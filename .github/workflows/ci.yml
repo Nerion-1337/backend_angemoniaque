@@ -1,0 +1,28 @@
+name: backend-ci-cd
+on: { push: { branches: [main] }, pull_request: {} }
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres: { image: "postgres:16", env: { POSTGRES_USER: ange, POSTGRES_PASSWORD: ange, POSTGRES_DB: angemoniaque }, ports: ["5432:5432"], options: "--health-cmd pg_isready --health-interval 5s --health-retries 10" }
+      redis: { image: "redis:7", ports: ["6379:6379"] }
+    env: { DATABASE_URL: "postgres://ange:ange@localhost:5432/angemoniaque", REDIS_URL: "redis://localhost:6379", PGPASSWORD: ange }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4          # schéma SQL depuis le dépôt infra
+        with: { repository: "${{ github.repository_owner }}/angemoniaque-infra", path: infra }
+      - run: sudo apt-get install -y postgresql-client && for f in infra/db/*.sql; do psql -h localhost -U ange -d angemoniaque -v ON_ERROR_STOP=1 -q -f $f; done
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npm install && npm run typecheck && npm test
+  publish:
+    needs: test
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions: { packages: write, contents: read }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with: { registry: ghcr.io, username: "${{ github.actor }}", password: "${{ secrets.GITHUB_TOKEN }}" }
+      - uses: docker/build-push-action@v6
+        with: { context: ., push: true, tags: "ghcr.io/${{ github.repository }}:latest" }

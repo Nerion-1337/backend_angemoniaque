@@ -1,0 +1,3 @@
+#!/bin/sh
+# Tests exécutés dans Docker : aucun node_modules sur la machine hôte.
+docker build --target test -q . > /dev/null || { echo "Tests en échec : commit refusé"; exit 1; }
