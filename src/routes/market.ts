@@ -1,5 +1,5 @@
-import { OpenAPIHono } from '@hono/zod-openapi'; import { def, z, P } from '../lib/route.js'; import { tx, ownChar, posOf, fail, log, dist } from '../lib/db.js';
-export const market = new OpenAPIHono();
+import { OpenAPIHono } from '@hono/zod-openapi'; import { def, router, z, P } from '../lib/route.js'; import { tx, ownChar, posOf, fail, log, dist } from '../lib/db.js';
+export const market = router();
 const TBL: Record<string, [string, string]> = { item: ['character_items', 'item_id'], spell: ['character_spells', 'spell_id'], mount: ['character_mounts', 'mount_id'] };
 const BAG_MAX = 20;
 async function atCapital(db: any, ch: any) {
@@ -7,12 +7,18 @@ async function atCapital(db: any, ch: any) {
   if (!rows.some((r: any) => r.map_id === mp.map_id && dist(mp, r) <= 2)) fail(409, 'Rendez-vous à la capitale de votre faction');
 }
 const bagCount = async (db: any, id: number) => (await db.query('SELECT count(*)::int n FROM character_items WHERE character_id=$1 AND NOT in_chest AND equipped_slot IS NULL', [id])).rows[0].n;
-def(market, 'get', '/shop', null, async c => (await (await import('../lib/db.js')).pool.query('SELECT id,name,slot,price FROM items WHERE shop ORDER BY price')).rows);
+def(market, 'get', '/shop', null, async c => { const { pool } = await import('../lib/db.js');
+  return { items: (await pool.query('SELECT id,name,slot,price,shop_stock stock,armor,weapon_damage,req_strength FROM items WHERE shop ORDER BY price')).rows, spells: (await pool.query('SELECT id,name,kind,price,energy_cost,description FROM spells ORDER BY price')).rows }; });
+def(market, 'post', '/shop/learn', z.object({ characterId: z.number(), spellId: z.number() }), (c, b) => tx(async db => {      // les sorts de base s'apprennent à la capitale
+  const me = await ownChar(db, c, b.characterId); await atCapital(db, me); const { rows: [sp] } = await db.query('SELECT * FROM spells WHERE id=$1', [b.spellId]); if (!sp) fail(404, 'Sort introuvable');
+  if ((await db.query('SELECT 1 FROM character_spells WHERE character_id=$1 AND spell_id=$2', [me.id, sp.id])).rowCount) fail(409, 'Sort déjà appris'); if (me.gold < sp.price) fail(409, 'Or insuffisant');
+  await db.query('UPDATE characters SET gold=gold-$2 WHERE id=$1', [me.id, sp.price]); await db.query('INSERT INTO character_spells(character_id,spell_id) VALUES ($1,$2)', [me.id, sp.id]); await log(db, me.id, `Apprend le sort ${sp.name}`); return { ok: true };
+}));
 def(market, 'post', '/shop/buy', z.object({ characterId: z.number(), itemId: z.number() }), (c, b) => tx(async db => {
   const me = await ownChar(db, c, b.characterId); await atCapital(db, me);
   const { rows: [it] } = await db.query('SELECT * FROM items WHERE id=$1 AND shop', [b.itemId]); if (!it) fail(404, 'Article introuvable');
-  if (me.gold < it.price) fail(409, 'Or insuffisant'); if (await bagCount(db, me.id) >= BAG_MAX) fail(409, 'Inventaire plein');
-  await db.query('UPDATE characters SET gold=gold-$2 WHERE id=$1', [me.id, it.price]); await db.query('INSERT INTO character_items(character_id,item_id) VALUES ($1,$2)', [me.id, it.id]); return { ok: true };
+  if (it.shop_stock <= 0) fail(409, 'Réserve de la faction épuisée'); if (me.gold < it.price) fail(409, 'Or insuffisant'); if (await bagCount(db, me.id) >= BAG_MAX) fail(409, 'Inventaire plein');
+  await db.query('UPDATE items SET shop_stock=shop_stock-1 WHERE id=$1', [it.id]); await db.query('UPDATE characters SET gold=gold-$2 WHERE id=$1', [me.id, it.price]); await db.query('INSERT INTO character_items(character_id,item_id) VALUES ($1,$2)', [me.id, it.id]); return { ok: true };
 }));
 def(market, 'post', '/market/list', z.object({ characterId: z.number(), kind: z.enum(['item', 'spell', 'mount']), refId: z.number(), price: z.number().int().positive() }), (c, b) => tx(async db => {
   const me = await ownChar(db, c, b.characterId); await atCapital(db, me); const [t, col] = TBL[b.kind];

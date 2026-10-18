@@ -23,3 +23,25 @@ export function walk(a: {x:number;y:number}, b: {x:number;y:number}) {
   return out;
 }
 export const routeEnergy = (a: any, b: any, cost: (x:number,y:number)=>number) => walk(a, b).reduce((s, c) => s + cost(c.x, c.y), 0);
+// ---------- Règles reprises du dépôt (statCalculator) ----------
+/** Dégâts = multiplicateur d'arme × (Force − Force requise des équipements) ; 1 à mains nues. */
+export function computeCharacterDamage(strength: number, totalRequiredStrength: number, weaponMultiplier: number | null): number {
+  if (!weaponMultiplier || weaponMultiplier <= 0) return 1;
+  return Math.max(1, weaponMultiplier * Math.max(0, strength - totalRequiredStrength));
+}
+/** Les PV exacts d'un autre joueur ne sont jamais exposés : seulement son état de forme. */
+export function getPublicHealthState(hp: number, hpMax: number): string {
+  const r = hpMax > 0 ? (hp / hpMax) * 100 : 100;
+  return r >= 75 ? 'En pleine forme' : r >= 50 ? 'Bon état' : r >= 25 ? 'Blessé' : 'Souffrant';
+}
+/** Pacte : l'Humain gagne 50 % des stats de l'être éthéré ; celui-ci perd moitié moins que le gain de l'Humain. */
+export function computePactStatTransfer(etherealStrength: number, etherealAgility: number) {
+  const humanStrengthBonus = Math.floor(etherealStrength * 0.5), humanAgilityBonus = Math.floor(etherealAgility * 0.5);
+  return { humanStrengthBonus, humanAgilityBonus, etherealStrengthPenalty: Math.floor(humanStrengthBonus * 0.5), etherealAgilityPenalty: Math.floor(humanAgilityBonus * 0.5) };
+}
+export function canUseDivineEnergy(race: string, rank: string): boolean {
+  if (race === 'nephilim') return true;
+  return ['divin', 'dieu', 'demi-dieu', 'seraphin', 'séraphin', 'titan'].includes((rank || '').toLowerCase());
+}
+/** Agilité : chance de toucher (l'esquive est le complément). À agilité égale : 50 %, bornée 10–95 %. */
+export const computeHitChance = (attackerAgi: number, defenderAgi: number) => Math.max(10, Math.min(95, Math.round(100 * (attackerAgi + 5) / (attackerAgi + defenderAgi + 10))));

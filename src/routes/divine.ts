@@ -1,6 +1,6 @@
-import { OpenAPIHono } from '@hono/zod-openapi'; import { def, z } from '../lib/route.js'; import { tx, ownChar, posOf, fail, log, dist } from '../lib/db.js';
+import { OpenAPIHono } from '@hono/zod-openapi'; import { def, router, z } from '../lib/route.js'; import { tx, ownChar, posOf, fail, log, dist } from '../lib/db.js';
 import { KIND, required, held, applySpec } from '../game/divine.js'; import { freeCell } from '../game/spawn.js'; import { broadcast } from '../realtime/ws.js';
-export const divine = new OpenAPIHono();
+export const divine = router();
 def(divine, 'post', '/divine/door', z.object({ characterId: z.number(), buildingId: z.number() }), (c, b) => tx(async db => {
   const ch = await ownChar(db, c, b.characterId); const mp = await posOf(db, ch.id);
   const { rows: [bd] } = await db.query(`SELECT b.*, p.map_id, p.coord_x, p.coord_y FROM buildings b JOIN positions p ON p.building_id=b.id WHERE b.id=$1 AND b.kind='door'`, [b.buildingId]);

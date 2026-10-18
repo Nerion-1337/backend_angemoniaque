@@ -1,5 +1,5 @@
-import { OpenAPIHono } from '@hono/zod-openapi'; import { def, z, P } from '../lib/route.js'; import { pool, tx, fail } from '../lib/db.js'; import { freeCell } from '../game/spawn.js';
-export const adminRoutes = new OpenAPIHono();
+import { OpenAPIHono } from '@hono/zod-openapi'; import { def, router, z, P } from '../lib/route.js'; import { pool, tx, fail } from '../lib/db.js'; import { freeCell } from '../game/spawn.js'; import { hourlyTick } from './tick.js';
+export const adminRoutes = router();
 const TABLES = ['items', 'monsters', 'mounts', 'spells']; const STATS = ['hp_max', 'energy_max', 'divine_energy_max', 'recovery', 'see', 'strength', 'agility', 'armor', 'range', 'xp', 'gold'];
 def(adminRoutes, 'get', '/admin/stats', null, async () => ({
   byRace: (await pool.query('SELECT race,count(*)::int n FROM characters GROUP BY race')).rows,
@@ -16,3 +16,8 @@ def(adminRoutes, 'post', '/admin/create/{table}', z.object({ data: z.record(z.an
   const keys = Object.keys(b.data).filter(k => cols.includes(k) && k !== 'id'); if (!keys.length) fail(400, 'Aucune colonne valide');
   const vals = keys.map(k => typeof b.data[k] === 'object' ? JSON.stringify(b.data[k]) : b.data[k]);
   return (await pool.query(`INSERT INTO ${t}(${keys.join(',')}) VALUES (${keys.map((_, i) => '$' + (i + 1)).join(',')}) RETURNING id`, vals)).rows[0]; });
+def(adminRoutes, 'post', '/admin/tick', null, async () => { await hourlyTick(); return { ok: true }; });         // simule la mise à jour horaire (+1 h)
+const GRANT: Record<string, string> = { item: 'INSERT INTO character_items(character_id,item_id) VALUES ($1,$2)', spell: 'INSERT INTO character_spells(character_id,spell_id) VALUES ($1,$2)',
+  mount: 'INSERT INTO character_mounts(character_id,mount_id,energy_current,hp_current) SELECT $1,id,energy_max,hp_max FROM mounts WHERE id=$2' };
+def(adminRoutes, 'post', '/admin/players/{id}/grant', z.object({ kind: z.enum(['item', 'spell', 'mount']), refId: z.number() }), async (c, b) => { await pool.query(GRANT[b.kind], [P(c, 'id'), b.refId]); return { ok: true }; });
+def(adminRoutes, 'get', '/admin/catalog', null, async () => ({ items: (await pool.query('SELECT id,name FROM items ORDER BY id')).rows, spells: (await pool.query('SELECT id,name FROM spells ORDER BY id')).rows, mounts: (await pool.query('SELECT id,name FROM mounts ORDER BY id')).rows }));

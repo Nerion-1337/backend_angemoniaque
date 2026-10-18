@@ -1,5 +1,5 @@
-import { OpenAPIHono } from '@hono/zod-openapi'; import { def, z, P } from '../lib/route.js'; import { tx, ownChar, fail, log } from '../lib/db.js';
-export const faiths = new OpenAPIHono();
+import { OpenAPIHono } from '@hono/zod-openapi'; import { def, router, z, P } from '../lib/route.js'; import { tx, ownChar, fail, log } from '../lib/db.js';
+export const faiths = router();
 const CHOICES = ['strength', 'agility', 'hp_max', 'recovery', 'heal'];
 async function god(db: any, c: any, id: number) {
   const g = await ownChar(db, c, id); const { rows: [s] } = await db.query('SELECT current_rank FROM specializations WHERE id=$1', [g.specialization_id]);
