@@ -11,6 +11,18 @@ describe.skipIf(!process.env.DATABASE_URL)('Fonctionnalités du dépôt', () => 
     for (const [n, slot] of [['Épée Sanctifiée', 'weapon_main'], ['Écu de la Garde', 'weapon_off'], ['Casque de Fer Forgé', 'head'], ['Plastron du Lion', 'chest']]) expect((await call('/inventory/equip', { characterId: T.a.id, itemId: id(n), slot }, T.a.tk)).status).toBe(200);
     const st = (await call(`/characters/${T.a.id}`, undefined, T.a.tk)).j.stats; expect(st.armor).toBe(20); expect(st.reqStrength).toBe(6); expect(st.damage).toBe(3 * (5 - 6 < 0 ? 0 : 5 - 6) || 1);
   });
+  test('équipement : armure physique/magique, verrou de 12 h par pièce', async () => {
+    const inv = (await call(`/inventory/${T.a.id}`, undefined, T.a.tk)).j, st = (await call(`/characters/${T.a.id}`, undefined, T.a.tk)).j.stats;
+    expect(st.magicArmor).toBe(0); expect(st.weaponDamage).toBe(3); expect(inv.lockHours).toBe(12);
+    const helm = inv.items.find((i: any) => i.name === 'Casque de Fer Forgé'); expect(helm.lock_seconds).toBeGreaterThan(11 * 3600);
+    const r = await call('/inventory/equip', { characterId: T.a.id, itemId: helm.id, slot: null }, T.a.tk); expect(r.status).toBe(409); expect(r.j.error).toContain('verrouillé');
+    await pool.query("UPDATE character_items SET equipped_at = now() - interval '13 hours' WHERE character_id=$1", [T.a.id]);
+    expect((await call('/inventory/equip', { characterId: T.a.id, itemId: helm.id, slot: null }, T.a.tk)).status).toBe(200);
+    expect((await call('/inventory/equip', { characterId: T.a.id, itemId: helm.id, slot: 'head' }, T.a.tk)).status).toBe(200);          // remis : de nouveau verrouillé
+    const again = (await call(`/inventory/${T.a.id}`, undefined, T.a.tk)).j.items.find((i: any) => i.id === helm.id); expect(again.lock_seconds).toBeGreaterThan(11 * 3600);
+    await pool.query('INSERT INTO character_items(character_id,item_id) SELECT $1,id FROM items WHERE name=\'Robe de Lumière\'', [T.a.id]);
+    expect((await call(`/inventory/${T.a.id}`, undefined, T.a.tk)).j.items.find((i: any) => i.name === 'Robe de Lumière').magic_armor).toBe(8);
+  });
   test('sorts : invocation, limite, prise de contrôle, retour au héros', async () => {
     expect((await call(`/spells/${T.a.id}`, undefined, T.a.tk)).j.spells).toHaveLength(0);                                    // aucun sort appris au départ : catégorie vide
     await pool.query('INSERT INTO character_spells(character_id,spell_id) SELECT $1,id FROM spells', [T.a.id]);                // (apprentissage à la capitale simulé)

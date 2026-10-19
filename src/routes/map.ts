@@ -2,7 +2,7 @@ import { def, router, P } from '../lib/route.js'; import { pool } from '../lib/d
 export const mapRoutes = router();
 const SEL = `SELECT p.coord_x x,p.coord_y y, CASE WHEN p.character_id IS NOT NULL THEN 'character' WHEN p.monsters_id IS NOT NULL THEN 'monster' WHEN p.summon_id IS NOT NULL THEN 'summon' WHEN p.building_id IS NOT NULL THEN 'building' WHEN p.mount_id IS NOT NULL THEN 'mount' ELSE 'item' END kind,
   COALESCE(ch.pseudo,mo.name,sm.name,b.name) name, ch.race, ch.id char_id, mo.id monster_id, sm.id summon_id, b.id building_id, b.kind building_kind, b.invulnerable, s.name rank_name, g.name guild,
-  ch.hp_current chp, ch.hp_max chpmax, mo.hp_current mhp, mo.hp_max mhpmax, mo.armor marmor, own.pseudo owner, mt.name mount_name, mt.flying mount_flying
+  ch.hp_current chp, ch.hp_max chpmax, mo.hp_current mhp, mo.hp_max mhpmax, mo.armor marmor, mo.magic_armor mmarmor, own.pseudo owner, mt.name mount_name, mt.flying mount_flying
   FROM positions p LEFT JOIN characters ch ON ch.id=p.character_id LEFT JOIN specializations s ON s.id=ch.specialization_id LEFT JOIN guilds g ON g.id=ch.guild_id LEFT JOIN monsters mo ON mo.id=p.monsters_id
   LEFT JOIN summons sm ON sm.id=p.summon_id LEFT JOIN characters own ON own.id=sm.owner_id LEFT JOIN buildings b ON b.id=p.building_id LEFT JOIN character_mounts cm ON cm.character_id=ch.id AND cm.active LEFT JOIN mounts mt ON mt.id=cm.mount_id`;
 /** Confidentialité : jamais les PV exacts d'un autre joueur, seulement son état de forme. */

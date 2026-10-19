@@ -45,3 +45,5 @@ export function canUseDivineEnergy(race: string, rank: string): boolean {
 }
 /** Agilité : chance de toucher (l'esquive est le complément). À agilité égale : 50 %, bornée 10–95 %. */
 export const computeHitChance = (attackerAgi: number, defenderAgi: number) => Math.max(10, Math.min(95, Math.round(100 * (attackerAgi + 5) / (attackerAgi + defenderAgi + 10))));
+/** L'armure réduit DIRECTEMENT les dégâts : dégâts subis = dégâts − armure (minimum 1). Armure physique contre les attaques physiques, magique contre les sorts. */
+export const applyArmor = (rawDamage: number, armor: number) => Math.max(1, rawDamage - armor);
