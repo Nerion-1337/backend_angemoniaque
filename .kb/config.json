@@ -1,0 +1,4 @@
+{
+  "test_cmd": "npm test",
+  "backend": "hash"
+}

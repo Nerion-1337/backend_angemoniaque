@@ -1,0 +1,60 @@
+# Project overview
+_Généré par `kb overview` — ne pas éditer ici ; notes manuelles dans `.kb/NOTES.md`._
+
+# Project notes (maintenus à la main / par l'agent)
+
+## Stack & conventions
+- Hono 4 + `@hono/zod-openapi` + Zod : chaque endpoint = schéma Zod dédié (params, body, statuts) via `def()` (`src/lib/route.ts`)
+- Modules de routes petits par domaine (`src/routes/*`) ; errors traduits une fois dans `app.onError`
+- Postgres via `DATABASE_URL` (pool force `search_path=game_schema`) ; Redis via `REDIS_URL` (pub/sub `map:{id}` pour le WS)
+- tsconfig `strict: false` — garder le typage lâche existant ; aucune nouvelle dépendance sans accord
+
+## Commandes utiles
+- tests : `npm test` (Vitest ; les tests d'intégration sont skipés sans `DATABASE_URL` — ils tournent en CI / `make test-int`)
+- dev : `npm run dev` (tsx watch) ; types+lint : `npm run check`
+- Docker test target : `npm run typecheck && npm test` (utilisé par le hook pre-commit et CI)
+- kb : backend d'embedding `hash` (offline) dans `.kb/config.json`
+
+## Features (1)
+- **hono-skeleton** [done] (.kb/cards/hono-skeleton.md) Hono + Zod OpenAPI skeleton: entry, router, auth, realtime WS — The Hono + `@hono/zod-openapi` skeleton that serves the game REST API on port 3000: one OpenAPI app factory, per-domain route modules (`src/routes/*`) with per-endpoint Zod schemas, JWT auth middlewar — files: src/index.ts, src/app.ts, src/config/env.ts, src/lib/route.ts (+5)
+
+## File map
+- `package.json`
+- `src/app.ts` — app
+- `src/config/env.ts` — env
+- `src/db/pool.ts` — (header), pool
+- `src/game/combatlib.ts` — Applique des dégâts ; gère la mort (joueur → Monde des Morts + objets divins, boss → butin au vainqueur, invoc — (header), Target, loadTarget, targetAt, applyDamage
+- `src/game/divine.ts` — Surcharge divine : plus d'objets que requis => rang supérieur gratuit, quota ignoré. — (header), KIND, required, held, applySpec, refreshSurcharge, die
+- `src/game/movement.ts` — Acteur courant : l'invocation contrôlée, sinon le héros (monté ou non). — (header), MOUNT_SQL, activeMount, isWater, actor, stepCost, blockedMsg, spend, pathCost, travel
+- `src/game/rules.ts` — Coût XP du prochain point : base × multiplicateur du palier (hypothèse : palier = floor(achats / numb_up), pla — StatRule, statUpgradeCost, pathEnergy, totalEnergy, effectiveRank, inVision, walk, routeEnergy, computeCharacterDamage, getPublicHealthState, computePactStatTransfer, canUseDivineEnergy, computeHitChance, applyArmor
+- `src/game/spawn.ts` — freeCell, CAPITAL, spawn
+- `src/game/stats.ts` — Caractéristiques effectives : base + bonus d'équipement ; dégâts = arme × (Force − Force requise) ; armure = s — gearStats, maxSummons
+- `src/game/terrain.ts` — Terrain procédural déterministe (dupliqué à l'identique côté front : src/lib/terrain.js) — h, noiseAt, Terrain, terrain
+- `src/index.ts`
+- `src/lib/db.ts` — (header), HttpError, fail, tx, ownChar, posOf, dist, log, trimLog
+- `src/lib/route.ts` — Déclare une route OpenAPI en une ligne ; le handler retourne l'objet JSON (erreurs via fail()). — (header), def, P, router
+- `src/middleware/auth.ts` — (header), signToken, auth, admin
+- `src/realtime/ws.ts` — (header), pub, sockets, joinMap, leave, broadcast
+- `src/routes/actions.ts` — Récolte : sur place, ou à distance (trajet + 4 énergie). — (header), actions, XY
+- `src/routes/admin.ts` — (header), adminRoutes, TABLES, GRANT
+- `src/routes/auth.ts` — (header), authRoutes, hash, check, Reg, Log
+- `src/routes/buildings.ts` — (header), buildings, BUILD_COST
+- `src/routes/characters.ts` — Kit de départ (équipement, sorts, monture) comme dans le dépôt d'origine — characters
+- `src/routes/combat.ts` — Attaquant : l'invocation contrôlée (ses stats) ou le héros (équipement). La monture peut cracher son souffle s — (header), combat, ATTACK_COST, attacker
+- `src/routes/divine.ts` — divine
+- `src/routes/faiths.ts` — (header), faiths, CHOICES, god
+- `src/routes/guilds.ts` — Membre de guilde avec son rang : le Chef a tous les droits. — (header), guilds, PERMS, ALL, words, member, need, lowestRank, Ranks, topicOf
+- `src/routes/inventory.ts` — (header), inventory, GROUP
+- `src/routes/map.ts` — Confidentialité : jamais les PV exacts d'un autre joueur, seulement son état de forme. — (header), mapRoutes, SEL, pub
+- `src/routes/market.ts` — (header), market, TBL, BAG_MAX, atCapital, bagCount
+- `src/routes/messages.ts` — (header), messages, VISION
+- `src/routes/mounts.ts` — mounts
+- `src/routes/pacts.ts` — Limites vérifiées à la conclusion : 1 pacte actif pour un Humain, selon le rang pour un Ange/Démon. — (header), pacts, maxPacts, BUFF_H, checkLimits
+- `src/routes/spells.ts` — spells
+- `src/routes/tick.ts` — Tick horaire : XP/or (+ bonus pactes & fidèles), régénération PV/énergie, expiration des buffs. — (header), REVERT, hourlyTick
+- `test/integration/api.test.ts` — Nécessite Postgres (schéma du dépôt infra) + Redis : exécuté en CI, ignoré sans DATABASE_URL.
+- `test/integration/auth.test.ts`
+- `test/integration/features.test.ts`
+- `test/integration/gameplay.test.ts`
+- `test/rules.test.ts` — r, find
+- `tsconfig.json`
