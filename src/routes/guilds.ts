@@ -37,8 +37,8 @@ def(guilds, 'post', '/guilds/leave', z.object({ characterId: z.number() }), (c, 
 def(guilds, 'get', '/guilds/{characterId}', null, c => tx(async db => {
   const m = await member(db, c, P(c, 'characterId')), gid = m.me.guild_id; const { rows: [g] } = await db.query('SELECT id,name,tag,logo,mantra,description FROM guilds WHERE id=$1', [gid]);
   const vis = (r: any) => m.leader || (r.visible_ranks ?? []).includes(m.rank.name);
-  const folders = (await db.query('SELECT id,name,visible_ranks FROM guild_folders WHERE guild_id=$1 ORDER BY id', [gid])).rows.filter(vis);
-  for (const f of folders) f.topics = (await db.query('SELECT t.id,t.title,t.visible_ranks,ch.pseudo author FROM guild_topics t LEFT JOIN characters ch ON ch.id=t.author_id WHERE t.folder_id=$1 ORDER BY t.id', [f.id])).rows.filter(vis);
+  const folders = (await db.query('SELECT id,name,visible_ranks FROM guild_folders WHERE guild_id=$1 ORDER BY sort_order,id', [gid])).rows.filter(vis);
+  for (const f of folders) f.topics = (await db.query('SELECT t.id,t.title,t.visible_ranks,ch.pseudo author FROM guild_topics t LEFT JOIN characters ch ON ch.id=t.author_id WHERE t.folder_id=$1 ORDER BY t.sort_order,t.id', [f.id])).rows.filter(vis);
   return { guild: g, me: { rank: m.rank.name, leader: m.leader, permissions: m.leader ? ALL : m.rank.permissions },
     ranks: (await db.query('SELECT id,name,is_leader,permissions FROM guild_ranks WHERE guild_id=$1 ORDER BY id', [gid])).rows,
     members: (await db.query('SELECT c.id,c.pseudo,c.race,r.name rank,r.id rank_id FROM characters c LEFT JOIN guild_ranks r ON r.id=c.guild_rank_id WHERE c.guild_id=$1 ORDER BY r.id,c.pseudo', [gid])).rows,
@@ -89,6 +89,11 @@ def(guilds, 'post', '/guilds/ranks/{id}/rename', z.object({ characterId: z.numbe
     if ((t.visible_ranks ?? []).includes(rk.name))
       await db.query('UPDATE guild_topics SET visible_ranks=$2 WHERE id=$1', [t.id, swap(t.visible_ranks ?? [])]);
   return { ok: true }; }));
+def(guilds, 'post', '/guilds/reorder', z.object({ characterId: z.number(), kind: z.enum(['folders', 'topics']), folderId: z.number().optional(), ids: z.array(z.number()).max(200) }), (c, b) => tx(async db => {
+  const m = await member(db, c, b.characterId); need(m, 'create_topics');
+  if (b.kind === 'folders') { for (let i = 0; i < b.ids.length; i++) await db.query('UPDATE guild_folders SET sort_order=$3 WHERE id=$1 AND guild_id=$2', [b.ids[i], m.me.guild_id, i]); return { ok: true }; }
+  if (!(await db.query('SELECT 1 FROM guild_folders WHERE id=$1 AND guild_id=$2', [b.folderId ?? 0, m.me.guild_id])).rowCount) fail(404, 'Catégorie introuvable');
+  for (let i = 0; i < b.ids.length; i++) await db.query('UPDATE guild_topics SET sort_order=$3 WHERE id=$1 AND folder_id=$2', [b.ids[i], b.folderId, i]); return { ok: true }; }));
 // ----- Forum : catégories et sujets visibles par rang -----
 const Ranks = z.array(z.string()).default([]);
 def(guilds, 'post', '/guilds/folders', z.object({ characterId: z.number(), name: z.string().min(1).max(60), visibleRanks: Ranks }), (c, b) => tx(async db => {

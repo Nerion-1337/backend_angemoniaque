@@ -44,7 +44,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Gameplay intégration', () => {
   });
   test('boutique : refus loin de la capitale, inventaire + coffre', async () => {
     const mp = (await call(`/characters/${T.h.id}`, undefined, T.h.tk)).j.pos; expect(mp.map_id).toBe(1);
-    const b = await call('/shop/buy', { characterId: T.h.id, itemId: 1 }, T.h.tk); expect([200, 409]).toContain(b.status);
+    const b = await call('/shop/buy', { characterId: T.h.id, itemId: 11 }, T.h.tk); expect([200, 409]).toContain(b.status); // n°11 : parchemin de mur (vendable, réserve 50) — le n°1 est de l'équipement de départ non vendu
     expect((await call(`/inventory/${T.h.id}`, undefined, T.h.tk)).status).toBe(200);
   });
   test('porte sans objet divin refusée ; rang sans objets refusé', async () => {
