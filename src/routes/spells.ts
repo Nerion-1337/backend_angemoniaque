@@ -1,5 +1,5 @@
 import { def, router, z, P } from '../lib/route.js'; import { tx, ownChar, fail, log, dist } from '../lib/db.js';
-import { actor, spend } from '../game/movement.js'; import { maxSummons } from '../game/stats.js'; import { terrain } from '../game/terrain.js'; import { targetAt, applyDamage } from '../game/combatlib.js'; import { applyArmor } from '../game/rules.js'; import { broadcast } from '../realtime/ws.js';
+import { actor, spend } from '../game/movement.js'; import { maxSummons } from '../game/stats.js'; import { terrain } from '../game/terrain.js'; import { targetAt, applyDamage } from '../game/combatlib.js'; import { applyArmor } from '../game/rules.js'; import { broadcast } from '../realtime/ws.js'; import { combatEvent } from '../lib/events.js';
 export const spells = router();
 def(spells, 'get', '/spells/{characterId}', null, c => tx(async db => { const me = await ownChar(db, c, P(c, 'characterId'));
   return { spells: (await db.query('SELECT s.* FROM character_spells cs JOIN spells s ON s.id=cs.spell_id WHERE cs.character_id=$1 ORDER BY s.id', [me.id])).rows, maxSummons: await maxSummons(db, me), active: (await db.query('SELECT count(*)::int n FROM summons WHERE owner_id=$1', [me.id])).rows[0].n }; }));
@@ -19,7 +19,7 @@ def(spells, 'post', '/spells/cast', z.object({ characterId: z.number(), spellId:
     for (const stat of ['strength', 'agility']) { await db.query(`UPDATE characters SET ${stat}=${stat}+4 WHERE id=$1`, [me.id]); await db.query("INSERT INTO temp_buffs(character_id,stat,delta,source,expires_at) VALUES ($1,$2,4,$3,now()+interval '1 hour')", [me.id, stat, `spell:${sp.id}`]); } }
   else if (sp.kind === 'attack') {
     if (d > 4) fail(409, 'Cible hors de portée (4 cases max)'); const t = await targetAt(db, a.mp.map_id, tx_, ty); if (!t) fail(409, 'Aucune cible sur cette case'); if (t.kind === 'character' && t.id === me.id) fail(400, 'Cible invalide');
-    await spend(db, me, a, sp.energy_cost); const dmg = applyArmor(sp.damage, t.magicArmor), r = await applyDamage(db, t, dmg, me.id); await log(db, me.id, `${sp.name} sur ${t.name} : -${dmg} PV`); broadcast(a.mp.map_id, { type: 'combat' }); return { ok: true, dmg, killed: r.killed };
+    await spend(db, me, a, sp.energy_cost); const dmg = applyArmor(sp.damage, t.magicArmor), r = await applyDamage(db, t, dmg, me.id); await log(db, me.id, `${sp.name} sur ${t.name} : -${dmg} PV`); broadcast(a.mp.map_id, combatEvent(t.id, r.killed)); return { ok: true, dmg, killed: r.killed };
   }
   await log(db, me.id, `Sort lancé : ${sp.name}`); broadcast(a.mp.map_id, { type: 'spell' }); return { ok: true };
 }));

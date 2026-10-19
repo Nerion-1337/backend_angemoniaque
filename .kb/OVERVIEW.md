@@ -15,7 +15,8 @@ _Généré par `kb overview` — ne pas éditer ici ; notes manuelles dans `.kb/
 - Docker test target : `npm run typecheck && npm test` (utilisé par le hook pre-commit et CI)
 - kb : backend d'embedding `hash` (offline) dans `.kb/config.json`
 
-## Features (1)
+## Features (2)
+- **combat-realtime** [done] (.kb/cards/combat-realtime.md) Realtime combat events: broadcast combat outcomes to map spectators — Makes combat outcomes visible in real time to every other player on the same map: every resolved attack (direct `/combat/attack` or the "Trait de Lumière" attack spell) publishes a `combat` event on t — files: src/lib/events.ts, src/routes/combat.ts, src/routes/spells.ts
 - **hono-skeleton** [done] (.kb/cards/hono-skeleton.md) Hono + Zod OpenAPI skeleton: entry, router, auth, realtime WS — The Hono + `@hono/zod-openapi` skeleton that serves the game REST API on port 3000: one OpenAPI app factory, per-domain route modules (`src/routes/*`) with per-endpoint Zod schemas, JWT auth middlewar — files: src/index.ts, src/app.ts, src/config/env.ts, src/lib/route.ts (+5)
 
 ## File map
@@ -32,6 +33,7 @@ _Généré par `kb overview` — ne pas éditer ici ; notes manuelles dans `.kb/
 - `src/game/terrain.ts` — Terrain procédural déterministe (dupliqué à l'identique côté front : src/lib/terrain.js) — h, noiseAt, Terrain, terrain
 - `src/index.ts`
 - `src/lib/db.ts` — (header), HttpError, fail, tx, ownChar, posOf, dist, log, trimLog
+- `src/lib/events.ts` — Événements de combat pour les spectateurs de la carte : données publiques uniquement — combatEvent
 - `src/lib/route.ts` — Déclare une route OpenAPI en une ligne ; le handler retourne l'objet JSON (erreurs via fail()). — (header), def, P, router
 - `src/middleware/auth.ts` — (header), signToken, auth, admin
 - `src/realtime/ws.ts` — (header), pub, sockets, joinMap, leave, broadcast
@@ -52,8 +54,10 @@ _Généré par `kb overview` — ne pas éditer ici ; notes manuelles dans `.kb/
 - `src/routes/pacts.ts` — Limites vérifiées à la conclusion : 1 pacte actif pour un Humain, selon le rang pour un Ange/Démon. — (header), pacts, maxPacts, BUFF_H, checkLimits
 - `src/routes/spells.ts` — spells
 - `src/routes/tick.ts` — Tick horaire : XP/or (+ bonus pactes & fidèles), régénération PV/énergie, expiration des buffs. — (header), REVERT, hourlyTick
+- `test/combat-event.test.ts`
 - `test/integration/api.test.ts` — Nécessite Postgres (schéma du dépôt infra) + Redis : exécuté en CI, ignoré sans DATABASE_URL.
 - `test/integration/auth.test.ts`
+- `test/integration/combat-realtime.test.ts` — Parcours complet du retour temps réel : un joueur attaque, le spectateur (abonné Redis du canal de la carte)
 - `test/integration/features.test.ts`
 - `test/integration/gameplay.test.ts`
 - `test/rules.test.ts` — r, find

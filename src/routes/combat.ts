@@ -1,6 +1,6 @@
 import { def, router, z, P } from '../lib/route.js'; import { tx, ownChar, fail, log, dist, trimLog } from '../lib/db.js';
 import { actor, travel, spend } from '../game/movement.js'; import { gearStats } from '../game/stats.js'; import { loadTarget, targetAt, applyDamage } from '../game/combatlib.js';
-import { computeHitChance, applyArmor } from '../game/rules.js'; import { broadcast } from '../realtime/ws.js';
+import { computeHitChance, applyArmor } from '../game/rules.js'; import { broadcast } from '../realtime/ws.js'; import { combatEvent } from '../lib/events.js';
 export const combat = router();
 const ATTACK_COST = 5;
 /** Attaquant : l'invocation contrôlée (ses stats) ou le héros (équipement). La monture peut cracher son souffle spécial. */
@@ -23,9 +23,9 @@ def(combat, 'post', '/combat/attack', z.object({ characterId: z.number(), target
   else if (!breath) await spend(db, me, a, cost);
   if (breath) await spend(db, me, a, cost, 'mount');                                                                      // le souffle spécial coûte l'énergie de la monture
   const hit = computeHitChance(at.agility, t.agility), ok = Math.random() * 100 < hit;
-  if (!ok) { await log(db, me.id, `Attaque ratée sur ${t.name}`); return { dmg: 0, missed: true, hitChance: hit, killed: false }; }
+  if (!ok) { await log(db, me.id, `Attaque ratée sur ${t.name}`); broadcast(a.mp.map_id, combatEvent(t.id, false, true)); return { dmg: 0, missed: true, hitChance: hit, killed: false }; }
   const raw = breath ? a.mount.special_attack_damage : at.damage, dmg = applyArmor(raw, t.armor);                  // armure physique : réduction directe
   const r = await applyDamage(db, t, dmg, me.id);
   await log(db, me.id, `${breath ? a.mount.special_attack_name : 'Attaque'} sur ${t.name} : -${dmg} PV`); if (t.kind === 'character') await log(db, t.id, `Attaqué par ${at.name} : -${dmg} PV`); await trimLog(db, me.id);
-  broadcast(a.mp.map_id, { type: 'combat', target: t.id }); return { dmg, killed: r.killed, hitChance: hit, missed: false };
+  broadcast(a.mp.map_id, combatEvent(t.id, r.killed)); return { dmg, killed: r.killed, hitChance: hit, missed: false };
 }));
