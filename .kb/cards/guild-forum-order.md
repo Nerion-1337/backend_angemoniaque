@@ -29,6 +29,9 @@ Lets the guild's authorized creators ("create_topics" — create categories and 
 ## Tests
 - "test/integration/guild-forum.test.ts" (requires "DATABASE_URL"; CI + "stack exec backend -- npx vitest run"): creates a guild + 3 categories + 2 topics; asserts id order (Conseil/Brigade/Veille) then reorders folders to [Veille, Conseil, Brigade] and topics to [Second, Premier...] — GET reflects both; a non-Chef creator ("Membre", has create_topics) can also reorder (200); a member demoted to a permission-less custom rank ("Ritourne") gets 403; "folderId: 999999" is 404; foreign ids inside the topics list do not disturb the order.
 
+## Cross-references
+- Category/topic ordering was extended by the forum revamp: creation now lands at the end of the list (`sort_order = max+1`) and reorderings are persisted via `POST /guilds/reorder` (`kind: 'folders'` / `'topics'`) — covered by card `guild-forum-perms` and `guild-ranks-order`.
+
 ## Gotchas
 - "sort_order" is a dense index written per item: a reorder is O(n) small UPDATEs inside one tx — fine at guild scale (max 200 ids in the schema), do not generalize to thousands of items.
 - "guild_topics.sort_order" is only meaningful per folder; two topics in different folders can legitimately share a "sort_order".

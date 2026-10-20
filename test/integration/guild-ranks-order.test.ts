@@ -37,7 +37,9 @@ describe.skipIf(!process.env.DATABASE_URL)('guilde : ordre des rangs', () => {
     expect(f.visible_ranks).toEqual(['Commandant']); // plus le « Chef » hardcodé
     expect((await call('/guilds/topics', { characterId: a.id, folderId: f.id, title: 'Ordre du jour', body: 'x' }, a.tk)).status).toBe(200);
     s = await st(a.id, a.tk);
-    expect(s.folders.find((x: any) => x.id === f.id).topics[0].visible_ranks).toEqual(['Commandant']);
+    // Forum v2 : un sujet sans choix de rangs hérite de la lecture de sa catégorie (liste vide),
+    // plus le défaut « rang Chef » — la lecture effective est donc celle de la catégorie renommée.
+    expect(s.folders.find((x: any) => x.id === f.id).topics[0].visible_ranks).toEqual([]);
     expect((await st(b.id, b.tk)).me.rank).toBe('Membre'); // les autres porteurs ne sont pas concernés
   });
   test('séquence front (toggle) : création + réorganisation = insertion au milieu', async () => {

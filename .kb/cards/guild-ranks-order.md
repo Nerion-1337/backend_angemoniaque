@@ -20,7 +20,7 @@ All in `src/routes/guilds.ts` (house `def()` idiom, `tx` transactions):
 - `POST /guilds/reorder` — extended with `kind: 'ranks'`: reserved to the leader (`403 'Réservé au Chef'` for non-leaders), assigns `sort_order = index` over the ids (`WHERE id=$ AND guild_id=$` → foreign ids are no-ops). Folders/topics kinds are unchanged (`create_topics`).
 - `POST /guilds/ranks` (create): computes `sort_order = COALESCE(MAX(sort_order),0)+1` → new ranks appear **last**.
 - `POST /guilds/ranks/{id}/rename`: the `is_leader` 403 guard was **removed** — the Chef label is editable. Remaining guards: unique name in the guild (409), 2–24 chars; the forum `visible_ranks` cascade (folders + topics) still runs for every rank including the leader one.
-- `leaderRankName(db, gid)` helper: `SELECT name FROM guild_ranks WHERE guild_id=$1 AND is_leader LIMIT 1` (fallback `'Chef'`). `POST /guilds/folders` and `POST /guilds/topics` with no `visibleRanks` now default to `[leaderRankName]` instead of `['Chef']` — so the default follows a renamed Chef label.
+- `leaderRankName(db, gid)` helper: `SELECT name FROM guild_ranks WHERE guild_id=$1 AND is_leader LIMIT 1` (fallback `'Chef'`). `POST /guilds/folders` with no `visibleRanks` still defaults to `[leaderRankName]` instead of `['Chef']` — so the default follows a renamed Chef label. `POST /guilds/topics` without a choice now stores `[]` = **inherited read from the category** (forum v2, card `guild-forum-perms`); the folder default remains the leader's rank name.
 
 ## Entry points
 - `POST /guilds/reorder` (`kind: 'ranks'`) — called by the up/down arrows of the front manage cards (`Guild.jsx:Manage`/`Arrows`).
@@ -33,7 +33,7 @@ All in `src/routes/guilds.ts` (house `def()` idiom, `tx` transactions):
 - Rename → `guild_ranks.name` + cascade `guild_folders.visible_ranks` / `guild_topics.visible_ranks` (name swap, only rows referencing the old name); holders' displayed rank follows via `me.rank` (name-based).
 
 ## Tests
-- `test/integration/guild-ranks-order.test.ts` (needs `DATABASE_URL`; CI + `stack exec backend -- npx vitest run`): new rank lands last (`['Chef','Officier','Membre','Éclaireur']`); reorder by a non-leader → 403; reorder by the leader persists (`['Éclaireur','Officier','Chef','Membre']`) and foreign ids are ignored; renaming the Chef rank to 'Commandant' → 200, holder's `me.rank` follows, unchosen folder/topic visibility defaults to `['Commandant']`, other holders unaffected; « séquence front (toggle) » test: create + reorder reproduces the front's au-dessus/below toggle (mid-list insertion, then a later create lands at the end again).
+- `test/integration/guild-ranks-order.test.ts` (needs `DATABASE_URL`; CI + `stack exec backend -- npx vitest run`): new rank lands last (`['Chef','Officier','Membre','Éclaireur']`); reorder by a non-leader → 403; reorder by the leader persists (`['Éclaireur','Officier','Chef','Membre']`) and foreign ids are ignored; renaming the Chef rank to 'Commandant' → 200, holder's `me.rank` follows, unchosen folder visibility defaults to `['Commandant']` (topics now default to `[]` = inherit from the category, forum v2), other holders unaffected; « séquence front (toggle) » test: create + reorder reproduces the front's au-dessus/below toggle (mid-list insertion, then a later create lands at the end again).
 - `test/integration/guild-ranks.test.ts` (previous feature) was updated: the "Chef protégé" assertion now expects 200 (label renamable) + holder follows.
 
 ## Gotchas

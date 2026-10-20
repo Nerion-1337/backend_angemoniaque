@@ -19,7 +19,7 @@ All in `src/routes/guilds.ts` (one route module, house `def()` idiom, transactio
 - `lastChef(db, guildId, meId)` helper: `SELECT 1 FROM characters c JOIN guild_ranks r ON r.id = c.guild_rank_id WHERE c.guild_id = $1 AND c.id <> $2 AND r.is_leader LIMIT 1` → `rowCount` is false when *no other* member holds a Chef rank.
 - `POST /guilds/leave`: replaces the old "leader can't leave while the guild has other members" check with `if (m.leader && await lastChef(...)) fail(409, 'Le dernier Chef ne peut pas quitter la guilde')`. So a Chef **can** leave as soon as another member holds a Chef rank — even if the guild still has many non-Chef members; a last Chef **cannot** leave even if they are the only member (a one-man guild can no longer be dissolved via leave).
 - `POST /guilds/members/rank`: besides the existing "only the Chef appoints Chefs" 403, it now fetches the target's current rank (`LEFT JOIN guild_ranks`) and fails 409 `'Le dernier Chef ne peut pas changer de rang'` when the target currently holds a Chef rank, the new rank is not a Chef rank, and `lastChef(db, gid, targetId)` is true. Works for self-demotion too (a Chef with `assign_ranks` can no longer demote themselves while last).
-- `POST /guilds/ranks/{id}/rename`: leader-only (403 `'Réservé au Chef'`), name trimmed with 2–24 chars (Zod `min(2).max(24)` + 400 after trim), duplicate name rejected (409 `'Ce nom est déjà utilisé'`). The old leader-rank 403 was **removed** by the manage-tab revamp: the Chef label is now editable like any rank label (see card `guild-ranks-order`) — the structural lock is the permissions grid, not the name. Then, because forum visibility is stored **by rank name** (`visible_ranks TEXT[]` on `guild_folders`/`guild_topics`), the handler rewrites every folder/topic of the guild that references the old name (a JS array is passed as the parameter — pg encodes it as a Postgres array literal).
+- `POST /guilds/ranks/{id}/rename`: leader-only (403 `'Réservé au Chef'`), name trimmed with 2–24 chars (Zod `min(2).max(24)` + 400 after trim), duplicate name rejected (409 `'Ce nom est déjà utilisé'`). The old leader-rank 403 was **removed** by the manage-tab revamp: the Chef label is now editable like any rank label (see card `guild-ranks-order`) — the structural lock is the permissions grid, not the name. Then, because forum visibility is stored **by rank name** (`visible_ranks TEXT[]` on `guild_folders`/`guild_topics`), the handler rewrites every folder/topic of the guild that references the old name (a JS array is passed as the parameter — pg encodes it as a Postgres array literal). Since the forum v2 revamp (card `guild-forum-perms`, migration `infra/db/07_forum_perms.sql`) the same cascade also rewrites **`write_ranks`** (write rights are name-based too); a topic's `NULL` write list (inherit) is left `NULL` so inheritance survives the rename.
 
 ## Entry points
 - `POST /guilds/leave` (front `Guild.jsx` → `leave()` in `GuildModal`).
@@ -29,7 +29,7 @@ All in `src/routes/guilds.ts` (one route module, house `def()` idiom, transactio
 
 ## Data flow
 - Leave/rank-change guards read `characters.guild_rank_id` + `guild_ranks.is_leader` (members holding a Chef rank), then update `characters` inside the `tx` transaction — the guard and the write are atomic.
-- Rename writes `guild_ranks.name`, then `guild_folders.visible_ranks` and `guild_topics.visible_ranks` (name swap, only rows that actually reference the old name).
+- Rename writes `guild_ranks.name`, then `guild_folders.visible_ranks` + `write_ranks` and `guild_topics.visible_ranks` + `write_ranks` (name swap, only rows that actually reference the old name; topic `write_ranks = NULL` stays NULL).
 - Forum filtering (`GET /guilds/{characterId}`) matches `visible_ranks` against the member's current rank **name**, so the cascade is what keeps folder/topic visibility consistent after a rename.
 
 ## Tests
@@ -37,7 +37,7 @@ All in `src/routes/guilds.ts` (one route module, house `def()` idiom, transactio
 - Pre-existing `test/integration/features.test.ts` (guilds: ranks, rights, applicants, forum) still passes — no behaviour regression on the appoint/permission flows.
 
 ## Gotchas
-- **Forum visibility is by rank NAME, not id** (`visible_ranks` holds strings). Renaming without the cascade silently breaks folder/topic visibility for the renamed rank — keep the cascade block in the rename handler if the schema ever changes.
+- **Forum visibility is by rank NAME, not id** (`visible_ranks`/`write_ranks` hold strings). Renaming without the cascade silently breaks folder/topic visibility **and write rights** for the renamed rank — keep the cascade block (both arrays, both tables) in the rename handler if the schema ever changes.
 - `visible_ranks` is a Postgres `TEXT[]`, not jsonb: pass a plain JS array (pg encodes `{...}`); `JSON.stringify` produces `["…"]` which Postgres rejects (`malformed array literal`).
 - A last Chef cannot leave even as the sole member (integrity rule, per design) — a 1-person guild has no "disband" path through `leave`.
 - `guilds.leader_id` (founder) is written at creation but never read by the rules — the Chef **rank** is the only source of authority; do not start using `leader_id`.
