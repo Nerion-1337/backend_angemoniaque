@@ -46,11 +46,12 @@ describe.skipIf(!process.env.DATABASE_URL)('guilde : dernier Chef & renommage de
     expect((await call('/guilds/leave', { characterId: b.id }, b.tk)).status).toBe(200);
     expect((await call('/guilds/leave', { characterId: c.id }, c.tk)).status).toBe(409); // c est le dernier Chef
   });
-  test('renommage : le Chef est protégé, le nom est unique, la visibilité du forum suit', async () => {
+  test('renommage : le label Chef est éditable, le nom est unique, la visibilité du forum suit', async () => {
     expect((await call('/guilds/folders', { characterId: c.id, name: 'Conseil', visibleRanks: ['Officier'] }, c.tk)).status).toBe(200);
     let st = await state(c.id, c.tk); const fid = st.folders.find((f: any) => f.name === 'Conseil').id;
     expect((await call('/guilds/topics', { characterId: c.id, folderId: fid, title: 'Ordre du jour', body: 'Premier point', visibleRanks: ['Officier'] }, c.tk)).status).toBe(200);
-    expect((await call(`/guilds/ranks/${rankId(st, 'Chef')}/rename`, { characterId: c.id, name: 'Grand Chef' }, c.tk)).status).toBe(403); // rang Chef protégé
+    expect((await call(`/guilds/ranks/${rankId(st, 'Chef')}/rename`, { characterId: c.id, name: 'Grand Chef' }, c.tk)).status).toBe(200); // le label Chef est renommable (refonte Gestion)
+    expect((await state(c.id, c.tk)).me.rank).toBe('Grand Chef'); // le porteur suit le renommage
     expect((await call(`/guilds/ranks/${rankId(st, 'Officier')}/rename`, { characterId: c.id, name: 'Officier' }, c.tk)).status).toBe(200); // nom inchangé : non-op
     const r = await call(`/guilds/ranks/${rankId(st, 'Officier')}/rename`, { characterId: c.id, name: 'Sergent' }, c.tk);
     expect(r.status).toBe(200);
