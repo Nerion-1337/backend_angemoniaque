@@ -57,7 +57,7 @@ def(guilds, 'get', '/guilds/{characterId}', null, c => tx(async db => {
     if (x.n > 0 && visT.has(x.tid)) { unread.topics[x.tid] = x.n; unread.folders[x.fid] = (unread.folders[x.fid] ?? 0) + x.n; }
   return { guild: g, me: { rank: m.rank.name, leader: m.leader, permissions: m.leader ? ALL : m.rank.permissions }, unread,
     ranks: (await db.query('SELECT id,name,is_leader,permissions FROM guild_ranks WHERE guild_id=$1 ORDER BY sort_order,id', [gid])).rows,
-    members: (await db.query('SELECT c.id,c.pseudo,c.race,r.name rank,r.id rank_id FROM characters c LEFT JOIN guild_ranks r ON r.id=c.guild_rank_id WHERE c.guild_id=$1 ORDER BY r.id,c.pseudo', [gid])).rows,
+    members: (await db.query('SELECT c.id,c.pseudo,c.race,r.name rank,r.id rank_id,s.name game_rank FROM characters c LEFT JOIN guild_ranks r ON r.id=c.guild_rank_id LEFT JOIN specializations s ON s.id=c.specialization_id WHERE c.guild_id=$1 ORDER BY r.id,c.pseudo', [gid])).rows,
     applicants: m.can('accept_applicants') ? (await db.query('SELECT a.id,c.pseudo,c.race FROM guild_applications a JOIN characters c ON c.id=a.character_id WHERE a.guild_id=$1', [gid])).rows : [], folders };
 }));
 def(guilds, 'post', '/guilds/presentation', z.object({ characterId: z.number(), logo: z.string().max(2_800_000).optional(), mantra: z.string().max(120, '120 caractères maximum').optional(), description: z.string().optional() }), (c, b) => tx(async db => {

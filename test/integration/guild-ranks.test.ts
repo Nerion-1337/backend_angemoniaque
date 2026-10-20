@@ -27,6 +27,10 @@ describe.skipIf(!process.env.DATABASE_URL)('guilde : dernier Chef & renommage de
     const r = await call('/guilds/members/rank', { characterId: a.id, memberId: a.id, rankId: rankId(st, 'Membre') }, a.tk);
     expect(r.status).toBe(409); expect(r.j.error).toContain('Chef');
   });
+  test('la liste des membres expose le rang de jeu (spécialisation)', async () => {
+    const st = await state(a.id, a.tk);
+    for (const m of st.members) expect(m.game_rank).toBe('Mortel'); // race humain : 1re spécialisation
+  });
   test('un second Chef libère le premier : nomination puis sortie', async () => {
     const st = await state(a.id, a.tk);
     expect((await call('/guilds/members/rank', { characterId: a.id, memberId: b.id, rankId: rankId(st, 'Officier') }, a.tk)).status).toBe(200); // non-Chef : autorisé
