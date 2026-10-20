@@ -26,7 +26,7 @@ All in `src/routes/guilds.ts` (house `def()` idiom, `tx`; schema in `infra/db/07
 - **Rename cascade** now rewrites `write_ranks` alongside `visible_ranks` on both folders and topics (name-based lists; a topic's `NULL` write stays NULL — inheritance survives the rename).
 
 ## Entry points
-- `POST /guilds/{id}/perms` (folder|topic) — the front "Droits par rang (Voir / Écrire)" panel (`Guild.jsx:PermsPanel`, card `guild-forum-v2`).
+- `POST /guilds/{id}/perms` (folder|topic) — the front per-rank rights matrix (`Guild.jsx:Perks`, **controlled** component saved with the title/description in one `run` — card `guild-forum-tools`), Chef-only, write ⊆ read enforced server-side.
 - `POST /guilds/folders/{id}/edit` — the inline title/description editors (front `InlineEdit`, card `guild-forum-tools`); `POST /guilds/topics/{id}/edit` — same editor, gated by author / create_topics / category write (card `guild-forum-edit`).
 - `GET /guilds/{me}` `unread` + `GET /guilds/topics/{me}/{tid}` — unread badges + auto-ack (front `Forum`).
 - `POST /guilds/topics` / `POST /guilds/posts` — the 403 write gates (front hides the reply box when the caller can't write, `effWrite` helper in `src/lib/guild.js`).

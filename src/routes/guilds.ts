@@ -146,6 +146,40 @@ const checkPerms = async (db: any, m: any, read: string[], write: string[], effR
   for (const n of [...read, ...write]) if (!names.has(n)) fail(400, `Rang inconnu : ${n}`);
   const eff = effR ?? read;
   for (const n of write) if (!eff.includes(n)) fail(400, 'Le droit écrire doit être inclus dans le droit voir'); };
+/** Suppression en cascade (le Chef seul) : catégorie → sujets → messages → états de lecture.
+ *  Les FK du schéma sont sans ON DELETE CASCADE : on supprime explicitement les enfants,
+ *  dans l'ordre, dans la même transaction. */
+def(guilds, 'post', '/guilds/folders/{id}/delete', z.object({ characterId: z.number() }), (c, b) => tx(async db => {
+  const m = await member(db, c, b.characterId); if (!m.leader) fail(403, 'Réservé au Chef');
+  if (!(await db.query('SELECT 1 FROM guild_folders WHERE id=$1 AND guild_id=$2', [P(c, 'id'), m.me.guild_id])).rowCount) fail(404, 'Catégorie introuvable');
+  const { rows: ts } = await db.query('SELECT id FROM guild_topics WHERE folder_id=$1', [P(c, 'id')]);
+  for (const t of ts) {
+    await db.query('DELETE FROM guild_posts WHERE topic_id=$1', [t.id]);
+    await db.query('DELETE FROM guild_topic_reads WHERE topic_id=$1', [t.id]);
+  }
+  await db.query('DELETE FROM guild_topics WHERE folder_id=$1', [P(c, 'id')]);
+  await db.query('DELETE FROM guild_folders WHERE id=$1', [P(c, 'id')]);
+  return { ok: true };
+}));
+def(guilds, 'post', '/guilds/topics/{id}/delete', z.object({ characterId: z.number() }), (c, b) => tx(async db => {
+  const m = await member(db, c, b.characterId); if (!m.leader) fail(403, 'Réservé au Chef');
+  if (!(await db.query('SELECT 1 FROM guild_topics t JOIN guild_folders f ON f.id=t.folder_id WHERE t.id=$1 AND f.guild_id=$2', [P(c, 'id'), m.me.guild_id])).rowCount) fail(404, 'Sujet introuvable');
+  await db.query('DELETE FROM guild_posts WHERE topic_id=$1', [P(c, 'id')]);
+  await db.query('DELETE FROM guild_topic_reads WHERE topic_id=$1', [P(c, 'id')]);
+  await db.query('DELETE FROM guild_topics WHERE id=$1', [P(c, 'id')]);
+  return { ok: true };
+}));
+/** Transfert d'un sujet vers une autre catégorie de la même guilde (détenteurs de create_topics / Chef) :
+ *  le sujet garde ses messages et ses droits, il est simplement raccroché et rangé en fin de cible. */
+def(guilds, 'post', '/guilds/topics/{id}/move', z.object({ characterId: z.number(), folderId: z.number() }), (c, b) => tx(async db => {
+  const m = await member(db, c, b.characterId); need(m, 'create_topics');
+  const { rows: [t] } = await db.query('SELECT t.id, t.folder_id FROM guild_topics t JOIN guild_folders f ON f.id=t.folder_id WHERE t.id=$1 AND f.guild_id=$2', [P(c, 'id'), m.me.guild_id]); if (!t) fail(404, 'Sujet introuvable');
+  const { rows: [cat] } = await db.query('SELECT id FROM guild_folders WHERE id=$1 AND guild_id=$2', [b.folderId, m.me.guild_id]); if (!cat) fail(404, 'Catégorie cible introuvable');
+  if (cat.id === t.folder_id) return { ok: true }; // déjà à sa place
+  const so = (await db.query('SELECT COALESCE(MAX(sort_order),0)+1 n FROM guild_topics WHERE folder_id=$1', [cat.id])).rows[0].n;
+  await db.query('UPDATE guild_topics SET folder_id=$2, sort_order=$3 WHERE id=$1', [P(c, 'id'), cat.id, so]);
+  return { ok: true };
+}));
 def(guilds, 'post', '/guilds/reorder', z.object({ characterId: z.number(), kind: z.enum(['folders', 'topics', 'ranks']), folderId: z.number().optional(), ids: z.array(z.number()).max(200) }), (c, b) => tx(async db => {
   const m = await member(db, c, b.characterId);
   if (b.kind === 'ranks') { if (!m.leader) fail(403, 'Réservé au Chef'); for (let i = 0; i < b.ids.length; i++) await db.query('UPDATE guild_ranks SET sort_order=$3 WHERE id=$1 AND guild_id=$2', [b.ids[i], m.me.guild_id, i]); return { ok: true }; }
