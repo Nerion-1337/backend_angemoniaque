@@ -49,7 +49,7 @@ def(guilds, 'get', '/guilds/{characterId}', null, c => tx(async db => {
   const m = await member(db, c, P(c, 'characterId')), gid = m.me.guild_id; const { rows: [g] } = await db.query('SELECT id,name,tag,logo,mantra,description,default_rank_id FROM guilds WHERE id=$1', [gid]);
   const vis = (r: any) => m.leader || (r.visible_ranks ?? []).includes(m.rank.name);
   const folders = (await db.query('SELECT id,name,description,visible_ranks,write_ranks FROM guild_folders WHERE guild_id=$1 ORDER BY sort_order,id', [gid])).rows.filter(vis);
-  for (const f of folders) f.topics = (await db.query('SELECT t.id,t.title,t.description,t.visible_ranks,t.write_ranks,ch.pseudo author FROM guild_topics t LEFT JOIN characters ch ON ch.id=t.author_id WHERE t.folder_id=$1 ORDER BY t.sort_order,t.id', [f.id])).rows.filter(t => m.leader || effRead(t, f).includes(m.rank.name));
+  for (const f of folders) f.topics = (await db.query('SELECT t.id,t.title,t.description,t.visible_ranks,t.write_ranks,t.author_id,ch.pseudo author FROM guild_topics t LEFT JOIN characters ch ON ch.id=t.author_id WHERE t.folder_id=$1 ORDER BY t.sort_order,t.id', [f.id])).rows.filter(t => m.leader || effRead(t, f).includes(m.rank.name));
   // Messages non lus (niveaux sujet + cumul catégorie) ; seuls les sujets visibles comptent.
   const visT = new Set(folders.flatMap(f => (f.topics ?? []).map((t: any) => t.id)));
   const unread: any = { topics: {}, folders: {} };
@@ -120,8 +120,11 @@ def(guilds, 'post', '/guilds/folders/{id}/edit', z.object({ characterId: z.numbe
   await db.query('UPDATE guild_folders SET name=COALESCE($2,name), description=COALESCE($3,description) WHERE id=$1', [P(c, 'id'), b.name ?? null, b.description]);
   return { ok: true }; }));
 def(guilds, 'post', '/guilds/topics/{id}/edit', z.object({ characterId: z.number(), title: z.string().min(1).max(100).optional(), description: z.string().max(500).nullable().optional() }), (c, b) => tx(async db => {
-  const m = await member(db, c, b.characterId); need(m, 'create_topics');
-  const { rows: [t] } = await db.query('SELECT t.id FROM guild_topics t JOIN guild_folders f ON f.id=t.folder_id WHERE t.id=$1 AND f.guild_id=$2', [P(c, 'id'), m.me.guild_id]); if (!t) fail(404, 'Sujet introuvable');
+  const m = await member(db, c, b.characterId);
+  const { rows: [t] } = await db.query('SELECT t.id, t.author_id, f.write_ranks FROM guild_topics t JOIN guild_folders f ON f.id=t.folder_id WHERE t.id=$1 AND f.guild_id=$2', [P(c, 'id'), m.me.guild_id]); if (!t) fail(404, 'Sujet introuvable');
+  // Droit d'édition du sujet : auteur du sujet, détenteur de create_topics, ou porteur du droit
+  // d'écriture de la catégorie parente ; le Chef passe toujours (can()).
+  if (!m.can('create_topics') && t.author_id !== m.me.id && !(t.write_ranks ?? []).includes(m.rank.name)) fail(403, 'Vous ne pouvez pas modifier ce sujet');
   await db.query('UPDATE guild_topics SET title=COALESCE($2,title), description=COALESCE($3,description) WHERE id=$1', [P(c, 'id'), b.title ?? null, b.description]);
   return { ok: true }; }));
 def(guilds, 'post', '/guilds/folders/{id}/perms', z.object({ characterId: z.number(), readRanks: z.array(z.string()).default([]), writeRanks: z.array(z.string()).default([]) }), (c, b) => tx(async db => {
