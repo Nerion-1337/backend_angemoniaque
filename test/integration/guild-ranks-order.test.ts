@@ -40,4 +40,22 @@ describe.skipIf(!process.env.DATABASE_URL)('guilde : ordre des rangs', () => {
     expect(s.folders.find((x: any) => x.id === f.id).topics[0].visible_ranks).toEqual(['Commandant']);
     expect((await st(b.id, b.tk)).me.rank).toBe('Membre'); // les autres porteurs ne sont pas concernés
   });
+  test('séquence front (toggle) : création + réorganisation = insertion au milieu', async () => {
+    // Le front crée le rang (sort_order max+1 → fin de liste) puis persiste l'ordre cible
+    // via /guilds/reorder : ici la carte d'ajout est affichée en 2e position → insertion « au-dessus ».
+    let s = await st(a.id, a.tk); const names0 = s.ranks.map((x: any) => x.name);
+    expect(names0).toEqual(['Éclaireur', 'Commandant', 'Officier', 'Membre']);
+    const r = await call('/guilds/ranks', { characterId: a.id, name: 'Gardien' }, a.tk);
+    expect(r.status).toBe(200);
+    s = await st(a.id, a.tk);
+    expect(s.ranks.map((x: any) => x.name)).toEqual(['Éclaireur', 'Commandant', 'Officier', 'Membre', 'Gardien']); // création en fin de liste
+    const prev = s.ranks.slice(0, -1).map((x: any) => x.id), target = [...prev]; target.splice(2, 0, r.j.id); // Gardien juste après Commandant
+    expect((await call('/guilds/reorder', { characterId: a.id, kind: 'ranks', ids: target }, a.tk)).status).toBe(200);
+    s = await st(a.id, a.tk);
+    expect(s.ranks.map((x: any) => x.name)).toEqual(['Éclaireur', 'Commandant', 'Gardien', 'Officier', 'Membre']);
+    // un rang créé ensuite repart de la fin (max+1) malgré l'ordre réorganisé
+    expect((await call('/guilds/ranks', { characterId: a.id, name: 'Sentinelle' }, a.tk)).status).toBe(200);
+    s = await st(a.id, a.tk);
+    expect(s.ranks.map((x: any) => x.name)).toEqual(['Éclaireur', 'Commandant', 'Gardien', 'Officier', 'Membre', 'Sentinelle']);
+  });
 });

@@ -33,7 +33,7 @@ All in `src/routes/guilds.ts` (house `def()` idiom, `tx` transactions):
 - Rename → `guild_ranks.name` + cascade `guild_folders.visible_ranks` / `guild_topics.visible_ranks` (name swap, only rows referencing the old name); holders' displayed rank follows via `me.rank` (name-based).
 
 ## Tests
-- `test/integration/guild-ranks-order.test.ts` (needs `DATABASE_URL`; CI + `stack exec backend -- npx vitest run`): new rank lands last (`['Chef','Officier','Membre','Éclaireur']`); reorder by a non-leader → 403; reorder by the leader persists (`['Éclaireur','Officier','Chef','Membre']`) and foreign ids are ignored; renaming the Chef rank to 'Commandant' → 200, holder's `me.rank` follows, unchosen folder/topic visibility defaults to `['Commandant']`, other holders unaffected.
+- `test/integration/guild-ranks-order.test.ts` (needs `DATABASE_URL`; CI + `stack exec backend -- npx vitest run`): new rank lands last (`['Chef','Officier','Membre','Éclaireur']`); reorder by a non-leader → 403; reorder by the leader persists (`['Éclaireur','Officier','Chef','Membre']`) and foreign ids are ignored; renaming the Chef rank to 'Commandant' → 200, holder's `me.rank` follows, unchosen folder/topic visibility defaults to `['Commandant']`, other holders unaffected; « séquence front (toggle) » test: create + reorder reproduces the front's au-dessus/below toggle (mid-list insertion, then a later create lands at the end again).
 - `test/integration/guild-ranks.test.ts` (previous feature) was updated: the "Chef protégé" assertion now expects 200 (label renamable) + holder follows.
 
 ## Gotchas
