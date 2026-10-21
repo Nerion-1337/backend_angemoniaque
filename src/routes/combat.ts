@@ -1,6 +1,13 @@
-import { def, router, z, P } from '../lib/route.js'; import { tx, ownChar, fail, log, dist, trimLog } from '../lib/db.js';
-import { actor, travel, spend } from '../game/movement.js'; import { gearStats } from '../game/stats.js'; import { loadTarget, targetAt, applyDamage } from '../game/combatlib.js';
-import { computeHitChance, applyArmor } from '../game/rules.js'; import { broadcast } from '../realtime/ws.js'; import { combatEvent } from '../lib/events.js';
+import { def, router, z, P } from '../lib/route.js';
+import { tx, ownChar, fail, log, dist, trimLog } from '../lib/db.js';
+import { actor, travel, spend } from '../game/movement.js';
+import { gearStats } from '../game/stats.js';
+import { loadTarget, targetAt, applyDamage } from '../game/combatlib.js';
+import { computeHitChance } from '../game/rules.js'; import { inSafeZone } from '../game/terrain.js';
+import { applyArmor } from '../game/rules.js';
+import { broadcast } from '../realtime/ws.js';
+import { combatEvent } from '../lib/events.js';
+
 export const combat = router();
 const ATTACK_COST = 5;
 /** Attaquant : l'invocation contrôlée (ses stats) ou le héros (équipement). La monture peut cracher son souffle spécial. */
@@ -17,6 +24,7 @@ def(combat, 'post', '/combat/attack', z.object({ characterId: z.number(), target
   const col = b.targetCharacterId ? ['character_id', b.targetCharacterId] : b.targetMonsterId ? ['monsters_id', b.targetMonsterId] : b.targetSummonId ? ['summon_id', b.targetSummonId] : fail(400, 'Cible manquante');
   const { rows: [tp] } = await db.query(`SELECT * FROM positions WHERE ${col[0]}=$1`, [col[1]]); if (!tp || tp.map_id !== a.mp.map_id) fail(409, 'Cible introuvable sur cette carte');
   const t = (await loadTarget(db, tp))!; if (t.kind === 'character' && t.id === me.id) fail(400, 'Vous ne pouvez pas vous attaquer');
+  if (t.kind !== 'monster' && (inSafeZone(a.mp.map_id, a.mp.coord_x, a.mp.coord_y) || inSafeZone(tp.map_id, tp.coord_x, tp.coord_y))) fail(403, 'Zone sacrée : aucun combat entre joueurs');
   const breath = !!b.useMountBreath && a.mount?.special_attack_name; if (b.useMountBreath && !breath) fail(409, 'Aucune attaque spéciale de monture');
   const cost = breath ? a.mount.special_attack_energy : ATTACK_COST, at = await attacker(db, me, a);
   if (dist(a.mp, tp) > a.range) await travel(db, me, a, { x: tp.coord_x, y: tp.coord_y }, a.range, breath ? 0 : cost);       // trajet (monture) + action (personnage)

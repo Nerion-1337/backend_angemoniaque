@@ -3,7 +3,7 @@ export async function freeCell(db: any, mapId: number, cx: number, cy: number, r
   const { rows: [m] } = await db.query('SELECT width w,height h FROM maps WHERE id=$1', [mapId]);
   for (let i = 0; i < 100; i++) {
     const x = cx + Math.floor(Math.random() * (2 * r + 1)) - r, y = cy + Math.floor(Math.random() * (2 * r + 1)) - r;
-    if (x < 0 || y < 0 || x >= m.w || y >= m.h || ['shallow', 'deep'].includes(terrain(x, y).kind)) continue;
+    if (x < 0 || y < 0 || x >= m.w || y >= m.h || ['shallow', 'deep', 'volcano'].includes(terrain(x, y, mapId).kind)) continue;
     if (!(await db.query('SELECT 1 FROM positions WHERE map_id=$1 AND coord_x=$2 AND coord_y=$3 AND item_id IS NULL', [mapId, x, y])).rowCount) return { x, y };
   }
   return fail(503, 'Aucune case libre');

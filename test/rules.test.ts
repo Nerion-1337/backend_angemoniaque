@@ -20,7 +20,7 @@ test('eau peu profonde = 4 ; eau profonde interdite à pied / monture terrestre'
   expect(stepCost(sh, { mount: null })).toBe(4); expect(stepCost(dp, { mount: null })).toBe(Infinity); expect(stepCost(dp, { mount: { flying: false, aquatic: false } })).toBe(Infinity); });
 test('navire / monture aquatique : l\'eau seulement ; monture volante : partout', () => { const dp = terrain(find('deep').x, find('deep').y), pl = terrain(find('plain').x, find('plain').y);
   expect(stepCost(dp, { mount: { aquatic: true } })).toBe(1); expect(stepCost(pl, { mount: { aquatic: true } })).toBe(Infinity); expect(stepCost(dp, { mount: { flying: true } })).toBe(1); expect(stepCost(pl, { mount: { flying: true } })).toBe(1); });
-test('relief : plus de forêts, montagnes et eaux', () => { const c: any = {}; for (let x = 0; x < 100; x++) for (let y = 0; y < 100; y++) { const k = terrain(x, y).kind; c[k] = (c[k] ?? 0) + 1; } for (const k of ['plain', 'forest', 'mountain', 'shallow', 'deep']) expect(c[k]).toBeGreaterThan(300); });
+test('relief : plus de forêts, montagnes et eaux', () => { const c: any = {}; for (let x = 0; x < 100; x++) for (let y = 0; y < 100; y++) { const k = terrain(x, y, 2).kind; c[k] = (c[k] ?? 0) + 1; } for (const k of ['plain', 'forest', 'mountain', 'shallow', 'deep']) expect(c[k]).toBeGreaterThan(300); });
 import { applyArmor } from '../src/game/rules';
 test('dégâts : exemples du cahier des charges', () => {
   expect(computeCharacterDamage(10, 2, 5)).toBe(40);        // Force 10, épée 5 dégâts / 2 Force requise : 5 × (10 − 2) = 40
