@@ -6,6 +6,10 @@ test('diagonale = 1 case', () => expect(pathEnergy({ x: 0, y: 0 }, { x: 3, y: 3 
 test('chemin 8 directions', () => { expect(walk({ x: 0, y: 0 }, { x: 3, y: 1 })).toHaveLength(3); expect(routeEnergy({ x: 0, y: 0 }, { x: 2, y: 2 }, () => 2)).toBe(4); });
 test('surcharge divine', () => expect(effectiveRank(2, 3, { 3: 2, 4: 3 })).toBe(3));
 test('terrain déterministe', () => expect(terrain(10, 10)).toEqual(terrain(10, 10)));
+test('ressource de la case : perle/eau/herbe/bois/pierre suit le terrain', () => {
+  const RES: Record<string, string> = { deep: 'perle', shallow: 'eau', plain: 'herbe', forest: 'bois', mountain: 'pierre' };
+  for (let x = 0; x < 100; x++) for (let y = 0; y < 100; y++) { const t = terrain(x, y); expect(t.resource).toBe(RES[t.kind]); }
+});
 import { computeCharacterDamage, getPublicHealthState, computePactStatTransfer, canUseDivineEnergy, computeHitChance } from '../src/game/rules';
 test('dégâts = arme × (Force − Force requise), 1 à mains nues', () => { expect(computeCharacterDamage(10, 3, 3)).toBe(21); expect(computeCharacterDamage(10, 3, null)).toBe(1); expect(computeCharacterDamage(2, 5, 3)).toBe(1); });
 test('état de forme public (jamais les PV exacts)', () => { expect(getPublicHealthState(100, 100)).toBe('En pleine forme'); expect(getPublicHealthState(60, 100)).toBe('Bon état'); expect(getPublicHealthState(30, 100)).toBe('Blessé'); expect(getPublicHealthState(10, 100)).toBe('Souffrant'); });

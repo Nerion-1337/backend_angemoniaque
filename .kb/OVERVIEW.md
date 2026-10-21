@@ -15,7 +15,7 @@ _Généré par `kb overview` — ne pas éditer ici ; notes manuelles dans `.kb/
 - Docker test target : `npm run typecheck && npm test` (utilisé par le hook pre-commit et CI)
 - kb : backend d'embedding `hash` (offline) dans `.kb/config.json`
 
-## Features (9)
+## Features (10)
 - **combat-realtime** [done] (.kb/cards/combat-realtime.md) Realtime combat events: broadcast combat outcomes to map spectators — Makes combat outcomes visible in real time to every other player on the same map: every resolved attack (direct `/combat/attack` or the "Trait de Lumière" attack spell) publishes a `combat` event on t — files: src/lib/events.ts, src/routes/combat.ts, src/routes/spells.ts
 - **guild-default-rank** [done] (.kb/cards/guild-default-rank.md) Guilde : rang par défaut des nouveaux arrivants (option unique default_rank_id) — The guild leader can pick **one** rank as the default assigned to newcomers (accepted applicants and accepted invitations). — files: src/routes/guilds.ts, test/integration/guild-default-rank.test.ts
 - **guild-forum-edit** [done] (.kb/cards/guild-forum-edit.md) Guilde : droits d'édition des catégories et sujets (auteur / create_topics / écriture catégorie) — Server half of the forum edit-rights pass: `POST /guilds/topics/{id}/edit` is no longer `create_topics`-only — it is allowed for the **topic author**, holders of `create_topics` (management roles), ho — files: src/routes/guilds.ts, test/integration/guild-forum-edit.test.ts
@@ -25,6 +25,7 @@ _Généré par `kb overview` — ne pas éditer ici ; notes manuelles dans `.kb/
 - **guild-ranks-integrity** [done] (.kb/cards/guild-ranks-integrity.md) Guilde : intégrité du dernier Chef + renommage des rangs — Guild-rank integrity plus rank renaming: a guild must never be left without a Chef, so the **last holder of the Chef rank** (`guild_ranks.is_leader = true`) cannot leave the guild nor be demoted to a  — files: src/routes/guilds.ts, test/integration/guild-ranks.test.ts
 - **guild-ranks-order** [done] (.kb/cards/guild-ranks-order.md) Guilde : ordre persisté des rangs, label Chef renommable, visibilités par défaut dynamiques — Server half of the "Rangs & privilèges" revamp: guild ranks have a persistent display order (`sort_order`, migration `infra/db/05_rank_order.sql`); reordering is leader-only; new ranks are created at  — files: src/routes/guilds.ts, test/integration/guild-ranks-order.test.ts
 - **hono-skeleton** [done] (.kb/cards/hono-skeleton.md) Hono + Zod OpenAPI skeleton: entry, router, auth, realtime WS — The Hono + `@hono/zod-openapi` skeleton that serves the game REST API on port 3000: one OpenAPI app factory, per-domain route modules (`src/routes/*`) with per-endpoint Zod schemas, JWT auth middlewar — files: src/index.ts, src/app.ts, src/config/env.ts, src/lib/route.ts (+5)
+- **map-terrain-gather** [done] (.kb/cards/map-terrain-gather.md) Procedural map & terrain: resources, movement rules, spawn, map/action routes — The world model of the game: a deterministic procedural terrain shared by every instance (no per-map storage), where each cell has a kind, a movement cost and a harvestable resource (`perle/eau/herbe/ — files: src/game/terrain.ts, src/game/movement.ts, src/game/spawn.ts, src/routes/map.ts (+2)
 
 ## File map
 - `package.json`
@@ -35,7 +36,7 @@ _Généré par `kb overview` — ne pas éditer ici ; notes manuelles dans `.kb/
 - `src/game/divine.ts` — Surcharge divine : plus d'objets que requis => rang supérieur gratuit, quota ignoré. — (header), KIND, required, held, applySpec, refreshSurcharge, die
 - `src/game/movement.ts` — Acteur courant : l'invocation contrôlée, sinon le héros (monté ou non). — (header), MOUNT_SQL, activeMount, isWater, actor, stepCost, blockedMsg, spend, pathCost, travel
 - `src/game/rules.ts` — Coût XP du prochain point : base × multiplicateur du palier (hypothèse : palier = floor(achats / numb_up), pla — StatRule, statUpgradeCost, pathEnergy, totalEnergy, effectiveRank, inVision, walk, routeEnergy, computeCharacterDamage, getPublicHealthState, computePactStatTransfer, canUseDivineEnergy, computeHitChance, applyArmor
-- `src/game/spawn.ts` — freeCell, CAPITAL, spawn
+- `src/game/spawn.ts` — Le rayon s’élargit si l’aire est saturée (capitale encombrée en base de dev) : on préfère — freeCell, CAPITAL, spawn
 - `src/game/stats.ts` — Caractéristiques effectives : base + bonus d'équipement ; dégâts = arme × (Force − Force requise) ; armure = s — gearStats, maxSummons
 - `src/game/terrain.ts` — Terrain procédural déterministe (dupliqué à l'identique côté front : src/lib/terrain.js) — h, noiseAt, Terrain, terrain
 - `src/index.ts`
@@ -74,5 +75,6 @@ _Généré par `kb overview` — ne pas éditer ici ; notes manuelles dans `.kb/
 - `test/integration/guild-forum.test.ts` — Forum de guilde : ordre d'affichage des catégories et sujets — réorganisation par liste
 - `test/integration/guild-ranks-order.test.ts` — Rangs de guilde : ordre persisté (sort_order) et refonte Gestion — réorganisation réservée au Chef,
 - `test/integration/guild-ranks.test.ts` — Parcours complet des rangs de guilde : le dernier Chef ne peut ni quitter ni changer de rang
+- `test/integration/map-gather.test.ts` — Parcours complet carte & récolte : déplacement, récolte sur place / à distance, ressources JSONB,
 - `test/rules.test.ts` — r, find
 - `tsconfig.json`

@@ -1,12 +1,16 @@
 import { terrain } from './terrain.js'; import { fail } from '../lib/db.js';
 export async function freeCell(db: any, mapId: number, cx: number, cy: number, r: number) {
   const { rows: [m] } = await db.query('SELECT width w,height h FROM maps WHERE id=$1', [mapId]);
-  for (let i = 0; i < 100; i++) {
-    const x = cx + Math.floor(Math.random() * (2 * r + 1)) - r, y = cy + Math.floor(Math.random() * (2 * r + 1)) - r;
-    if (x < 0 || y < 0 || x >= m.w || y >= m.h || ['shallow', 'deep'].includes(terrain(x, y).kind)) continue;
-    if (!(await db.query('SELECT 1 FROM positions WHERE map_id=$1 AND coord_x=$2 AND coord_y=$3 AND item_id IS NULL', [mapId, x, y])).rowCount) return { x, y };
+  // Le rayon s’élargit si l’aire est saturée (capitale encombrée en base de dev) : on préfère
+  // naître un peu plus loin plutôt que de renoncer. Échec seulement si toute la carte est occupée.
+  for (let rad = r; ; rad += 2) {
+    for (let i = 0; i < 100; i++) {
+      const x = cx + Math.floor(Math.random() * (2 * rad + 1)) - rad, y = cy + Math.floor(Math.random() * (2 * rad + 1)) - rad;
+      if (x < 0 || y < 0 || x >= m.w || y >= m.h || ['shallow', 'deep'].includes(terrain(x, y).kind)) continue;
+      if (!(await db.query('SELECT 1 FROM positions WHERE map_id=$1 AND coord_x=$2 AND coord_y=$3 AND item_id IS NULL', [mapId, x, y])).rowCount) return { x, y };
+    }
+    if (rad * 2 >= Math.max(m.w, m.h)) return fail(503, 'Aucune case libre');
   }
-  return fail(503, 'Aucune case libre');
 }
 const CAPITAL: Record<string, string> = { human: 'Hôtel de ville', demon: 'Bastion Infernal', angel: 'Sanctuaire de la Providence' };
 export async function spawn(db: any, charId: number, race: string) {
