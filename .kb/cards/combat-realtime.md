@@ -2,7 +2,7 @@
 title: Realtime combat events: broadcast combat outcomes to map spectators
 slug: combat-realtime
 status: done
-updated: 2026-10-19
+updated: 2026-10-21
 files:
   - src/lib/events.ts
   - src/routes/combat.ts
@@ -21,6 +21,7 @@ Makes combat outcomes visible in real time to every other player on the same map
 ## How it works
 - `src/lib/events.ts` exports the pure builder `combatEvent(target, killed, missed=false)` → `{ type: 'combat', target, killed, missed }`. It is the single source of the event shape, shared by both combat entry points.
 - `POST /combat/attack` (`src/routes/combat.ts`): after the hit roll and damage application inside the transaction (`applyDamage`), the route broadcasts `combatEvent(t.id, r.killed)` on `a.mp.map_id` — and, new, the miss branch (early return) also broadcasts `combatEvent(t.id, false, true)`, so a dodged attack still refreshes spectators. The move part of a long-range attack (`travel`) emits no separate event; the combat event covers the visual state change.
+- **Safe zone (new)**: both `/combat/attack` and the attack spells reject any player-vs-player fight when either the attacker's or the target's cell lies inside a safe zone (`inSafeZone` from `terrain.ts`), 403 `Zone sacrée : aucun combat entre joueurs` — see card `map-terrain-gather` for the positional rule (monsters stay targetable).
 - `POST /spells/cast` (`src/routes/spells.ts`, spell kind `attack`): previously published a bare `{ type: 'combat' }`; it now publishes the same `combatEvent(t.id, r.killed)` payload, so every channel message has the same shape.
 - Fan-out: `realtime/ws.ts` — `broadcast(mapId, evt)` publishes JSON to Redis channel `map:{mapId}`; the app's psubscribed client re-sends each message to every WebSocket joined to that map (`joinMap`), so the event scales across backend instances.
 - Privacy: the event carries only the target id, the `killed` flag and the `missed` flag — never exact HP (rule from `map.ts`: other players only ever see a public health state; the client re-fetch `/map/{id}/area` after the event to see the updated state, and for a killed hero the `die()` reposition to map 3).
