@@ -1,5 +1,5 @@
 import { def, router, z, P } from '../lib/route.js'; import { tx, ownChar, fail, log, dist } from '../lib/db.js';
-import { actor, spend } from '../game/movement.js'; import { maxSummons } from '../game/stats.js'; import { terrain } from '../game/terrain.js'; import { targetAt, applyDamage } from '../game/combatlib.js'; import { applyArmor } from '../game/rules.js'; import { broadcast } from '../realtime/ws.js'; import { combatEvent } from '../lib/events.js';
+import { actor, spend } from '../game/movement.js'; import { maxSummons } from '../game/stats.js'; import { terrain, inSafeZone } from '../game/terrain.js'; import { targetAt, applyDamage } from '../game/combatlib.js'; import { applyArmor } from '../game/rules.js'; import { broadcast } from '../realtime/ws.js'; import { combatEvent } from '../lib/events.js';
 export const spells = router();
 def(spells, 'get', '/spells/{characterId}', null, c => tx(async db => { const me = await ownChar(db, c, P(c, 'characterId'));
   return { spells: (await db.query('SELECT s.* FROM character_spells cs JOIN spells s ON s.id=cs.spell_id WHERE cs.character_id=$1 ORDER BY s.id', [me.id])).rows, maxSummons: await maxSummons(db, me), active: (await db.query('SELECT count(*)::int n FROM summons WHERE owner_id=$1', [me.id])).rows[0].n }; }));
@@ -10,7 +10,7 @@ def(spells, 'post', '/spells/cast', z.object({ characterId: z.number(), spellId:
   if (sp.kind === 'summon') {
     if (d !== 1) fail(409, 'Choisissez une case adjacente'); const cap = await maxSummons(db, me), n = (await db.query('SELECT count(*)::int n FROM summons WHERE owner_id=$1', [me.id])).rows[0].n;
     if (n >= cap) fail(409, `Limite d'invocations atteinte (${cap} max)`);
-    if (terrain(tx_, ty).kind === 'deep' || (await db.query('SELECT 1 FROM positions WHERE map_id=$1 AND coord_x=$2 AND coord_y=$3 AND item_id IS NULL', [a.mp.map_id, tx_, ty])).rowCount) fail(409, 'Case occupée');
+    if (terrain(tx_, ty, a.mp.map_id).kind === 'deep' || (await db.query('SELECT 1 FROM positions WHERE map_id=$1 AND coord_x=$2 AND coord_y=$3 AND item_id IS NULL', [a.mp.map_id, tx_, ty])).rowCount) fail(409, 'Case occupée');
     await spend(db, me, a, sp.energy_cost);
     const { rows: [s] } = await db.query(`INSERT INTO summons(owner_id,name,hp_current,hp_max,energy_current,energy_max,recovery,see,strength,agility,armor,damage) VALUES ($1,'Golem d’Éther',280,280,75,75,5,4,14,8,10,14) RETURNING id`, [me.id]);
     await db.query('INSERT INTO positions(map_id,coord_x,coord_y,summon_id) VALUES ($1,$2,$3,$4)', [a.mp.map_id, tx_, ty, s.id]);
@@ -19,6 +19,7 @@ def(spells, 'post', '/spells/cast', z.object({ characterId: z.number(), spellId:
     for (const stat of ['strength', 'agility']) { await db.query(`UPDATE characters SET ${stat}=${stat}+4 WHERE id=$1`, [me.id]); await db.query("INSERT INTO temp_buffs(character_id,stat,delta,source,expires_at) VALUES ($1,$2,4,$3,now()+interval '1 hour')", [me.id, stat, `spell:${sp.id}`]); } }
   else if (sp.kind === 'attack') {
     if (d > 4) fail(409, 'Cible hors de portée (4 cases max)'); const t = await targetAt(db, a.mp.map_id, tx_, ty); if (!t) fail(409, 'Aucune cible sur cette case'); if (t.kind === 'character' && t.id === me.id) fail(400, 'Cible invalide');
+    if (t.kind !== 'monster' && (inSafeZone(a.mp.map_id, a.mp.coord_x, a.mp.coord_y) || inSafeZone(a.mp.map_id, tx_, ty))) fail(403, 'Zone sacrée : aucun combat entre joueurs');
     await spend(db, me, a, sp.energy_cost); const dmg = applyArmor(sp.damage, t.magicArmor), r = await applyDamage(db, t, dmg, me.id); await log(db, me.id, `${sp.name} sur ${t.name} : -${dmg} PV`); broadcast(a.mp.map_id, combatEvent(t.id, r.killed)); return { ok: true, dmg, killed: r.killed };
   }
   await log(db, me.id, `Sort lancé : ${sp.name}`); broadcast(a.mp.map_id, { type: 'spell' }); return { ok: true };

@@ -6,7 +6,7 @@ export async function freeCell(db: any, mapId: number, cx: number, cy: number, r
   for (let rad = r; ; rad += 2) {
     for (let i = 0; i < 100; i++) {
       const x = cx + Math.floor(Math.random() * (2 * rad + 1)) - rad, y = cy + Math.floor(Math.random() * (2 * rad + 1)) - rad;
-      if (x < 0 || y < 0 || x >= m.w || y >= m.h || ['shallow', 'deep'].includes(terrain(x, y).kind)) continue;
+      if (x < 0 || y < 0 || x >= m.w || y >= m.h || ['shallow', 'deep', 'volcano'].includes(terrain(x, y, mapId).kind)) continue;
       if (!(await db.query('SELECT 1 FROM positions WHERE map_id=$1 AND coord_x=$2 AND coord_y=$3 AND item_id IS NULL', [mapId, x, y])).rowCount) return { x, y };
     }
     if (rad * 2 >= Math.max(m.w, m.h)) return fail(503, 'Aucune case libre');

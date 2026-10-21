@@ -12,7 +12,7 @@ def(buildings, 'post', '/buildings/place', z.object({ characterId: z.number(), k
     await db.query("INSERT INTO character_mounts(character_id,mount_id,energy_current,hp_current) SELECT $1,id,energy_max,hp_max FROM mounts WHERE name='Navire'", [me.id]); await log(db, me.id, 'Construit : navire'); return { ok: true, cost: BUILD_COST };
   }
   if (b.x === undefined || b.y === undefined) fail(400, 'Case cible requise');
-  if (['shallow', 'deep'].includes(terrain(b.x, b.y).kind) || (await db.query('SELECT 1 FROM positions WHERE map_id=$1 AND coord_x=$2 AND coord_y=$3 AND item_id IS NULL', [a.mp.map_id, b.x, b.y])).rowCount) fail(409, 'Case indisponible');
+  if (['shallow', 'deep', 'volcano'].includes(terrain(b.x, b.y, a.mp.map_id).kind) || (await db.query('SELECT 1 FROM positions WHERE map_id=$1 AND coord_x=$2 AND coord_y=$3 AND item_id IS NULL', [a.mp.map_id, b.x, b.y])).rowCount) fail(409, 'Case indisponible');
   const t = await travel(db, me, a, b, 1, BUILD_COST);
   await db.query('DELETE FROM character_items WHERE ctid=$1::tid', [sc.ctid]);
   const { rows: [bd] } = await db.query('INSERT INTO buildings(name,kind,owner_id,data) VALUES ($1,$2,$3,$4) RETURNING id', [b.kind, b.kind, me.id, JSON.stringify({ hp: 200, ...(b.totem ? { totem: b.totem } : {}) })]);

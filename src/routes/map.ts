@@ -1,4 +1,4 @@
-import { def, router, P } from '../lib/route.js'; import { pool } from '../lib/db.js'; import { terrain } from '../game/terrain.js'; import { getPublicHealthState } from '../game/rules.js';
+import { def, router, P } from '../lib/route.js'; import { pool } from '../lib/db.js'; import { terrain, inSafeZone } from '../game/terrain.js'; import { getPublicHealthState } from '../game/rules.js';
 export const mapRoutes = router();
 const SEL = `SELECT p.coord_x x,p.coord_y y, CASE WHEN p.character_id IS NOT NULL THEN 'character' WHEN p.monsters_id IS NOT NULL THEN 'monster' WHEN p.summon_id IS NOT NULL THEN 'summon' WHEN p.building_id IS NOT NULL THEN 'building' WHEN p.mount_id IS NOT NULL THEN 'mount' ELSE 'item' END kind,
   COALESCE(ch.pseudo,mo.name,sm.name,b.name) name, ch.race, ch.id char_id, mo.id monster_id, sm.id summon_id, b.id building_id, b.kind building_kind, b.invulnerable, s.name rank_name, g.name guild,
@@ -15,6 +15,6 @@ def(mapRoutes, 'get', '/map/{mapId}/cell', null, async c => {
   const q = c.req.query(), x = +q.x, y = +q.y, e = (await pool.query(`${SEL} WHERE p.map_id=$1 AND p.coord_x=$2 AND p.coord_y=$3 AND p.item_id IS NULL`, [P(c, 'mapId'), x, y])).rows[0];
   const out: any = e ? pub(e) : null;
   if (out?.kind === 'character' && q.details) out.visibleGear = (await pool.query('SELECT i.name FROM character_items ci JOIN items i ON i.id=ci.item_id WHERE ci.character_id=$1 AND ci.equipped_slot IS NOT NULL', [out.char_id])).rows.map((r: any) => r.name);
-  return { x, y, terrain: terrain(x, y), entity: out };
+  return { x, y, terrain: terrain(x, y, P(c, 'mapId')), safe: inSafeZone(P(c, 'mapId'), x, y), entity: out };
 });
 def(mapRoutes, 'get', '/map/{mapId}/landmarks', null, async c => (await pool.query(`SELECT b.name,b.kind,p.coord_x x,p.coord_y y FROM buildings b JOIN positions p ON p.building_id=b.id WHERE p.map_id=$1 AND b.invulnerable`, [P(c, 'mapId')])).rows);

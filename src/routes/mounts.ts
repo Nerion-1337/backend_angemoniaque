@@ -9,5 +9,5 @@ def(mounts, 'post', '/mounts/summon', z.object({ characterId: z.number(), mountI
 }));
 def(mounts, 'post', '/mounts/dismount', z.object({ characterId: z.number() }), (c, b) => tx(async db => {
   const me = await ownChar(db, c, b.characterId), mp = await posOf(db, me.id), m = await activeMount(db, me.id);
-  if (m && !m.flying && terrain(mp.coord_x, mp.coord_y).kind === 'deep') fail(409, 'Impossible de renvoyer sa monture en eau profonde');
+  if (m && !m.flying && terrain(mp.coord_x, mp.coord_y, mp.map_id).kind === 'deep') fail(409, 'Impossible de renvoyer sa monture en eau profonde');
   await db.query('UPDATE character_mounts SET active=false WHERE character_id=$1', [me.id]); broadcast(mp.map_id, { type: 'moved' }); return { ok: true }; }));

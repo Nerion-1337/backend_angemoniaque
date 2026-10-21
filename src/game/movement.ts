@@ -1,4 +1,4 @@
-import { walk } from './rules.js'; import { terrain } from './terrain.js'; import { fail, posOf } from '../lib/db.js';
+import { walk } from './rules.js'; import { ignite } from './burn.js'; import { terrain } from './terrain.js'; import { fail, posOf } from '../lib/db.js';
 const MOUNT_SQL = `SELECT cm.*, m.name, m.hp_max, m.armor, m.strength, m.agility, m.energy_max, m.bonus_see, m.bonus_range, m.flying, m.aquatic, m.recovery, m.special_attack_name, m.special_attack_damage, m.special_attack_energy
   FROM character_mounts cm JOIN mounts m ON m.id=cm.mount_id WHERE cm.character_id=$1 AND cm.active`;
 export const activeMount = async (db: any, id: number) => (await db.query(MOUNT_SQL, [id])).rows[0];
@@ -29,18 +29,19 @@ export async function spend(db: any, ch: any, a: any, amount: number, kind: 'mov
 }
 export const pathCost = (a: any, from: any, to: any, stopAt = 0) => {
   let cost = 0;
-  for (const c of walk(from, to)) { const s = stepCost(terrain(c.x, c.y), a); if (!isFinite(s)) return Infinity; cost += s; if (Math.max(Math.abs(c.x - to.x), Math.abs(c.y - to.y)) <= stopAt) break; } return cost;
+  for (const c of walk(from, to)) { const s = stepCost(terrain(c.x, c.y, a.mp?.map_id), a); if (!isFinite(s)) return Infinity; cost += s; if (Math.max(Math.abs(c.x - to.x), Math.abs(c.y - to.y)) <= stopAt) break; } return cost;
 };
 /** Avance vers `target` jusqu'à `stopAt` cases (0 = sur la case). Trajet payé par la monture si invoquée ; l'action par le personnage. */
 export async function travel(db: any, ch: any, a: any, target: { x: number; y: number }, stopAt: number, actionCost = 0) {
   const mp = a.mp, { rows: [m] } = await db.query('SELECT width w,height h FROM maps WHERE id=$1', [mp.map_id]);
   if (target.x < 0 || target.y < 0 || target.x >= m.w || target.y >= m.h) fail(409, 'Hors de la carte');
-  const cells: { x: number; y: number }[] = []; let cost = 0;
-  for (const c of walk({ x: mp.coord_x, y: mp.coord_y }, target)) { const t = terrain(c.x, c.y), s = stepCost(t, a); if (!isFinite(s)) fail(409, blockedMsg(t.kind, a)); cells.push(c); cost += s;
+  const cells: { x: number; y: number }[] = []; let cost = 0, lava = false;
+  for (const c of walk({ x: mp.coord_x, y: mp.coord_y }, target)) { const t = terrain(c.x, c.y, mp.map_id), s = stepCost(t, a); if (!isFinite(s)) fail(409, blockedMsg(t.kind, a)); cells.push(c); cost += s; if (t.burn) lava = true;
     if (Math.max(Math.abs(c.x - target.x), Math.abs(c.y - target.y)) <= stopAt) break; }
   if (cells.length && (await db.query(`SELECT 1 FROM positions WHERE map_id=$1 AND item_id IS NULL AND (coord_x||','||coord_y)=ANY($2)`, [mp.map_id, cells.map(c => `${c.x},${c.y}`)])).rowCount) fail(409, 'Chemin bloqué');
   await spend(db, ch, a, cost, 'move'); await spend(db, ch, a, actionCost, 'action');
   const last = cells[cells.length - 1];
   if (last) { await db.query(`UPDATE positions SET coord_x=$2, coord_y=$3 WHERE ${a.sm ? 'summon_id' : 'character_id'}=$1`, [a.sm ? a.sm.id : ch.id, last.x, last.y]); a.mp = { ...mp, coord_x: last.x, coord_y: last.y }; }
+  if (lava && !a.sm) await ignite(db, ch.id);      // volcan : brûlure dès qu'on traverse une case
   return { cost, pos: last ?? { x: mp.coord_x, y: mp.coord_y }, mapId: mp.map_id };
 }

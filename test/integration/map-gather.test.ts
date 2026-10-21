@@ -1,8 +1,8 @@
 import { describe, test, expect, beforeAll } from 'vitest';
 import { terrain } from '../../src/game/terrain';
 import { pathCost } from '../../src/game/movement';
-// Parcours complet carte & récolte : déplacement, récolte sur place / à distance, ressources JSONB,
-// interdits (eau profonde à pied, hors carte) et confidentialité de la zone. Nécessite Postgres + Redis (CI / stack).
+// Parcours complet carte & récolte (carte v2 : Monde des Hommes dessiné, catalogue de ressources à clés stables,
+// volcan brûlant, zone sacrée sans JcJ). Nécessite Postgres + Redis (CI / stack).
 // La base de dev est partagée entre suites : on choisit les cases en évitant les cases ET les chemins occupés
 // (lecture de la zone en une fois), avec relance si un interlock nous coince au dernier moment.
 describe.skipIf(!process.env.DATABASE_URL)('Carte & récolte intégration', () => {
@@ -25,11 +25,12 @@ describe.skipIf(!process.env.DATABASE_URL)('Carte & récolte intégration', () =
     expect(me.actor).toBeTruthy();
   });
   const pos = () => me.actor.pos;
+  const tAt = (x: number, y: number) => terrain(x, y, pos().map_id);
   const occupied = new Set<string>(); // cases portant une entité bloquante (pas les objets déposés : ils ne bloquent pas le trajet)
   const loadZone = async (r: number) => { occupied.clear(); for (const e of await (await call(`/map/${pos().map_id}/area?x=${pos().x}&y=${pos().y}&r=${r}`)).json()) if (e.kind !== 'item') occupied.add(`${e.x},${e.y}`); };
   const walkCells = (from: { x: number; y: number }, to: { x: number; y: number }) => { const cells: { x: number; y: number }[] = []; let { x, y } = from; while (x !== to.x || y !== to.y) { x += Math.sign(to.x - x), y += Math.sign(to.y - y); cells.push({ x, y }); } return cells; };
   const clearPath = (c: { x: number; y: number }) => walkCells(pos(), c).every(p => !occupied.has(`${p.x},${p.y}`)); // inclut la case cible
-  // Case libre du bon type autour de la position courante (humains.map = 200×200), chemins compris. `maxCost` borne le
+  // Case libre du bon type autour de la position courante (200×200), chemins compris. `maxCost` borne le
   // coût d'énergie du trajet (budget du Mortel = 50) pour rester dans le budget quelle que soit la case trouvée.
   const freeCellOf = async (kind: string, r = 12, maxCost = Infinity) => {
     if (kind !== 'deep') await loadZone(r); // la case profonde se cherche à la carte (la route borne le rayon d’aire à 25)
@@ -38,9 +39,9 @@ describe.skipIf(!process.env.DATABASE_URL)('Carte & récolte intégration', () =
       const x = pos().x + Math.floor(Math.random() * (2 * rad + 1)) - rad,
         y = pos().y + Math.floor(Math.random() * (2 * rad + 1)) - rad;
       if (x < 0 || y < 0 || x > 199 || y > 199) continue;
-      if (terrain(x, y).kind !== kind || occupied.has(`${x},${y}`) || (kind !== 'deep' && !clearPath({ x, y }))) continue;
-      if (pathCost({ mount: null }, pos(), { x, y }) > maxCost) continue;
-      return { x, y };
+      if (tAt(x, y).kind !== kind || occupied.has(`${x},${y}`) || (kind !== 'deep' && !clearPath({ x, y }))) continue;
+      if (pathCost({ mount: null, mp: pos() }, pos(), { x, y }) > maxCost) continue;
+      return { x, y, terrain: tAt(x, y) };
     }
     throw new Error(`pas de case libre ${kind} (chemin dégagé, coût ≤ ${maxCost}) autour de ${pos().x},${pos().y}`);
   };
@@ -56,13 +57,14 @@ describe.skipIf(!process.env.DATABASE_URL)('Carte & récolte intégration', () =
     const c = await (await call(`/map/${pos().map_id}/cell?x=${pos().x}&y=${pos().y}`)).json();
     expect(c.terrain.kind).not.toBe('deep'); // un personnage à pied ne se pose jamais dans l’eau profonde
     expect((await call('/actions/gather', { characterId: id })).status).toBe(200);
+    const rid = c.terrain.resourceId; expect(rid).toBeTruthy();
     const inv = await (await call(`/inventory/${id}`)).json();
-    expect(inv.resources[c.terrain.resource]).toBeGreaterThanOrEqual(1);
+    expect(inv.resources[rid]).toBeGreaterThanOrEqual(1); // clé stable = id du catalogue (pas le nom)
   });
-  test('récolte à distance : trajet + 4 énergie, la position suit, herbe +1', async () => {
+  test('récolte à distance : trajet + 4 énergie, la position suit, ressource stable +1', async () => {
     let c: any; expect(await retry(25, async () => { c = await freeCellOf('plain', 12, 20); return (await call('/actions/gather', { characterId: id, x: c.x, y: c.y })).status; })).toBe(200);
     const inv = await (await call(`/inventory/${id}`)).json();
-    expect(inv.resources.herbe).toBeGreaterThanOrEqual(2);
+    expect(inv.resources[c.terrain.resourceId]).toBeGreaterThanOrEqual(1);
     me = await (await call(`/characters/${id}`)).json();
     expect([me.actor.pos.x, me.actor.pos.y]).toEqual([c.x, c.y]);
   });
@@ -72,7 +74,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Carte & récolte intégration', () =
     expect(resp.status).toBe(409);
     expect((await resp.json()).error).toBe('Rien à récolter ici');
   });
-  test('la zone n’expose que l’état de forme + l’équipement visible, jamais les PV', async () => {
+  test('zone sacrée de l’Hôtel de ville : aucun combat entre joueurs (403)', async () => {
     const t2 = (await (await call('/auth/register', { email: `${u}9@x.fr`, password: 'password1' }, '', 'POST')).json()).token;
     let ok = false, id2: any, p: any;
     for (let k = 0; k < 3 && !ok; k++) { // même saturation possible pour le 2e personnage
@@ -80,8 +82,13 @@ describe.skipIf(!process.env.DATABASE_URL)('Carte & récolte intégration', () =
       if (cr.status === 200) { ok = true; id2 = (await cr.json()).id; p = (await (await call(`/characters/${id2}`, undefined, t2)).json()).actor.pos; }
     }
     expect(ok).toBe(true);
+    // les deux personnages sont apparus dans l’anneau r=4 autour de la capitale, dans la zone sacrée (rayon 10)
+    const resp = await call('/combat/attack', { characterId: id, targetCharacterId: id2 });
+    expect(resp.status).toBe(403);
+    expect((await resp.json()).error).toContain('Zone sacrée');
     const c = await (await call(`/map/${p.map_id}/cell?x=${p.x}&y=${p.y}&details=1`)).json();
     expect(c.entity.kind).toBe('character');
+    expect(c.safe).toBe(true); // le /cell expose le drapeau zone sacrée
     expect(['En pleine forme', 'Bon état', 'Blessé', 'Souffrant']).toContain(c.entity.health);
     expect(c.entity.chp).toBeUndefined(); expect(c.entity.visibleGear).toBeInstanceOf(Array);
   });
