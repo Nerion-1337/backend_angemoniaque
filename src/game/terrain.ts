@@ -1,7 +1,7 @@
 // ⚠ GÉNÉRÉ par tools/gen_human_map.py — copie identique dans backend/src/game/terrain.ts et frontend/src/lib/terrain.js. Ne pas éditer à la main.
 // Monde des Hommes (carte 1) : grille dessinée (humanMap) ; autres mondes : bruit procédural d'origine.
 import { W, H, ROWS, CODES, FEATURES } from './humanMap.js';
-import { RES_BY_ID } from './resources.js';
+import { RES_BY_ID } from './resources.js'; import { terrain2, noise2 } from './world2.js';
 export { FEATURES };
 export const MAP_HUMAN = 1;
 let WORLD = MAP_HUMAN;
@@ -42,6 +42,7 @@ for (const k of Object.keys(POOL)) PROC[k] = POOL[k].map(id => mk(k, id));
 
 /** Scalaire d'élévation (0..1) ; interpolé entre les cases, exact aux coordonnées entières. */
 export function noiseAt(x, y, mapId = WORLD) {
+  if (mapId === 2) return noise2(x, y);
   if (mapId !== MAP_HUMAN) return procNoise(x, y);
   const x0 = Math.floor(x), y0 = Math.floor(y), ex = x - x0, ey = y - y0, fx = ex * ex * (3 - 2 * ex), fy = ey * ey * (3 - 2 * ey);
   return vAt(x0, y0) * (1 - fx) * (1 - fy) + vAt(x0 + 1, y0) * fx * (1 - fy) + vAt(x0, y0 + 1) * (1 - fx) * fy + vAt(x0 + 1, y0 + 1) * fx * fy;
@@ -49,6 +50,7 @@ export function noiseAt(x, y, mapId = WORLD) {
 /** { kind, cost, resource (nom affiché), resourceId (clé stable), burn } — objet partagé et figé. */
 export function terrain(x, y, mapId = WORLD) {
   if (mapId === MAP_HUMAN) return humanCell(x, y);
+  if (mapId === 2) return terrain2(x, y);
   const v = procNoise(x, y), k = v < 0.14 ? 'deep' : v < 0.22 ? 'shallow' : v < 0.58 ? 'plain' : v < 0.74 ? 'forest' : 'mountain', a = PROC[k];
   return a[Math.floor(h0(x + 11.3, y + 5.7) * a.length) % a.length];
 }
