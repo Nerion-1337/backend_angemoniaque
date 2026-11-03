@@ -2,7 +2,7 @@
 title: Hono + Zod OpenAPI skeleton: entry, router, auth, realtime WS
 slug: hono-skeleton
 status: done
-updated: 2026-10-19
+updated: 2026-11-03
 files:
   - src/index.ts
   - src/app.ts
@@ -31,12 +31,12 @@ The Hono + `@hono/zod-openapi` skeleton that serves the game REST API on port 30
 
 ## How it works
 - `src/index.ts` boots the process: `createNodeWebSocket({ app })` exposes `GET /ws?map=N` (handler calls `joinMap` / `leave` from `realtime/ws.ts`), then `injectWebSocket(serve({ fetch: app.fetch, port: env.port }))`; a `setInterval` (3 600 000 ms) fires `hourlyTick()` with a `.catch(console.error)`.
-- `src/app.ts` builds the app: `router()` (from `lib/route.ts`) creates an `OpenAPIHono` whose `defaultHook` turns Zod validation failures into `400 {error: "..."}`; it mounts `app.use('*', cors())`, the global `auth` middleware, `admin` on `/admin/*`, then registers the 14 route modules (auth, spells, characters, actions, combat, divine, map, pacts, faiths, guilds, messages, buildings, market, inventory, mounts, admin) with `app.route('/', r)`, adds `app.doc('/openapi.json')`, and a global `onError` mapping `HttpError` → its status, PG `23505` → 409 "Déjà existant ou case occupée", `P0001`/`23514` → 400, anything else → 500 "Erreur interne".
+- `src/app.ts` builds the app: `router()` (from `lib/route.ts`) creates an `OpenAPIHono` whose `defaultHook` turns Zod validation failures into `400 {error: "..."}`; it mounts `app.use('*', cors())`, the global `auth` middleware, `admin` on `/admin/*`, then registers the 14 route modules (auth, spells, characters, actions, combat, divine, map, pacts, faiths, guilds, messages, buildings, market, inventory, mounts, admin — `admin` is now an aggregator of 8 sub-routers under `routes/admin/`, see card `admin-socle`) with `app.route('/', r)`, adds `app.doc('/openapi.json')`, and a global `onError` mapping `HttpError` → its status, PG `23505` → 409 "Déjà existant ou case occupée", `P0001`/`23514` → 400, anything else → 500 "Erreur interne".
 - `lib/route.ts` gives the one-line endpoint idiom: `def(app, method, path, schema, handler)` wraps `createRoute` + `c.req.valid('json')` (Zod body) and returns `c.json(await handler(c, body))`; `P(c, key)` parses numeric path params. `router()` is shared by every module so errors stay uniform.
 - `lib/db.ts` / `db/pool.ts`: `pool` is a `pg` Pool on `env.pg` with `-c search_path=game_schema`; `fail(status, msg)` throws `HttpError`; `tx(fn)` wraps a pool connection in BEGIN/COMMIT/ROLLBACK; helpers `ownChar` (ownership + blocked check), `posOf`, `dist` (Chebyshev), `log` + `trimLog` (history capped at 100 rows per character).
-- `middleware/auth.ts`: HS256 JWT (hono/jwt, 24 h expiry, payload `{sub, admin}`, secret from `env.jwt`); the `auth` middleware verifies the Bearer token and stores it via `c.set('acc', …)`, whitelisting `/auth/login`, `/auth/register`, `/ws`, `/openapi*`; `admin` returns 403 unless `acc.admin`.
+- `middleware/auth.ts`: HS256 JWT (hono/jwt, 24 h expiry, payload `{sub, role}`, secret from `env.jwt`); the `auth` middleware verifies the Bearer token and stores it via `c.set('acc', …)`, whitelisting `/auth/login`, `/auth/register`, `/ws`, `/openapi*`; `admin` returns 403 unless `role==='admin'`; a `mod` guard (role mod|admin, phase 4) is exported for moderation endpoints. Old tokens without a `role` claim degrade to 'player'.
 - `realtime/ws.ts`: two ioredis clients on `env.redis`; `sockets` is `Map<mapId, Set<ws>>`; `broadcast(mapId, evt)` publishes `map:{mapId}`; a psubscribed `map:*` listener forwards each message to that map's sockets, so several backend instances scale out behind one Redis.
-- `routes/auth.ts` shows the module idiom: scrypt-hashed passwords (`salt:hash`, `timingSafeEqual`), register (auto-login + admin bootstrap when email === `env.adminEmail`), login, `/auth/me`.
+- `routes/auth.ts` shows the module idiom: scrypt-hashed passwords (`salt:hash`, `timingSafeEqual`), register (auto-login + admin bootstrap when email === `env.adminEmail` → `role='admin'` in `accounts`), login, `/auth/me` (returns `role` + legacy `admin` bool).
 
 ## Entry points
 - Node entry: `src/index.ts` (`npm run dev` → tsx watch; `npm run build` + `start` in prod)

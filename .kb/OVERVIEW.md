@@ -15,7 +15,8 @@ _Généré par `kb overview` — ne pas éditer ici ; notes manuelles dans `.kb/
 - Docker test target : `npm run typecheck && npm test` (utilisé par le hook pre-commit et CI)
 - kb : backend d'embedding `hash` (offline) dans `.kb/config.json`
 
-## Features (10)
+## Features (12)
+- **admin-socle** [done] (.kb/cards/admin-socle.md) Socle admin (Étape 2 phase 1) : rôles, CRUD contenu, règles transverses, production, audit — Phase 1 (socle) of the admin back-office (Étape 2): a data-driven admin layer on top of the game content. — files: src/routes/admin.ts, src/routes/admin/core.ts, src/routes/admin/races.ts, src/routes/admin/monsters.ts (+11)
 - **combat-realtime** [done] (.kb/cards/combat-realtime.md) Realtime combat events: broadcast combat outcomes to map spectators — Makes combat outcomes visible in real time to every other player on the same map: every resolved attack (direct `/combat/attack` or the "Trait de Lumière" attack spell) publishes a `combat` event on t — files: src/lib/events.ts, src/routes/combat.ts, src/routes/spells.ts
 - **guild-default-rank** [done] (.kb/cards/guild-default-rank.md) Guilde : rang par défaut des nouveaux arrivants (option unique default_rank_id) — The guild leader can pick **one** rank as the default assigned to newcomers (accepted applicants and accepted invitations). — files: src/routes/guilds.ts, test/integration/guild-default-rank.test.ts
 - **guild-forum-edit** [done] (.kb/cards/guild-forum-edit.md) Guilde : droits d'édition des catégories et sujets (auteur / create_topics / écriture catégorie) — Server half of the forum edit-rights pass: `POST /guilds/topics/{id}/edit` is no longer `create_topics`-only — it is allowed for the **topic author**, holders of `create_topics` (management roles), ho — files: src/routes/guilds.ts, test/integration/guild-forum-edit.test.ts
@@ -26,30 +27,45 @@ _Généré par `kb overview` — ne pas éditer ici ; notes manuelles dans `.kb/
 - **guild-ranks-order** [done] (.kb/cards/guild-ranks-order.md) Guilde : ordre persisté des rangs, label Chef renommable, visibilités par défaut dynamiques — Server half of the "Rangs & privilèges" revamp: guild ranks have a persistent display order (`sort_order`, migration `infra/db/05_rank_order.sql`); reordering is leader-only; new ranks are created at  — files: src/routes/guilds.ts, test/integration/guild-ranks-order.test.ts
 - **hono-skeleton** [done] (.kb/cards/hono-skeleton.md) Hono + Zod OpenAPI skeleton: entry, router, auth, realtime WS — The Hono + `@hono/zod-openapi` skeleton that serves the game REST API on port 3000: one OpenAPI app factory, per-domain route modules (`src/routes/*`) with per-endpoint Zod schemas, JWT auth middlewar — files: src/index.ts, src/app.ts, src/config/env.ts, src/lib/route.ts (+5)
 - **map-terrain-gather** [done] (.kb/cards/map-terrain-gather.md) Procedural map & terrain: resources, movement rules, spawn, map/action routes — The world model of the game: **the Human world (map 1) is a hand-drawn 200×200 grid** (RLE-encoded in `humanMap.ts`) while the other worlds keep the original procedural noise. — files: src/game/terrain.ts, src/game/humanMap.ts, src/game/resources.ts, src/game/burn.ts (+5)
+- **world2-angel-demon** [done] (.kb/cards/world2-angel-demon.md) Monde Anges & Démons (carte 2, 300x300) : zones, ressources, logique partagée — La carte 2 est une grille de **zones** 300x300 : démons à l'ouest, anges à l'est, bande neutre du Voile au centre. — files: src/game/world2.ts, src/game/resources2.ts, src/game/angelDemonMap.ts, src/game/terrain.ts (+1)
 
 ## File map
 - `package.json`
 - `src/app.ts` — app
 - `src/config/env.ts` — env
 - `src/db/pool.ts` — (header), pool
+- `src/game/angelDemonMap.ts` — ⚠ GÉNÉRÉ par tools/gen_angel_demon_map.py — monde Anges & Démons : ne pas éditer à la main. — W2, ROWS2, FEATURES2
 - `src/game/burn.ts` — Durée d'une brûlure après passage sur une case de volcan (renouvelée à chaque passage). Dégâts : BURN_DAMAGE p — (header), BURN_HOURS, ignite
 - `src/game/combatlib.ts` — Applique des dégâts ; gère la mort (joueur → Monde des Morts + objets divins, boss → butin au vainqueur, invoc — (header), Target, loadTarget, targetAt, applyDamage
-- `src/game/divine.ts` — Surcharge divine : plus d'objets que requis => rang supérieur gratuit, quota ignoré. — (header), KIND, required, held, applySpec, refreshSurcharge, die
+- `src/game/content.ts` — Cache des paramètres globaux (game_config) et invalideur du cache de contenu : — (header), cfg, cfgAll, cfgNum, bumpContent, divineCap
+- `src/game/divine.ts` — Surcharge divine : plus d'objets que requis => rang supérieur gratuit, quota ignoré. — (header), KIND, required, held, applySpec, refreshSurcharge, die, grantDivine
 - `src/game/humanMap.ts` — ⚠ GÉNÉRÉ par tools/gen_human_map.py à partir de la carte de référence — ne pas éditer à la main. — W, ROWS, CODES, FEATURES
 - `src/game/movement.ts` — Acteur courant : l'invocation contrôlée, sinon le héros (monté ou non). — (header), MOUNT_SQL, activeMount, isWater, actor, stepCost, blockedMsg, spend, pathCost, travel
 - `src/game/resources.ts` — ⚠ GÉNÉRÉ par tools/gen_human_map.py — catalogue des ressources et légende de la carte. — RESOURCES, GROUPS, RES_BY_ID
+- `src/game/resources2.ts` — ⚠ GÉNÉRÉ par tools/gen_angel_demon_map.py — catalogue du monde Anges & Démons (zones, ressources, apparence 3D — SIDES, RESOURCES2, ZONES2, RES2_BY_ID
 - `src/game/rules.ts` — Coût XP du prochain point : base × multiplicateur du palier (hypothèse : palier = floor(achats / numb_up), pla — StatRule, statUpgradeCost, pathEnergy, totalEnergy, effectiveRank, inVision, walk, routeEnergy, computeCharacterDamage, getPublicHealthState, computePactStatTransfer, canUseDivineEnergy, computeHitChance, applyArmor
 - `src/game/spawn.ts` — Le rayon s’élargit si l’aire est saturée (capitale encombrée en base de dev) : on préfère — freeCell, CAPITAL, spawn
 - `src/game/stats.ts` — Caractéristiques effectives : base + bonus d'équipement ; dégâts = arme × (Force − Force requise) ; armure = s — gearStats, maxSummons
 - `src/game/terrain.ts` — ⚠ GÉNÉRÉ par tools/gen_human_map.py — copie identique dans backend/src/game/terrain.ts et frontend/src/lib/ter — (header), MAP_HUMAN, WORLD, setWorld, BURN_DAMAGE, KIND_COST, KIND_LABEL, mk, hash, CELLS, BY_CODE, VOID, inMap, humanCell, VR, V, vAt, h0, procNoise, POOL, PROC, noiseAt, terrain, SAFE_ZONES, inSafeZone
+- `src/game/world2.ts` — ⚠ GÉNÉRÉ par tools/gen_angel_demon_map.py — copie identique dans backend/src/game/world2.ts et frontend/src/li — (header), MAP_ANGDEM, COST, ihash, CELLS, mk, ZBY, VOID, inMap, pick, terrain2, VR, V, vAt, noise2, lerpHex, FRONTIER_X, waterTint
 - `src/index.ts`
+- `src/lib/audit.ts` — Traile d'audit : qui a modifié quoi, avant/après. Appelé après chaque mutation d'administration. — (header), audit
 - `src/lib/db.ts` — (header), HttpError, fail, tx, ownChar, posOf, dist, log, trimLog
 - `src/lib/events.ts` — Événements de combat pour les spectateurs de la carte : données publiques uniquement — combatEvent
 - `src/lib/route.ts` — Déclare une route OpenAPI en une ligne ; le handler retourne l'objet JSON (erreurs via fail()). — (header), def, P, router
-- `src/middleware/auth.ts` — (header), signToken, auth, admin
+- `src/middleware/auth.ts` — (header), signToken, roleOf, auth, admin, mod
 - `src/realtime/ws.ts` — (header), pub, sockets, joinMap, leave, broadcast
 - `src/routes/actions.ts` — Récolte : sur place, ou à distance (trajet + 4 énergie). — (header), actions, XY
-- `src/routes/admin.ts` — (header), adminRoutes, TABLES, GRANT
+- `src/routes/admin.ts` — Espace administrateur — monté dans app.ts sous la garde `admin` (rôle du JWT). — (header), adminRoutes
+- `src/routes/admin/buildings.ts` — (header), buildingRoutes, Building
+- `src/routes/admin/common.ts` — Table par type d'entité + colonnes « sûres » (INSERT/UPDATE ne touchent que celles-ci, vérifiées en base). — (header), TABLE, URL_KIND, kindOf, colsOf, jsonable, safeInsert, safeUpdate, requireRow, extras
+- `src/routes/admin/core.ts` — Création dynamique conservée pour compatibilité (l'éditeur dédié est /admin/content/*) — coreRoutes
+- `src/routes/admin/entity.ts` — Règles transverses (D2) : coûts en ressources, plafonds (caps), modificateurs bonus/malus & effets. — (header), entityRoutes, refId, Cost, Cap, Mod
+- `src/routes/admin/items.ts` — (header), itemRoutes, Item
+- `src/routes/admin/monsters.ts` — (header), monsterRoutes, Monster
+- `src/routes/admin/mounts.ts` — (header), mountRoutes, Mount
+- `src/routes/admin/players.ts` — Endpoints hérités de l'admin historique — complétés en phase 4 (modération, rôles mod). — (header), playerRoutes, STATS, GRANT
+- `src/routes/admin/races.ts` — (header), raceRoutes, Race
 - `src/routes/auth.ts` — (header), authRoutes, hash, check, Reg, Log
 - `src/routes/buildings.ts` — (header), buildings, BUILD_COST
 - `src/routes/characters.ts` — Kit de départ (équipement, sorts, monture) comme dans le dépôt d'origine — characters
@@ -64,8 +80,11 @@ _Généré par `kb overview` — ne pas éditer ici ; notes manuelles dans `.kb/
 - `src/routes/mounts.ts` — mounts
 - `src/routes/pacts.ts` — Limites vérifiées à la conclusion : 1 pacte actif pour un Humain, selon le rang pour un Ange/Démon. — (header), pacts, maxPacts, BUFF_H, checkLimits
 - `src/routes/spells.ts` — spells
-- `src/routes/tick.ts` — Tick horaire : XP/or (+ bonus pactes & fidèles), régénération PV/énergie, expiration des buffs. — (header), REVERT, hourlyTick
+- `src/routes/tick.ts` — Tick horaire : XP/or (× multiplicateur global), régénération PV/énergie, production des bâtiments, expiration  — (header), REVERT, hourlyTick, buildingGains, applyBuildingProduction
 - `test/combat-event.test.ts`
+- `test/content.test.ts`
+- `test/divine.test.ts`
+- `test/integration/admin.test.ts` — Socle de l'espace admin : rôles, CRUD générique, règles transverses, divins, production, audit.
 - `test/integration/api.test.ts` — Nécessite Postgres (schéma du dépôt infra) + Redis : exécuté en CI, ignoré sans DATABASE_URL.
 - `test/integration/auth.test.ts`
 - `test/integration/combat-realtime.test.ts` — Parcours complet du retour temps réel : un joueur attaque, le spectateur (abonné Redis du canal de la carte)
@@ -78,7 +97,4 @@ _Généré par `kb overview` — ne pas éditer ici ; notes manuelles dans `.kb/
 - `test/integration/guild-forum.test.ts` — Forum de guilde : ordre d'affichage des catégories et sujets — réorganisation par liste
 - `test/integration/guild-ranks-order.test.ts` — Rangs de guilde : ordre persisté (sort_order) et refonte Gestion — réorganisation réservée au Chef,
 - `test/integration/guild-ranks.test.ts` — Parcours complet des rangs de guilde : le dernier Chef ne peut ni quitter ni changer de rang
-- `test/integration/map-gather.test.ts` — Parcours complet carte & récolte (carte v2 : Monde des Hommes dessiné, catalogue de ressources à clés stables,
-- `test/rules.test.ts` — r, KIND_GROUP, find
-- `test/world.test.ts` — all
-- `tsconfig.json`
+- … 6 autres fichiers (utiliser `kb search`)

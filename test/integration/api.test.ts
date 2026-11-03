@@ -13,5 +13,5 @@ describe.skipIf(!process.env.DATABASE_URL)('API intégration', () => {
   });
   test('même race obligatoire (trigger SQL)', async () => expect((await call('/characters', { pseudo: u + 'b', race: 'human' }, token)).status).toBe(400));
   test('routes protégées', async () => expect((await call('/characters')).status).toBe(401));
-  test('admin interdit aux joueurs', async () => expect((await call('/admin/stats', undefined, token)).status).toBe(403));
+  test('admin interdit aux joueurs', async () => expect((await call('/admin/dashboard', undefined, token)).status).toBe(403));
 });

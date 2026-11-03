@@ -1,0 +1,34 @@
+import { def, router, z } from '../../lib/route.js'; import { pool, fail } from '../../lib/db.js';
+import { audit } from '../../lib/audit.js'; import { hourlyTick } from '../tick.js';
+export const coreRoutes = router();
+def(coreRoutes, 'get', '/admin/dashboard', null, async () => ({
+  byRace: (await pool.query('SELECT race,count(*)::int n FROM characters GROUP BY race')).rows,
+  counts: (await pool.query('SELECT (SELECT count(*)::int FROM characters) characters,(SELECT count(*)::int FROM buildings) buildings,(SELECT count(*)::int FROM items) items,(SELECT count(*)::int FROM messages) messages')).rows[0] }));
+def(coreRoutes, 'post', '/admin/tick', null, async () => { await hourlyTick(); return { ok: true }; });   // simule la mise à jour horaire
+def(coreRoutes, 'get', '/admin/catalog', null, async () => ({
+  items: (await pool.query('SELECT id,name FROM items ORDER BY id')).rows,
+  spells: (await pool.query('SELECT id,name FROM spells ORDER BY id')).rows,
+  mounts: (await pool.query('SELECT id,name FROM mounts ORDER BY id')).rows }));
+def(coreRoutes, 'get', '/admin/audit', null, async c => {
+  const q = c.req.query(), limit = Math.min(Number(q.limit ?? 50), 200);
+  const w: string[] = [], v: any[] = [];
+  if (q.target) { w.push(`target=$${v.length + 1}`); v.push(q.target); }
+  if (q.action) { w.push(`action LIKE $${v.length + 1}`); v.push(`%${q.action}%`); }
+  const { rows } = await pool.query(
+    `SELECT a.id,a.created_at,a.action,a.target,a.target_id,a.before,a.after,COALESCE(ch.pseudo,ac.email) actor
+     FROM admin_audit a LEFT JOIN accounts ac ON ac.id=a.actor_id
+     LEFT JOIN characters ch ON ch.id=(SELECT min(id) FROM characters WHERE account_id=ac.id)
+     ${w.length ? 'WHERE ' + w.join(' AND ') : ''} ORDER BY a.id DESC LIMIT ${limit}`, v);
+  return rows;
+});
+// Création dynamique conservée pour compatibilité (l'éditeur dédié est /admin/content/*)
+def(coreRoutes, 'post', '/admin/create/{table}', z.object({ data: z.record(z.any()) }), async (c, b) => {
+  const TABLES = ['items', 'monsters', 'mounts', 'spells'];
+  const t = c.req.param('table'); if (!TABLES.includes(t)) fail(400, 'Table non autorisée');
+  const cols = (await pool.query("SELECT column_name FROM information_schema.columns WHERE table_schema='game_schema' AND table_name=$1", [t])).rows.map((r: any) => r.column_name);
+  const keys = Object.keys(b.data).filter(k => cols.includes(k) && k !== 'id'); if (!keys.length) fail(400, 'Aucune colonne valide');
+  const vals = keys.map(k => typeof b.data[k] === 'object' ? JSON.stringify(b.data[k]) : b.data[k]);
+  const row = (await pool.query(`INSERT INTO ${t}(${keys.join(',')}) VALUES (${keys.map((_, i) => '$' + (i + 1)).join(',')}) RETURNING id`, vals)).rows[0];
+  await audit(c, 'create.legacy', t, row?.id, null, b.data);
+  return row;
+});

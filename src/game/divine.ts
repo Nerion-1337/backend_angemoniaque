@@ -1,4 +1,4 @@
-import { effectiveRank } from './rules.js';
+import { effectiveRank } from './rules.js'; import { fail } from '../lib/db.js'; import { divineCap } from './content.js';
 export const KIND: Record<string, string> = { human: 'artefact', demon: 'arcane', angel: 'relique' };
 export const required = (targetRank: number) => targetRank - 1;   // hypothèse : rang visé N exige N-1 objets
 export const held = async (db: any, id: number, kind: string) => (await db.query('SELECT count(*)::int n FROM divine_items WHERE holder_character_id=$1 AND kind=$2', [id, kind])).rows[0].n;
@@ -23,5 +23,18 @@ export async function die(db: any, victim: any, killerCharId: number | null) {
   const c = await freeCell(db, 3, 50, 50, 20);
   await db.query('UPDATE positions SET map_id=3, coord_x=$2, coord_y=$3 WHERE character_id=$1', [victim.id, c.x, c.y]);
   await db.query('UPDATE characters SET hp_current=hp_max WHERE id=$1', [victim.id]);
+}
+/**
+ * Transfert propre d'un objet divin (don admin / butin, phases 1-2-4) : une pièce = une ligne
+ * avec UN SEUL détenteur (mise à jour du holder, jamais d'insertion => aucune duplication),
+ * dans la limite du plafond global du kind (divine_caps).
+ */
+export async function grantDivine(db: any, toCharId: number, kind: string) {
+  const cap = await divineCap(kind);
+  if (cap !== null && (await held(db, toCharId, kind)) >= cap) fail(409, `Plafond de ${cap} ${kind}(s) déjà détenu(s)`);
+  const r = await db.query('UPDATE divine_items SET holder_character_id=$2 WHERE holder_character_id IS NULL AND kind=$1 RETURNING id', [kind, toCharId]);
+  if (!r.rowCount) fail(409, `Aucun ${kind} libre`);
+  await refreshSurcharge(db, toCharId);
+  return r.rows[0];
 }
 import { freeCell } from './spawn.js';

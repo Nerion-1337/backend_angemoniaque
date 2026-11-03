@@ -5,7 +5,10 @@ describe.skipIf(!process.env.DATABASE_URL)('Gameplay intégration', () => {
   const call = async (path: string, body?: any, tk?: string, method?: string) => { const r = await app.request(path, { method: method ?? (body ? 'POST' : 'GET'), headers: { 'content-type': 'application/json', ...(tk ? { authorization: `Bearer ${tk}` } : {}) }, body: body ? JSON.stringify(body) : undefined }); return { status: r.status, j: await r.json().catch(() => null) }; };
   const mk = async (name: string, race: string, admin = false) => { const email = admin ? (process.env.ADMIN_EMAIL ?? 'admin@ange.local') : `${name}${s}@x.fr`;
     let r = await call('/auth/register', { email, password: 'password1' }); if (r.status !== 200) r = await call('/auth/login', { email, password: 'password1' });
-    const c = await call('/characters', { pseudo: `${name}${s}`.slice(0, 20), race }, r.j.token); if (c.status !== 200) throw new Error(JSON.stringify(c.j)); return { tk: r.j.token, id: c.j.id, pseudo: `${name}${s}`.slice(0, 20) }; };
+    const c0 = await call('/characters', undefined, r.j.token);   // 3 persos max / compte admin partagé : on réutilise sinon
+    if (c0.j?.[0]) return { tk: r.j.token, id: c0.j[0].id, pseudo: c0.j[0].pseudo };
+    const pseudo = `${name}${s}`.slice(0, 20);
+    const c = await call('/characters', { pseudo, race }, r.j.token); if (c.status !== 200) throw new Error(JSON.stringify(c.j)); return { tk: r.j.token, id: c.j.id, pseudo }; };
   beforeAll(async () => { T.h = await mk('hum', 'human'); T.a = await mk('ang', 'angel'); T.adm = await mk('adm', 'human', true); });
   test('pacte sur demande : acceptation requise, plusieurs demandes, bonus, résiliation', async () => {
     const r = await call('/pacts/request', { characterId: T.a.id, targetPseudo: T.h.pseudo }, T.a.tk); expect(r.status).toBe(200);                 // l'Ange demande à l'Humain
@@ -37,7 +40,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Gameplay intégration', () => {
     expect((await call(`/messages/${T.a.id}/unread/count`, undefined, T.a.tk)).j.mail).toBe(1);
   });
   test('admin : stats, ajout de caractéristique, création d\'objet', async () => {
-    expect((await call('/admin/stats', undefined, T.adm.tk)).status).toBe(200);
+    expect((await call('/admin/dashboard', undefined, T.adm.tk)).status).toBe(200);
     expect((await call(`/admin/players/${T.h.id}/stat`, { stat: 'gold', delta: 500 }, T.adm.tk)).status).toBe(200);
     expect((await call('/admin/create/items', { data: { name: 'Épée test', slot: 'weapon', rarity: 'rare', quantity_max: 3 } }, T.adm.tk)).status).toBe(200);
     expect((await call('/admin/create/items', { data: { name: 'x; drop' , evil_col: 1 } }, T.adm.tk)).status).toBe(200); // colonnes inconnues ignorées
