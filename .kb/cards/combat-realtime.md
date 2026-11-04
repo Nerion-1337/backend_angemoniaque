@@ -2,7 +2,7 @@
 title: Realtime combat events: broadcast combat outcomes to map spectators
 slug: combat-realtime
 status: done
-updated: 2026-10-21
+updated: 2026-11-04
 files:
   - src/lib/events.ts
   - src/routes/combat.ts
@@ -37,7 +37,7 @@ Makes combat outcomes visible in real time to every other player on the same map
 
 ## Tests
 - `test/combat-event.test.ts` (pure, no services): asserts the exact public shape of `combatEvent` (hit vs miss) and the closed key set (no HP or sensitive fields).
-- `test/integration/combat-realtime.test.ts` (skipped without `DATABASE_URL` + `REDIS_URL`; runs in CI and `stack exec backend`): registers an account, creates two same-race characters, places the target on a free cell adjacent to the attacker, subscribes a raw Redis client to `map:{mapId}`, fires `/combat/attack`, and asserts a `combat` event for that target arrives within 10 s with `killed`/`missed` consistent with the HTTP response.
+- `test/integration/combat-realtime.test.ts` (skipped without `DATABASE_URL` + `REDIS_URL`; runs in CI and `stack exec backend`): registers an account, creates two same-race characters, places the target on a free cell near the attacker (tries the 8 adjacent cells, then the 8 cells at distance 2 — a warm dev volume can have occupied neighbours), subscribes a raw Redis client to `map:{mapId}`, fires `/combat/attack`, and asserts a `combat` event for that target arrives within 10 s with `killed`/`missed` consistent with the HTTP response.
 
 ## Gotchas
 - Event payload stays public-only by design — never add exact HP, gold or other private stats to it (mirrors the `pub()` rule of `map.ts`).

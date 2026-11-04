@@ -26,4 +26,26 @@ describe('grantDivine : transfert propre des objets divins (caps, jamais de dupl
     (pool.query as any).mockResolvedValue({ rows: [] });
     await expect(grantDivine(fakeDb(0, false), 9, 'arcane')).rejects.toMatchObject({ status: 409 });
   });
+  test('pièce précise (divineId) : transfert UPDATE, cap du détenteur respecté, jamais de duplication', async () => {
+    const db = {
+      async query(sql: string, params: any[] = []) {
+        if (sql.startsWith('SELECT * FROM divine_items')) return { rows: [{ id: 42, kind: 'relique', holder_character_id: null }] };
+        if (sql.startsWith('SELECT count')) return { rows: [{ n: 0 }] };
+        if (sql.startsWith('UPDATE divine_items')) { expect(params).toEqual([42, 9]); return { rowCount: 1, rows: [{ id: 42 }] }; }
+        return { rows: [] };
+      }
+    };
+    (pool.query as any).mockResolvedValue({ rows: [{ key: 'divine_caps', value: { relique: 4 } }] });
+    const d = await grantDivine(db, 9, null, 42);
+    expect(d.id).toBe(42);
+  });
+  test('pièce précise déjà détenue : 409 (pas de double détenteur)', async () => {
+    const db = {
+      async query(sql: string, params: any[] = []) {
+        if (sql.startsWith('SELECT * FROM divine_items')) return { rows: [{ id: 42, kind: 'relique', holder_character_id: 3 }] };
+        return { rows: [] };
+      }
+    };
+    await expect(grantDivine(db, 9, null, 42)).rejects.toMatchObject({ status: 409 });
+  });
 });

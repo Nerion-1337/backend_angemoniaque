@@ -2,7 +2,7 @@
 title: Procedural map & terrain: resources, movement rules, spawn, map/action routes
 slug: map-terrain-gather
 status: done
-updated: 2026-10-21
+updated: 2026-11-04
 files:
   - src/game/terrain.ts
   - src/game/humanMap.ts
@@ -26,6 +26,7 @@ symbols:
   - src/game/movement.ts:actor
   - src/game/spawn.ts:freeCell
   - src/game/spawn.ts:spawn
+  - src/game/spawn.ts:hourlySpawns
   - src/routes/map.ts:mapRoutes
   - src/routes/actions.ts:actions
 tests:
@@ -44,12 +45,13 @@ The world model of the game: **the Human world (map 1) is a hand-drawn 200×200 
 - `actions.ts`: `POST /actions/move` = `travel` + log + WS `moved`. `POST /actions/gather` = harvest the target cell's resource in place (4 energy) or at range (travel first, +4): the water rule fires **before** travel (deep on foot → 409 `Rien à récolter ici`, deterministic), then `characters.resources = jsonb_set(resources, {resourceId}, +1)`. `POST /actions/approach` = `travel(stopAt=1)`.
 - `map.ts`: one big join over `positions`; `GET /map/{id}/area` (r ≤ 25), `GET /map/{id}/cell` returns `{terrain(x, y, mapId), safe: inSafeZone(...), entity}` (+ `visibleGear` when `details=1`), `GET /map/{id}/landmarks`. `pub()` strips exact HP (4-level public state).
 - Safe zone (PvP): `combat.ts` and `spells.ts` refuse any non-monster target when **either** side is inside a safe zone (403 `Zone sacrée : aucun combat entre joueurs`).
-- `spawn.ts`: `freeCell` scans random cells around the race capital, refusing water **and volcano** cells; the radius expands by 2 per round when saturated (only a fully-occupied map fails 503). `spawn` places the character in a `positions` row.
+- `spawn.ts`: `freeCell` scans random cells around the race capital, refusing water **and volcano** cells; the radius expands by 2 per round when saturated (only a fully-occupied map fails 503). `spawn` places the character in a `positions` row. Phase 2 added `hourlySpawns` (called by `hourlyTick`) + `freeCellRect`: wild monster instances on the hourly tick — see card `bestiaire` for caps/probability/despawn details.
+- `inventory.ts`: `GET /inventory/{characterId}` returns equipped + bag items with the 12 h equip lock remaining (`lock_seconds` computed from `equipped_at`, GREATEST 0), the stacked `ci.qty`, `lockHours: 12`, `specialSlots` (5 human / 4 others) and `bagMax: 20`; `POST /inventory/equip` enforces per-slot compatibility (`GROUP` map), the 12 h lock on unequip (409 with remaining h/min), occupied-slot 409 and the two-handed rule (`i.data->>'hands'='2'` on the equipped main weapon → 409 on offhand).
 
 ## Entry points
 - `POST /actions/move|gather|approach` (`routes/actions.ts`) — front `TileCard` action menu.
 - `GET /map/{id}/area|cell|landmarks` (`routes/map.ts`) — front `GameCanvas` re-fetches on every WS event + 8 s poll.
-- `spawn()` from `routes/characters.ts`; `freeCell` from `routes/divine.ts` (summon, r=3), `routes/admin.ts` (r=2), `game/divine.ts` (resurrection on map 3, r=20); `buildings.ts` reuses the same water/volcano check for placement.
+- `spawn()` from `routes/characters.ts`; `freeCell` from `routes/divine.ts` (summon, r=3), `routes/admin.ts` (r=2), `game/divine.ts` (resurrection on map 3, r=20); `buildings.ts` reuses the same water/volcano check for placement. `hourlySpawns` is fired from `routes/tick.ts` `hourlyTick` (bestiaire).
 - `travel`/`spend`/`actor` shared by `combat.ts` (long-range attacks) and `spells.ts`.
 - `terrain.setWorld` is called by the front `GameCanvas` on every `me` refresh so the mirror defaults to the right world.
 - Realtime: move/gather/approach broadcast `{type:'moved'}` via Redis `map:{id}` (multi-instance fan-out).

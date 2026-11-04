@@ -29,7 +29,17 @@ export async function die(db: any, victim: any, killerCharId: number | null) {
  * avec UN SEUL détenteur (mise à jour du holder, jamais d'insertion => aucune duplication),
  * dans la limite du plafond global du kind (divine_caps).
  */
-export async function grantDivine(db: any, toCharId: number, kind: string) {
+export async function grantDivine(db: any, toCharId: number, kind: string | null, divineId?: number) {
+  if (divineId != null) {   // pièce précise (gardiennage, loot) : transfert propre, jamais d'insertion
+    const { rows: [d] } = await db.query('SELECT * FROM divine_items WHERE id=$1', [divineId]);
+    if (!d) fail(404, 'Objet divin inconnu');
+    if (d.holder_character_id != null) fail(409, 'Cet objet divin est déjà détenu');
+    const cap = await divineCap(d.kind);
+    if (cap !== null && (await held(db, toCharId, d.kind)) >= cap) fail(409, `Plafond de ${cap} ${d.kind}(s) déjà détenu(s)`);
+    await db.query('UPDATE divine_items SET holder_character_id=$2, guardian_monster_id=NULL WHERE id=$1', [divineId, toCharId]);
+    await refreshSurcharge(db, toCharId);
+    return d;
+  }
   const cap = await divineCap(kind);
   if (cap !== null && (await held(db, toCharId, kind)) >= cap) fail(409, `Plafond de ${cap} ${kind}(s) déjà détenu(s)`);
   const r = await db.query('UPDATE divine_items SET holder_character_id=$2 WHERE holder_character_id IS NULL AND kind=$1 RETURNING id', [kind, toCharId]);

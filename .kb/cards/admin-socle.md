@@ -2,7 +2,7 @@
 title: Socle admin (Étape 2 phase 1) : rôles, CRUD contenu, règles transverses, production, audit
 slug: admin-socle
 status: done
-updated: 2026-11-03
+updated: 2026-11-04
 files:
   - src/routes/admin.ts
   - src/routes/admin/core.ts
@@ -44,7 +44,9 @@ live-ops) build on.
   The `admin` middleware on `/admin/*` requires role==='admin'; a `mod` middleware (role mod|admin) exists for
   phase 4. `/auth/me` and login/register return `role` + legacy `admin` bool.
 - **Aggregator**: `routes/admin.ts` mounts sub-routers (core, races, monsters, items, mounts, buildings,
-  entity, players) under one `adminRoutes` router. All content CRUD lives in `routes/admin/*.ts`.
+  entity, players, bestiary) under one `adminRoutes` router. All content CRUD lives in `routes/admin/*.ts`.
+  The beasts-of-burden loot/spawn subroutes of `monsters.ts` (`/admin/content/monsters/{id}/loot|spawns`,
+  GET/POST/PUT/DELETE) belong to phase 2 — see the `bestiaire` card.
 - **Generic entity CRUD** (`common.ts` `safeInsert`/`safeUpdate`): INSERT/UPDATE are restricted to real DB
   columns (checked via information_schema) so unknown keys are ignored (no SQL injection). `monsters`,
   `items`, `mounts`, `buildings` each expose GET list / POST / GET {id} / PUT {id} / DELETE {id}.
@@ -63,7 +65,8 @@ live-ops) build on.
   which inserts into `admin_audit`; `GET /admin/audit` lists them (actor resolved via accounts/characters).
 - **Hourly production** (`routes/tick.ts`): `applyBuildingProduction()` reads `buildings.data.production` /
   `.collection` (per-hour yield per resource) and credits the owner's `characters.resources`, capped by
-  `data.storage`. Runs inside `hourlyTick()` (also the manual `POST /admin/tick`).
+  `data.storage`. Runs inside `hourlyTick()` (also the manual `POST /admin/tick`), which also calls
+  `hourlySpawns` (bestiaire, phase 2 — see the `bestiaire` card).
 - **XP tick fix**: `hourlyTick()` XP/gold bonus is now a correlated subquery in the SET clause. The old
   `LATERAL (...) b` referencing the target table `c` was INVALID SQL, so the hourly tick silently failed.
 
@@ -71,6 +74,8 @@ live-ops) build on.
 - `src/app.ts` mounts `adminRoutes` (gated by `admin` middleware on `/admin/*`).
 - `src/index.ts` `setInterval(hourlyTick, 3600e3)` + `POST /admin/tick` (manual trigger).
 - `grantDivine` (game/divine.ts) is the safe transfer used by the admin grant endpoint and (phase 2) loot.
+  The same file holds the rank-surcharge mechanics (`KIND`, `held`, `applySpec`, `refreshSurcharge`) and
+  `die` (character death → World of the Dead + guarded divine pieces).
 - `cfgNum`/`divineCap` (game/content.ts) are consumed by the tick and divine creation.
 
 ## Data flow

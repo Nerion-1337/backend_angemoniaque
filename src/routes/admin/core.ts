@@ -8,7 +8,8 @@ def(coreRoutes, 'post', '/admin/tick', null, async () => { await hourlyTick(); r
 def(coreRoutes, 'get', '/admin/catalog', null, async () => ({
   items: (await pool.query('SELECT id,name FROM items ORDER BY id')).rows,
   spells: (await pool.query('SELECT id,name FROM spells ORDER BY id')).rows,
-  mounts: (await pool.query('SELECT id,name FROM mounts ORDER BY id')).rows }));
+  mounts: (await pool.query('SELECT id,name FROM mounts ORDER BY id')).rows,
+  maps: (await pool.query('SELECT id,name_file, width,height FROM maps ORDER BY id')).rows }));
 def(coreRoutes, 'get', '/admin/audit', null, async c => {
   const q = c.req.query(), limit = Math.min(Number(q.limit ?? 50), 200);
   const w: string[] = [], v: any[] = [];

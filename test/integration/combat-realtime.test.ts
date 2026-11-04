@@ -13,8 +13,12 @@ describe.skipIf(!process.env.DATABASE_URL || !process.env.REDIS_URL)('combat tem
     target = (await (await call('/characters', { pseudo: `${u}b`, race: 'angel' }, tk)).json()).id;
     const pa = await posOf(attacker), pb = await posOf(target); mapId = pa.map_id;
     let moved = false;
-    for (const [dx, dy] of [[0, 1], [1, 0], [0, -1], [-1, 0], [1, 1], [-1, -1], [1, -1], [-1, 1]] as const)   // cas adjacent libre
-      if ((await call('/actions/move', { characterId: target, x: pa.x + dx, y: pa.y + dy }, tk)).status === 200) { moved = true; break; }
+    for (const d of [1, 2] as const) {   // rayon 1 puis 2 : les cases adjacentes peuvent être occupées (monstres sauvages accumulés)
+      for (const [dx, dy] of [[0, 1], [1, 0], [0, -1], [-1, 0], [1, 1], [-1, -1], [1, -1], [-1, 1]] as const) {   // case libre proche
+        if ((await call('/actions/move', { characterId: target, x: pa.x + dx * d, y: pa.y + dy * d }, tk)).status === 200) { moved = true; break; }
+      }
+      if (moved) break;
+    }
     expect(moved).toBe(true);
     const sub = new Redis(process.env.REDIS_URL); sub.on('error', () => {});
     await sub.subscribe(`map:${mapId}`);

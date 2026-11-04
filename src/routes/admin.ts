@@ -7,6 +7,7 @@ import { mountRoutes } from './admin/mounts.js';
 import { buildingRoutes } from './admin/buildings.js';
 import { entityRoutes } from './admin/entity.js';
 import { playerRoutes } from './admin/players.js';
+import { bestiaryRoutes } from './admin/bestiary.js';
 /** Espace administrateur — monté dans app.ts sous la garde `admin` (rôle du JWT). */
 export const adminRoutes = router();
-[coreRoutes, raceRoutes, monsterRoutes, itemRoutes, mountRoutes, buildingRoutes, entityRoutes, playerRoutes].forEach(r => adminRoutes.route('/', r));
+[coreRoutes, raceRoutes, monsterRoutes, itemRoutes, mountRoutes, buildingRoutes, entityRoutes, playerRoutes, bestiaryRoutes].forEach(r => adminRoutes.route('/', r));

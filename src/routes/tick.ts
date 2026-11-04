@@ -1,4 +1,4 @@
-import { pool } from '../db/pool.js'; import { BURN_DAMAGE } from '../game/terrain.js'; import { cfgNum } from '../game/content.js';
+import { pool } from '../db/pool.js'; import { BURN_DAMAGE } from '../game/terrain.js'; import { cfgNum } from '../game/content.js'; import { hourlySpawns } from '../game/spawn.js';
 const REVERT = ['strength', 'agility', 'hp_max', 'recovery'];
 /** Tick horaire : XP/or (× multiplicateur global), régénération PV/énergie, production des bâtiments, expiration des buffs. */
 export async function hourlyTick() {
@@ -18,6 +18,7 @@ export async function hourlyTick() {
   await pool.query('UPDATE summons SET hp_current=LEAST(hp_max,hp_current+recovery), energy_current=LEAST(energy_max,energy_current+recovery)');
   await pool.query('UPDATE monsters SET hp_current=LEAST(hp_max,hp_current+recovery), energy_current=LEAST(energy_max,energy_current+recovery), divine_energy_current=LEAST(divine_energy_max,divine_energy_current+recovery)');
   await applyBuildingProduction();
+  await hourlySpawns(pool);   // bestiaire (Étape 2) : spawn_rules → instances sur case libre, caps + probabilité + fréquence
   // Brûlure du volcan : BURN_DAMAGE par heure tant que burn_until est dans le futur (jamais mortelle : PV min. 1)
   await pool.query('UPDATE characters SET hp_current=GREATEST(1,hp_current-$1) WHERE burn_until>now() AND NOT blocked', [BURN_DAMAGE]);
   const { rows } = await pool.query('DELETE FROM temp_buffs WHERE expires_at<=now() RETURNING character_id,stat,delta');
