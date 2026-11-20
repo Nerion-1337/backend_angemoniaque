@@ -13,7 +13,10 @@ def(bestiaryRoutes, 'get', '/admin/bestiary/status', null, async c => {
        (m.data->>'spawned')::boolean spawned, (m.data->>'placed')::boolean placed,
        (m.data->>'prototype')::int prototype, m.guards_item, m.gold_current gold,
        COALESCE((m.data->>'reincarnate_h')::int, m.reincarnate_delay_h) reincarnate_h,
-       mr.due_at respawn_due_at
+       mr.due_at respawn_due_at,
+       EXISTS (SELECT 1 FROM character_monster cm WHERE cm.monster_id=m.id) linked,
+       (SELECT ch.pseudo FROM character_monster cm JOIN characters ch ON ch.id=cm.character_id
+          WHERE cm.monster_id=m.id ORDER BY ch.id LIMIT 1) linked_pseudo
      FROM monsters m JOIN positions p ON p.monsters_id=m.id
      LEFT JOIN monster_respawns mr ON mr.monster_id=m.id
      ORDER BY m.id`);
@@ -66,6 +69,22 @@ def(bestiaryRoutes, 'post', '/admin/bestiary/place', Place, async (c, b) => {
   await pool.query('INSERT INTO positions(map_id,coord_x,coord_y,monsters_id) VALUES ($1,$2,$3,$4)', [b.mapId, b.x, b.y, ins.id]);
   await bumpContent(); await audit(c, 'monster.place', 'monster', ins.id, null, b);
   return { id: ins.id, name, mapId: b.mapId, x: b.x, y: b.y, gold: b.gold ?? proto.gold_current ?? 0, dropsCopied: copies };
+});
+/** Déplace une instance sur une case (même carte ou autre) : mêmes garde-fous que le
+ *  placement (bornes, eau/volcan, case occupée) ; l'instance garde son butin et son équipement.
+ *  `mapId` omis = reste sur sa carte actuelle. */
+def(bestiaryRoutes, 'put', '/admin/bestiary/place/{posId}', z.object({ mapId: z.number().int().optional(), x: z.number().int(), y: z.number().int() }), async (c, b) => {
+  const { rows: [p] } = await pool.query('SELECT * FROM positions WHERE id=$1', [P(c, 'posId')]);
+  if (!p?.monsters_id) fail(404, 'Placement inconnu');
+  const mapId = b.mapId ?? p.map_id;
+  const { rows: [map] } = await pool.query('SELECT width, height FROM maps WHERE id=$1', [mapId]);
+  if (!map) fail(404, 'Carte inconnue');
+  if (b.x < 0 || b.y < 0 || b.x >= map.width || b.y >= map.height) fail(400, 'Hors de la carte');
+  if (['shallow', 'deep', 'volcano'].includes(terrain(b.x, b.y, mapId).kind)) fail(400, 'Case invadable (eau/volcan)');
+  if ((await pool.query('SELECT 1 FROM positions WHERE map_id=$1 AND coord_x=$2 AND coord_y=$3 AND item_id IS NULL AND id<>$4', [mapId, b.x, b.y, p.id])).rowCount) fail(409, 'Case occupée');
+  await pool.query('UPDATE positions SET map_id=$1, coord_x=$2, coord_y=$3 WHERE id=$4', [mapId, b.x, b.y, p.id]);
+  await audit(c, 'monster.move', 'position', p.id, null, b);
+  return { ok: true, mapId, x: b.x, y: b.y };
 });
 /** Retire un placement (case libérée) ; l'instance placée/sauvage est supprimée avec son butin. */
 def(bestiaryRoutes, 'delete', '/admin/bestiary/place/{posId}', null, async c => {

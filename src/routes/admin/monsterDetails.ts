@@ -1,8 +1,10 @@
 import { def, router, z, P } from '../../lib/route.js'; import { pool, fail } from '../../lib/db.js';
 import { audit } from '../../lib/audit.js'; import { bumpContent } from '../../game/content.js';
 /**
- * Étape 2 — Phase 3 : catalogue global de sorts (base de sorts du jeu) + sous-collections
- * du monstre (compétences/sorts, équipement par slot, auras : bonus/malus en continu).
+ * Étape 2 — Phase 3b : catalogue global de sorts (base de sorts du jeu), capacités des
+ * monstres (actives : sorts qu'ils peuvent LANCER ; passives : sorts appliqués EN CONTINU
+ * sans consommation d'énergie, cible + périmètre — les auras de la phase 3 initiale sont
+ * fusionnées ici), et parties du corps équipables par type (7 slots, style personnage).
  */
 export const spellRoutes = router();
 const Spell = z.object({
@@ -42,38 +44,45 @@ def(spellRoutes, 'delete', '/admin/content/spells/{id}', null, async c => {
   return { ok: true };
 });
 
-/** Sous-collections du monstre : compétences/sorts (catalogue global), équipement (7 slots), auras. */
+/** Capacités, équipement et parties équipables du monstre (sous-collections). */
 export const monsterDetailRoutes = router();
 async function requireMonster(id: number) {
   if ((await pool.query('SELECT 1 FROM monsters WHERE id=$1', [id])).rowCount === 0) fail(404, 'Monstre inconnu');
 }
 const SLOTS = z.enum(['mains', 'tete', 'torse', 'pieds', 'collier', 'bracelet', 'bague']);
 
+// ── Capacités : actives (sorts lancés) et passives (en continu, sans énergie) ─────────
 def(monsterDetailRoutes, 'get', '/admin/content/monsters/{id}/spells', null, async c => {
   const id = P(c, 'id');
   await requireMonster(id);
   const { rows } = await pool.query(
-    `SELECT ms.*, s.name, s.kind, s.energy_cost, s.duration_h FROM monster_spells ms
-     JOIN spells s ON s.id=ms.spell_id WHERE ms.monster_id=$1 ORDER BY ms.id`, [id]);
+    `SELECT ms.*, s.name, s.kind, s.energy_cost FROM monster_spells ms
+     JOIN spells s ON s.id=ms.spell_id WHERE ms.monster_id=$1 ORDER BY ms.mode, ms.id`, [id]);
   return rows;
 });
-def(monsterDetailRoutes, 'post', '/admin/content/monsters/{id}/spells', z.object({ spellId: z.number().int() }), async (c, b) => {
+def(monsterDetailRoutes, 'post', '/admin/content/monsters/{id}/spells',
+  z.object({ spellId: z.number().int(), mode: z.enum(['active', 'passive']), target: z.enum(['ally', 'enemy']).optional(), radius: z.number().int().min(1).max(50).optional() }), async (c, b) => {
   const id = P(c, 'id');
   await requireMonster(id);
   if ((await pool.query('SELECT 1 FROM spells WHERE id=$1', [b.spellId])).rowCount === 0) fail(404, 'Sort inconnu');
+  // Cible/périmètre : réservés aux passives (en continu) ; actives lancées à la demande.
+  const target = b.mode === 'passive' ? b.target ?? null : null;
+  const radius = b.mode === 'passive' ? (b.radius ?? 3) : null;
   const { rows: [row] } = await pool.query(
-    'INSERT INTO monster_spells(monster_id,spell_id) VALUES ($1,$2) ON CONFLICT (monster_id,spell_id) DO NOTHING RETURNING *', [id, b.spellId]);
-  if (!row) fail(409, 'Sort déjà attribué à ce monstre');
+    `INSERT INTO monster_spells(monster_id,spell_id,mode,target,radius) VALUES ($1,$2,$3,$4,$5)
+     ON CONFLICT (monster_id,spell_id,mode) DO NOTHING RETURNING *`, [id, b.spellId, b.mode, target, radius]);
+  if (!row) fail(409, 'Capacité déjà attribuée dans ce mode');
   await audit(c, 'monster.spell', 'monster', id, null, b);
   return row;
 });
-def(monsterDetailRoutes, 'delete', '/admin/content/monsters/{id}/spells/{spellId}', null, async c => {
-  const r = await pool.query('DELETE FROM monster_spells WHERE monster_id=$1 AND spell_id=$2 RETURNING id', [P(c, 'id'), P(c, 'spellId')]);
-  if (!r.rowCount) fail(404, 'Attribution inconnue');
-  await audit(c, 'monster.spell.delete', 'monster', P(c, 'id'), null, { spellId: P(c, 'spellId') });
+def(monsterDetailRoutes, 'delete', '/admin/content/monsters/{id}/spells/{rowId}', null, async c => {
+  const r = await pool.query('DELETE FROM monster_spells WHERE id=$1 AND monster_id=$2 RETURNING id', [P(c, 'rowId'), P(c, 'id')]);
+  if (!r.rowCount) fail(404, 'Capacité inconnue');
+  await audit(c, 'monster.spell.delete', 'monster', P(c, 'id'), null, { rowId: P(c, 'rowId') });
   return { ok: true };
 });
 
+// ── Équipement (objet + slot) ───────────────────────────────────────────────────────────
 def(monsterDetailRoutes, 'get', '/admin/content/monsters/{id}/equips', null, async c => {
   const id = P(c, 'id');
   await requireMonster(id);
@@ -87,6 +96,8 @@ def(monsterDetailRoutes, 'post', '/admin/content/monsters/{id}/equips', z.object
   await requireMonster(id);
   if ((await pool.query('SELECT 1 FROM items WHERE id=$1', [b.itemId])).rowCount === 0) fail(404, 'Objet inconnu');
   // Même objet → on met à jour le slot (une pièce par objet par monstre).
+  // La restriction aux parties équipables du type est appliquée par l'UI (liste monster_slots),
+  // pas ici : un admin peut équiper hors restriction en connaissance de cause.
   const { rows: [row] } = await pool.query(
     `INSERT INTO monster_equips(monster_id,item_id,slot) VALUES ($1,$2,$3)
      ON CONFLICT (monster_id,item_id) DO UPDATE SET slot=EXCLUDED.slot RETURNING *`, [id, b.itemId, b.slot]);
@@ -100,29 +111,23 @@ def(monsterDetailRoutes, 'delete', '/admin/content/monsters/{id}/equips/{itemId}
   return { ok: true };
 });
 
-def(monsterDetailRoutes, 'get', '/admin/content/monsters/{id}/auras', null, async c => {
+// ── Parties du corps équipables (grille style personnage, par type de monstre) ─────────
+def(monsterDetailRoutes, 'get', '/admin/content/monsters/{id}/slots', null, async c => {
   const id = P(c, 'id');
   await requireMonster(id);
-  const { rows } = await pool.query(
-    `SELECT a.*, s.name spell_name FROM monster_auras a JOIN spells s ON s.id=a.spell_id
-     WHERE a.monster_id=$1 ORDER BY a.id`, [id]);
+  const { rows } = await pool.query('SELECT slot FROM monster_slots WHERE monster_id=$1 ORDER BY slot', [id]);
   return rows;
 });
-def(monsterDetailRoutes, 'post', '/admin/content/monsters/{id}/auras',
-  z.object({ spellId: z.number().int(), target: z.enum(['ally', 'enemy']), radius: z.number().int().min(1).max(50).default(3) }), async (c, b) => {
+def(monsterDetailRoutes, 'post', '/admin/content/monsters/{id}/slots', z.object({ slot: SLOTS }), async (c, b) => {
   const id = P(c, 'id');
   await requireMonster(id);
-  if ((await pool.query('SELECT 1 FROM spells WHERE id=$1', [b.spellId])).rowCount === 0) fail(404, 'Sort inconnu');
-  const { rows: [row] } = await pool.query(
-    'INSERT INTO monster_auras(monster_id,spell_id,target,radius) VALUES ($1,$2,$3,$4) ON CONFLICT (monster_id,spell_id,target) DO NOTHING RETURNING *',
-    [id, b.spellId, b.target, b.radius]);
-  if (!row) fail(409, 'Aura déjà définie pour ce sort et cette cible');
-  await audit(c, 'monster.aura', 'monster', id, null, b);
-  return row;
+  await pool.query('INSERT INTO monster_slots(monster_id,slot) VALUES ($1,$2) ON CONFLICT DO NOTHING', [id, b.slot]);
+  await audit(c, 'monster.slot', 'monster', id, null, b);
+  return { ok: true };
 });
-def(monsterDetailRoutes, 'delete', '/admin/content/monsters/{id}/auras/{auraId}', null, async c => {
-  const r = await pool.query('DELETE FROM monster_auras WHERE id=$1 AND monster_id=$2 RETURNING id', [P(c, 'auraId'), P(c, 'id')]);
-  if (!r.rowCount) fail(404, 'Aura inconnue');
-  await audit(c, 'monster.aura.delete', 'monster', P(c, 'id'), null, { auraId: P(c, 'auraId') });
+def(monsterDetailRoutes, 'delete', '/admin/content/monsters/{id}/slots/{slot}', null, async c => {
+  const r = await pool.query('DELETE FROM monster_slots WHERE monster_id=$1 AND slot=$2 RETURNING slot', [P(c, 'id'), P(c, 'slot')]);
+  if (!r.rowCount) fail(404, 'Slot inconnu');
+  await audit(c, 'monster.slot.delete', 'monster', P(c, 'id'), null, { slot: P(c, 'slot') });
   return { ok: true };
 });

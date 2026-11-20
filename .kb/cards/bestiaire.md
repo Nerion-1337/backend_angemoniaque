@@ -63,8 +63,10 @@ dashboard (instances on maps + divine-item guardians).
   `data->>'prototype'`, `gold`, `reincarnate_h`, `respawn_due_at` via
   `LEFT JOIN monster_respawns`) and all divine items with guardian / holder, for the front
   dashboard. Phase 3 added `POST /admin/bestiary/place` (ad-hoc instance with chosen drops +
-  reincarnation delay) and `DELETE /admin/bestiary/place/{posId}` (unplace) — see card
-  `monster-details`.
+  reincarnation delay) and `DELETE /admin/bestiary/place/{posId}` (unplace); phase 3b added
+  `PUT /admin/bestiary/place/{posId}` (move an instance — same guards as placement) and the status
+  now exposes `linked`/`linked_pseudo` (owner via `character_monster`, else the monster is
+  native) — see card `monster-details`.
 
 ## Entry points
 - `hourlyTick` (`routes/tick.ts`, `setInterval` 1 h in `index.ts` + manual `POST /admin/tick`) →
