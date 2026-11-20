@@ -1,4 +1,4 @@
-import { pool } from '../db/pool.js'; import { BURN_DAMAGE } from '../game/terrain.js'; import { cfgNum } from '../game/content.js'; import { hourlySpawns } from '../game/spawn.js';
+import { pool } from '../db/pool.js'; import { BURN_DAMAGE } from '../game/terrain.js'; import { cfgNum } from '../game/content.js'; import { hourlySpawns, reincarnateDue } from '../game/spawn.js';
 const REVERT = ['strength', 'agility', 'hp_max', 'recovery'];
 /** Tick horaire : XP/or (× multiplicateur global), régénération PV/énergie, production des bâtiments, expiration des buffs. */
 export async function hourlyTick() {
@@ -16,9 +16,11 @@ export async function hourlyTick() {
     FROM specializations s WHERE s.id=c.specialization_id AND NOT c.blocked`, [xpRate]);
   await pool.query("UPDATE character_mounts cm SET hp_current=LEAST(m.hp_max,cm.hp_current+m.recovery), energy_current=LEAST(m.energy_max,cm.energy_current+m.recovery) FROM mounts m WHERE m.id=cm.mount_id");
   await pool.query('UPDATE summons SET hp_current=LEAST(hp_max,hp_current+recovery), energy_current=LEAST(energy_max,energy_current+recovery)');
-  await pool.query('UPDATE monsters SET hp_current=LEAST(hp_max,hp_current+recovery), energy_current=LEAST(energy_max,energy_current+recovery), divine_energy_current=LEAST(divine_energy_max,divine_energy_current+recovery)');
+  // Les monstres en attente de réincarnation (mort + délai) ne régénèrent pas avant l'échéance.
+  await pool.query('UPDATE monsters m SET hp_current=LEAST(m.hp_max,m.hp_current+m.recovery), energy_current=LEAST(m.energy_max,m.energy_current+m.recovery), divine_energy_current=LEAST(m.divine_energy_max,m.divine_energy_current+m.recovery) WHERE m.id NOT IN (SELECT monster_id FROM monster_respawns)');
   await applyBuildingProduction();
   await hourlySpawns(pool);   // bestiaire (Étape 2) : spawn_rules → instances sur case libre, caps + probabilité + fréquence
+  await reincarnateDue(pool); // bestiaire (Étape 2 phase 3) : réincarnation différée des monstres tués avec délai
   // Brûlure du volcan : BURN_DAMAGE par heure tant que burn_until est dans le futur (jamais mortelle : PV min. 1)
   await pool.query('UPDATE characters SET hp_current=GREATEST(1,hp_current-$1) WHERE burn_until>now() AND NOT blocked', [BURN_DAMAGE]);
   const { rows } = await pool.query('DELETE FROM temp_buffs WHERE expires_at<=now() RETURNING character_id,stat,delta');

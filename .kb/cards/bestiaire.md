@@ -2,7 +2,7 @@
 title: "Bestiaire (phase 2): loot roll, hourly spawns, combat death, admin routes & status"
 slug: bestiaire
 status: done
-updated: 2026-11-04
+updated: 2026-11-20
 files:
   - src/game/loot.ts
   - src/game/combatlib.ts
@@ -47,15 +47,24 @@ dashboard (instances on maps + divine-item guardians).
   `entity_caps` (global / per_zone) stop spawning when reached.
 - **Death + loot** (`game/combatlib.ts` `applyDamage` → `monsterDeath`): when a monster dies,
   wild instances (`data.spawned`) are despawned (delete row + position + their loot/guardians);
-  anchored monsters regenerate (`hp_current=hp_max`). `rollLoot` (source = `data.prototype` for
-  wild instances): credits the monster's `gold_current` to the killer; for each `monster_loot`
+  anchored monsters regenerate — phase 3 made it optional: with a reincarnation delay
+  (`data.reincarnate_h` of the instance, fallback `reincarnate_delay_h` of the prototype, >0 h)
+  the corpse stays at 0 PV and a `monster_respawns` deadline is scheduled (`scheduleRespawn`,
+  revived by `reincarnateDue` on the hourly tick); without delay, instant `hp_current=hp_max`
+  (historical behavior). Loot is ALWAYS rolled at death — a re-attack on a dead body only
+  refreshes the deadline (guard `hp_current<=0`, see card `monster-details`). `rollLoot`
+  (source = `data.prototype` for wild instances): credits the monster's `gold_current` to the killer; for each `monster_loot`
   entry rolled at `drop_rate × game_config.drop_rate` — item → upsert into `character_items`
   (UPDATE qty, else INSERT), resource → increment `characters.resources` JSONB, divine →
   `grantDivine` (UPDATE of the holder, never an insert → no duplication; cap hit is logged,
   not blocking).
 - **Status** (`routes/admin/bestiary.ts` `GET /admin/bestiary/status`): all placed monsters
-  (`monsters ⋈ positions`, flags `data->>'spawned'`/`data->>'prototype'`) and all divine items
-  with guardian / holder, for the front dashboard.
+  (`monsters ⋈ positions`, `pos_id`, flags `data->>'spawned'`/`data->>'placed'`,
+  `data->>'prototype'`, `gold`, `reincarnate_h`, `respawn_due_at` via
+  `LEFT JOIN monster_respawns`) and all divine items with guardian / holder, for the front
+  dashboard. Phase 3 added `POST /admin/bestiary/place` (ad-hoc instance with chosen drops +
+  reincarnation delay) and `DELETE /admin/bestiary/place/{posId}` (unplace) — see card
+  `monster-details`.
 
 ## Entry points
 - `hourlyTick` (`routes/tick.ts`, `setInterval` 1 h in `index.ts` + manual `POST /admin/tick`) →
@@ -64,6 +73,8 @@ dashboard (instances on maps + divine-item guardians).
   `monsterDeath`/`rollLoot` on monster death.
 - `GET /admin/bestiary/status` (admin middleware) consumed by the front `Bestiary` panel
   (`front/src/admin/Bestiary.jsx`).
+- Phase 3: `POST /admin/bestiary/place` / `DELETE /admin/bestiary/place/{posId}` (admin
+  middleware); `reincarnateDue` at the end of `hourlyTick` (`routes/tick.ts`).
 - Loot/spawn CRUD mounted through `routes/admin.ts` under `/admin/*`.
 
 ## Data flow
@@ -87,6 +98,9 @@ instances per tick, `monster_loot`/`spawn_rules` rows (admin CRUD, audited via `
   `spawn_rules`, `character_monster` rows, positions and monsters: without it the active rules
   (`interval_h` 0) accumulate across re-runs on a warm volume and flood the maps with wild
   instances on every tick.
+- `test/monsterDetails.test.ts` + `test/integration/monsterDetails.test.ts` (card
+  `monster-details`): the phase-3 death/reincarnation mechanics and the ad-hoc placement
+  journey, kept hermetic across re-runs (the catalog counts asserted by `features.test.ts`).
 
 ## Gotchas
 - **`m.data->>'prototype'` is a text extraction**: always compare against a text parameter

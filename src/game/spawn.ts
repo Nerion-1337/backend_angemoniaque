@@ -54,6 +54,16 @@ export async function hourlySpawns(db: any) {
     await db.query('UPDATE spawn_rules SET last_spawned_at=now() WHERE id=$1', [r.id]);
   }
 }
+/** Réincarnation différée (Étape 2 phase 3) : les monstres ancrés tués avec délai
+ *  (monster_respawns) régénèrent leur PV complet quand l'échéance est atteinte (tick horaire). */
+export async function reincarnateDue(db: any) {
+  const { rows: due } = await db.query('SELECT monster_id FROM monster_respawns WHERE due_at <= now()');
+  for (const r of due) {
+    await db.query('UPDATE monsters SET hp_current=hp_max WHERE id=$1', [r.monster_id]);
+    await db.query('DELETE FROM monster_respawns WHERE monster_id=$1', [r.monster_id]);
+  }
+  return due.length;
+}
 /** Case libre dans le rectangle de la règle : évite eau/volcan et toute case occupée (uq_cell). */
 async function freeCellRect(db: any, r: any) {
   const w = r.x_max - r.x_min + 1, h = r.y_max - r.y_min + 1;

@@ -2,7 +2,7 @@
 title: Socle admin (Étape 2 phase 1) : rôles, CRUD contenu, règles transverses, production, audit
 slug: admin-socle
 status: done
-updated: 2026-11-04
+updated: 2026-11-20
 files:
   - src/routes/admin.ts
   - src/routes/admin/core.ts
@@ -44,7 +44,9 @@ live-ops) build on.
   The `admin` middleware on `/admin/*` requires role==='admin'; a `mod` middleware (role mod|admin) exists for
   phase 4. `/auth/me` and login/register return `role` + legacy `admin` bool.
 - **Aggregator**: `routes/admin.ts` mounts sub-routers (core, races, monsters, items, mounts, buildings,
-  entity, players, bestiary) under one `adminRoutes` router. All content CRUD lives in `routes/admin/*.ts`.
+  entity, players, bestiary, spell + monster-detail) under one `adminRoutes` router.
+  Phase 3 mounted `spellRoutes` (global spell catalog CRUD) and `monsterDetailRoutes`
+  (monster spells / equipment / auras subcollections) — see card `monster-details`. All content CRUD lives in `routes/admin/*.ts`.
   The beasts-of-burden loot/spawn subroutes of `monsters.ts` (`/admin/content/monsters/{id}/loot|spawns`,
   GET/POST/PUT/DELETE) belong to phase 2 — see the `bestiaire` card.
 - **Generic entity CRUD** (`common.ts` `safeInsert`/`safeUpdate`): INSERT/UPDATE are restricted to real DB

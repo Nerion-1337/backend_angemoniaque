@@ -2,7 +2,7 @@
 title: Procedural map & terrain: resources, movement rules, spawn, map/action routes
 slug: map-terrain-gather
 status: done
-updated: 2026-11-04
+updated: 2026-11-20
 files:
   - src/game/terrain.ts
   - src/game/humanMap.ts
@@ -51,7 +51,9 @@ The world model of the game: **the Human world (map 1) is a hand-drawn 200×200 
 ## Entry points
 - `POST /actions/move|gather|approach` (`routes/actions.ts`) — front `TileCard` action menu.
 - `GET /map/{id}/area|cell|landmarks` (`routes/map.ts`) — front `GameCanvas` re-fetches on every WS event + 8 s poll.
-- `spawn()` from `routes/characters.ts`; `freeCell` from `routes/divine.ts` (summon, r=3), `routes/admin.ts` (r=2), `game/divine.ts` (resurrection on map 3, r=20); `buildings.ts` reuses the same water/volcano check for placement. `hourlySpawns` is fired from `routes/tick.ts` `hourlyTick` (bestiaire).
+- `spawn()` from `routes/characters.ts`; `freeCell` from `routes/divine.ts` (summon, r=3), `routes/admin.ts` (r=2), `game/divine.ts` (resurrection on map 3, r=20); `buildings.ts` reuses the same water/volcano check for placement. `hourlySpawns` is fired from `routes/tick.ts` `hourlyTick` (bestiaire); `spawn.ts` also
+exports `reincarnateDue` (phase 3 — deferred monster resurrection, card `monster-details`),
+called at the end of `hourlyTick`.
 - `travel`/`spend`/`actor` shared by `combat.ts` (long-range attacks) and `spells.ts`.
 - `terrain.setWorld` is called by the front `GameCanvas` on every `me` refresh so the mirror defaults to the right world.
 - Realtime: move/gather/approach broadcast `{type:'moved'}` via Redis `map:{id}` (multi-instance fan-out).

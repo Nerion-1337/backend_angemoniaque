@@ -21,18 +21,31 @@ export async function applyDamage(db: any, t: Target, dmg: number, killerCharId:
     else await db.query('DELETE FROM summons WHERE id=$1', [t.id]);
   } return { hp, killed };
 }
+/** Programme la réincarnation différée d'un monstre (échéance due_at, rafraîchie si déjà morte). */
+export async function scheduleRespawn(db: any, monsterId: number, delayH: number) {
+  await db.query(
+    `INSERT INTO monster_respawns(monster_id,due_at) VALUES ($1, now() + make_interval(hours => $2))
+     ON CONFLICT (monster_id) DO UPDATE SET due_at = now() + make_interval(hours => $2)`, [monsterId, delayH]);
+}
 /** Mort d'un monstre : le sauvage disparaît (désespawn), l'ancré régénère ; le butin est tiré
  *  (rollLoot : or + entrées pondérées × drop_rate global) et les objets divins gardés sont
  *  transférés au vainqueur via grantDivine (transfert propre — plafonds respectés, jamais de
- *  duplication ; en cas de plafond la pièce reste sans détenteur). */
+ *  duplication ; en cas de plafond la pièce reste sans détenteur).
+ *  Phase 3 : si le monstre a un délai de réincarnation (>0 h), il reste mort (PV 0) et
+ *  régénère à l'échéance (tick horaire) ; sans délai, régénération instantanée (historique).
+ *  Un monstre déjà mort (en attente de réincarnation) ne retoue jamais son butin. */
 async function monsterDeath(db: any, t: Target, killerCharId: number) {
   const drops: string[] = [];
+  const delayH = Number(t.row.data?.reincarnate_h ?? t.row.reincarnate_delay_h ?? 0);
+  if ((t.row.hp_current ?? 0) <= 0) { if (delayH > 0) await scheduleRespawn(db, t.id, delayH); return; }
   if (t.row.data?.spawned) {
     await db.query('DELETE FROM character_monster WHERE monster_id=$1', [t.id]);
     await db.query('DELETE FROM positions WHERE monsters_id=$1', [t.id]);
     await db.query('DELETE FROM monster_loot WHERE monster_id=$1', [t.id]);
     await db.query('DELETE FROM divine_items WHERE guardian_monster_id=$1', [t.id]);
     await db.query('DELETE FROM monsters WHERE id=$1', [t.id]);
+  } else if (delayH > 0) {
+    await scheduleRespawn(db, t.id, delayH);
   } else {
     await db.query('UPDATE monsters SET hp_current=hp_max WHERE id=$1', [t.id]);
   }
