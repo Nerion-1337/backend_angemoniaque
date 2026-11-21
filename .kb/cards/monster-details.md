@@ -2,7 +2,7 @@
 title: Détails de monstre (phase 3) : compétences/sorts, équipement par slot, auras, placement spontané & réincarnation
 slug: monster-details
 status: done
-updated: 2026-11-20
+updated: 2026-11-21
 files:
   - src/routes/admin/monsterDetails.ts
   - src/routes/admin/bestiary.ts
@@ -66,6 +66,12 @@ réincarnation automatique après délai une fois tué.
   `/admin/bestiary/status` expose par instance `linked` (existe-t-il une ligne
   `character_monster` ?) + `linked_pseudo` (1er propriétaire) : « natif » si non lié à un
   personnage.
+- **Butin « or »** (phase 3c) : `monster_loot.resource = 'or'` est une ressource spéciale —
+  `rollLoot` (loot.ts) crédite l'**or** du vainqueur (`characters.gold`), pas le JSONB
+  `characters.resources`. C'est la façon de déclarer « ce monstre donne X or au tueur »
+  depuis le panneau admin (type Or dans la liste du butin). Le `/admin/catalog` expose
+  désormais `resources` (catalogue dédoublonné `RESOURCES`+`RESOURCES2` : id/nom/groupe)
+  pour les menus déroulants de recherche de ressources.
 - **Réincarnation** : `monsterDeath` (combatlib) lit le délai
   (`data.reincarnate_h` de l'instance, repli `reincarnate_delay_h` du prototype) : à 0 → régénération
   instantanée (historique) ; >0 → le monstre **reste mort (PV 0)** et `scheduleRespawn` insère

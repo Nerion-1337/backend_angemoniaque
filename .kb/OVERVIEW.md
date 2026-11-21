@@ -64,7 +64,7 @@ _Généré par `kb overview` — ne pas éditer ici ; notes manuelles dans `.kb/
 - `src/routes/admin/bestiary.ts` — Statut bestiaire pour le dashboard (Étape 2 phase 2) : — bestiaryRoutes, Place
 - `src/routes/admin/buildings.ts` — (header), buildingRoutes, Building
 - `src/routes/admin/common.ts` — Table par type d'entité + colonnes « sûres » (INSERT/UPDATE ne touchent que celles-ci, vérifiées en base). — (header), TABLE, URL_KIND, kindOf, colsOf, jsonable, safeInsert, safeUpdate, requireRow, extras
-- `src/routes/admin/core.ts` — Création dynamique conservée pour compatibilité (l'éditeur dédié est /admin/content/*) — coreRoutes
+- `src/routes/admin/core.ts` — Catalogue des ressources des deux mondes (menus déroulants admin) — dédoublonné par id. — (header), RESCATALOG, coreRoutes
 - `src/routes/admin/entity.ts` — Règles transverses (D2) : coûts en ressources, plafonds (caps), modificateurs bonus/malus & effets. — (header), entityRoutes, refId, Cost, Cap, Mod
 - `src/routes/admin/items.ts` — (header), itemRoutes, Item
 - `src/routes/admin/monsterDetails.ts` — Étape 2 — Phase 3b : catalogue global de sorts (base de sorts du jeu), capacités des — (header), spellRoutes, Spell, monsterDetailRoutes, requireMonster, SLOTS

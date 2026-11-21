@@ -2,7 +2,7 @@
 title: Socle admin (Étape 2 phase 1) : rôles, CRUD contenu, règles transverses, production, audit
 slug: admin-socle
 status: done
-updated: 2026-11-20
+updated: 2026-11-21
 files:
   - src/routes/admin.ts
   - src/routes/admin/core.ts

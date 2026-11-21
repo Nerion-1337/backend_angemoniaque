@@ -2,7 +2,7 @@
 title: "Bestiaire (phase 2): loot roll, hourly spawns, combat death, admin routes & status"
 slug: bestiaire
 status: done
-updated: 2026-11-20
+updated: 2026-11-21
 files:
   - src/game/loot.ts
   - src/game/combatlib.ts
@@ -29,6 +29,7 @@ back-office manages loot tables and spawn rules per monster plus a live bestiary
 dashboard (instances on maps + divine-item guardians).
 
 ## How it works
+- **Gold in the loot** (phase 3c): the special resource `monster_loot.resource = 'or'` is credited to the killer's **gold** (not the resources JSONB) by `rollLoot` — the admin loot editor offers an "Or" type for exactly this.
 - **Admin CRUD** (`routes/admin/monsters.ts` `monsterRoutes`): `monster_loot` rows (item /
   resource / divine, `drop_rate` 0-100, `qty_min`/`qty_max`) and `spawn_rules` rows
   (map + rectangle, `max_instances`, `interval_h`, `probability`, `active`) under

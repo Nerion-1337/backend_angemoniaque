@@ -3,13 +3,16 @@ import { grantDivine } from './divine.js';
 /**
  * Butin au death d'un monstre : or du monstre + entrées monster_loot tirées à la probabilité
  * (drop_rate de l'entrée × multiplicateur global game_config.drop_rate).
- *  - item    → character_items (quantité aléatoire dans [qty_min, qty_max])
- *  - resource → characters.resources (JSONB, incrément)
- *  - divine  → grantDivine (transfert propre de la pièce désignée : UPDATE du holder, jamais
- *              d'insertion → aucune duplication ; si le plafond de détention du vainqueur est
- *              atteint, la pièce reste au gardien et l'échec est journalisé, pas bloquant).
+ *  - item     → character_items (quantité aléatoire dans [qty_min, qty_max])
+ *  - resource → characters.resources (JSONB, incrément) — sauf la ressource spéciale `or` :
+ *               elle crédite directement l'OR du vainqueur (gold), l'or faisant partie du
+ *               butin donné au tueur (Étape 2 phase 3c).
+ *  - divine   → grantDivine (transfert propre de la pièce désignée : UPDATE du holder, jamais
+ *               d'insertion → aucune duplication ; si le plafond de détention du vainqueur est
+ *               atteint, la pièce reste au gardien et l'échec est journalisé, pas bloquant).
  * Un monstre sauvage (data.spawned) tire le butin de son prototype (data.prototype).
  */
+
 export async function rollLoot(db: any, monster: any, killerId: number, out: string[] = []): Promise<string[]> {
   if (monster.gold_current > 0) {
     await db.query('UPDATE characters SET gold=gold+$2 WHERE id=$1', [killerId, Number(monster.gold_current)]);
@@ -28,11 +31,16 @@ export async function rollLoot(db: any, monster: any, killerId: number, out: str
       out.push(`objet x${q}`);
     }
     if (l.resource) {
-      const { rows: [ch] } = await db.query('SELECT resources FROM characters WHERE id=$1', [killerId]);
-      const res: Record<string, number> = { ...(ch?.resources ?? {}) };
-      res[l.resource] = (res[l.resource] ?? 0) + q;
-      await db.query('UPDATE characters SET resources=$2 WHERE id=$1', [killerId, JSON.stringify(res)]);
-      out.push(`${l.resource} x${q}`);
+      if (l.resource === 'or') {   // l'or fait partie du butin donné au tueur
+        await db.query('UPDATE characters SET gold=gold+$2 WHERE id=$1', [killerId, q]);
+        out.push(`or x${q}`);
+      } else {
+        const { rows: [ch] } = await db.query('SELECT resources FROM characters WHERE id=$1', [killerId]);
+        const res: Record<string, number> = { ...(ch?.resources ?? {}) };
+        res[l.resource] = (res[l.resource] ?? 0) + q;
+        await db.query('UPDATE characters SET resources=$2 WHERE id=$1', [killerId, JSON.stringify(res)]);
+        out.push(`${l.resource} x${q}`);
+      }
     }
     if (l.divine_id) {
       try {

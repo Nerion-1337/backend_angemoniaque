@@ -52,6 +52,16 @@ describe('rollLoot : or + entrées pondérées (× multiplicateur global drop_ra
     expect(out).toEqual(['objet x1']);
     DROP_RATE = 1; vi.restoreAllMocks();
   });
+  test('ressource spéciale « or » : créditée en OR du vainqueur, pas dans le JSONB ressources', async () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+    const db = lootDb([{ resource: 'or', drop_rate: 100, qty_min: 7, qty_max: 7 }], {});
+    const out = await rollLoot(db, { id: 3, gold_current: 0 }, 9);
+    expect(out).toContain('or x7');
+    const upd = db.calls.find(c => c.sql.startsWith('UPDATE characters SET gold=gold+'));
+    expect(upd.params).toEqual([9, 7]);
+    expect(db.calls.find(c => c.sql.startsWith('UPDATE characters SET resources'))).toBeUndefined();
+    vi.restoreAllMocks();
+  });
   test('un monstre sauvage (data.spawned) tire le butin de son prototype', async () => {
     vi.spyOn(Math, 'random').mockReturnValue(0);
     let lootParam: any = null;
