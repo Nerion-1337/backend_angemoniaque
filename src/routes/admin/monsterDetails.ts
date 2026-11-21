@@ -95,9 +95,14 @@ def(monsterDetailRoutes, 'post', '/admin/content/monsters/{id}/equips', z.object
   const id = P(c, 'id');
   await requireMonster(id);
   if ((await pool.query('SELECT 1 FROM items WHERE id=$1', [b.itemId])).rowCount === 0) fail(404, 'Objet inconnu');
+  // La restriction aux parties équipables est définie par type (monster_slots) et bornée
+  // côté serveur : une instance est soumise à la grille de son prototype (le type lui-même
+  // à la sienne). Aucune partie sélectionnée pour le type → aucun équipement possible.
+  const { rows: [m] } = await pool.query("SELECT COALESCE((data->>'prototype')::int, id) grid_ref FROM monsters WHERE id=$1", [id]);
+  const { rows: grid } = await pool.query('SELECT slot FROM monster_slots WHERE monster_id=$1', [m.grid_ref]);
+  if (grid.length === 0) fail(400, 'Aucune partie du corps sélectionnée pour ce type (onglet Spécificités) : aucun équipement possible');
+  if (!grid.some(g => g.slot === b.slot)) fail(400, `La partie « ${b.slot} » n'est pas équipables pour ce type (cochées : ${grid.map(g => g.slot).join(', ')})`);
   // Même objet → on met à jour le slot (une pièce par objet par monstre).
-  // La restriction aux parties équipables du type est appliquée par l'UI (liste monster_slots),
-  // pas ici : un admin peut équiper hors restriction en connaissance de cause.
   const { rows: [row] } = await pool.query(
     `INSERT INTO monster_equips(monster_id,item_id,slot) VALUES ($1,$2,$3)
      ON CONFLICT (monster_id,item_id) DO UPDATE SET slot=EXCLUDED.slot RETURNING *`, [id, b.itemId, b.slot]);

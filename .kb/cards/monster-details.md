@@ -44,9 +44,11 @@ réincarnation automatique après délai une fois tué.
     sort peut exister en actif ET en passif (lignes distinctes, DELETE par `rowId`). POST actif
     force `target`/`radius` à NULL ; passif avec `radius` omis → 3.
   - `monster_equips` : objet du catalogue + slot (CHECK 7 valeurs) ; même objet → `DO UPDATE SET
-    slot` (une pièce par objet par monstre, le slot est modifiable). La restriction aux parties
-    équipables du type est appliquée **côté UI** (grille `monster_slots`), pas par l'API — un
-    admin peut équiper hors grille en connaissance de cause.
+    slot` (une pièce par objet par monstre, le slot est modifiable). **Bornage serveur (phase 3d)** :
+    le POST vérifie la grille `monster_slots` du type (pour une instance, celle de son
+    prototype — `COALESCE((data->>'prototype')::int, id)`) : grille vide → 400 « aucune partie
+    sélectionnée pour ce type » ; slot hors grille → 400 (les pièces déjà portées restent
+    supprimables, aucun ajout).
   - `monster_slots` : parties du corps équipables par **type** de monstre (7 slots, style
     personnage) ; liste vide = aucune restriction.
   GETs jointes (`item_name`, `spell_name`, `energy_cost`…) ; DELETE par clé. Les FK

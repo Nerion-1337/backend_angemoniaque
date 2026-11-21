@@ -94,9 +94,13 @@ describe.skipIf(!process.env.DATABASE_URL)('Admin phase 3 (détails de monstre)'
     inst = (await call('/admin/bestiary/status', undefined, tk).then(x => x.j)).instances.find((i: any) => i.id === placed.id);
     expect(`${inst.x},${inst.y}`).toBe(`${moved.x},${moved.y}`);
     expect((await call('/admin/content/monsters/' + placed.id + '/loot', undefined, tk)).j.length).toBe(1);
-    // Équiper l'instance (le slot est borné par la grille du type, appliqué côté UI).
+    // Équiper l'instance : le slot est borné PAR LA GRILLE DU TYPE (bornage serveur, phase 3d).
     const items: any[] = await call('/admin/content/items', undefined, tk).then(r => r.j);
-    expect((await call(`/admin/content/monsters/${placed.id}/equips`, { itemId: items[0].id, slot: 'collier' }, tk)).status).toBe(200);
+    expect((await call(`/admin/content/monsters/${placed.id}/equips`, { itemId: items[0].id, slot: 'collier' }, tk)).status).toBe(400);   // grille vide → impossible
+    expect((await call(`/admin/content/monsters/${mId}/slots`, { slot: 'mains' }, tk)).status).toBe(200);
+    expect((await call(`/admin/content/monsters/${placed.id}/equips`, { itemId: items[0].id, slot: 'mains' }, tk)).status).toBe(200);   // dans la grille → OK
+    expect((await call(`/admin/content/monsters/${placed.id}/equips`, { itemId: items[0].id, slot: 'collier' }, tk)).status).toBe(400);   // hors grille → refusé
+    expect((await call(`/admin/content/monsters/${placed.id}/equips/${items[0].id}`, undefined, tk, 'DELETE')).status).toBe(200);
     // Retrait : case libérée, instance supprimée (butin + équipement en cascade).
     expect((await call(`/admin/bestiary/place/${inst.pos_id}`, undefined, tk, 'DELETE')).status).toBe(200);
     const st2: any = await call('/admin/bestiary/status', undefined, tk).then(x => x.j);
