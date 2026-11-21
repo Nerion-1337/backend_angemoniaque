@@ -1,25 +1,52 @@
 import { def, router, z, P } from '../../lib/route.js'; import { pool, fail } from '../../lib/db.js';
 import { audit } from '../../lib/audit.js'; import { bumpContent, divineCap } from '../../game/content.js';
-import { safeInsert, safeUpdate, requireRow, extras } from './common.js';
+import { safeInsert, safeUpdate, requireRow, extras, RARITIES, USABLE_KINDS } from './common.js';
 export const itemRoutes = router();
 const Item = z.object({
-  name: z.string().max(80), slot: z.string().max(30).optional(), rarity: z.string().max(20).optional(),
+  name: z.string().max(80), slot: z.string().max(30).optional(),
+  /** Libre : les anciennes données conservent leurs valeurs (l'UI admin propose les 5
+   *  RARITIES) ; les nouveaux sorts (colonne fraîche) sont bornés par l'enum. */
+  rarity: z.string().max(20).optional(),
+  /** Qui peut s'en équiper (sous-ensemble des 6 kinds ; vide = tout le monde). */
+  usable_by: z.array(z.enum(USABLE_KINDS)).max(6).optional(),
   quantity_max: z.number().int().optional(), price: z.number().int().optional(), shop: z.boolean().optional(),
   shop_stock: z.number().int().optional(), durability: z.number().int().optional(),
   armor: z.number().int().optional(), strength_bonus: z.number().int().optional(), agility_bonus: z.number().int().optional(),
   req_strength: z.number().int().optional(), weapon_damage: z.number().int().optional(), magic_armor: z.number().int().optional(),
   data: z.record(z.any()).optional()
 });
+const usable = (b: any) => b.usable_by !== undefined ? { ...b, usable_by: JSON.stringify(b.usable_by) } : b;
 def(itemRoutes, 'get', '/admin/content/items', null, async c => {
-  const q = c.req.query('q'), kind = c.req.query('kind');
-  const like = q && kind !== 'divine' ? 'WHERE name ILIKE $1' : '';
-  const { rows } = kind === 'divine'
-    ? await pool.query(`SELECT di.*,COALESCE(ch.pseudo,'libre') holder,mo.name guardian FROM divine_items di LEFT JOIN characters ch ON ch.id=di.holder_character_id LEFT JOIN monsters mo ON mo.id=di.guardian_monster_id ORDER BY di.kind,di.id`)
-    : await pool.query(`SELECT * FROM items ${like} ORDER BY id`, like ? [`%${q}%`] : []);
+  const q = c.req.query('q'), kind = c.req.query('kind'), rarity = c.req.query('rarity'), slot = c.req.query('slot');
+  if (kind === 'divine') {
+    const { rows } = await pool.query(`SELECT di.*,COALESCE(ch.pseudo,'libre') holder,mo.name guardian FROM divine_items di LEFT JOIN characters ch ON ch.id=di.holder_character_id LEFT JOIN monsters mo ON mo.id=di.guardian_monster_id ORDER BY di.kind,di.id`);
+    return rows;
+  }
+  // Rareté normalisée : les données historiques sont en texte libre (ex. « Épique »,
+  // « Commun », « unique ») — le filtre et l'affichage passent par cette normalisation
+  // vers les 5 valeurs canoniques (les écrits récents du UI le sont déjà).
+  const rarNorm = `CASE lower(i.rarity)
+     WHEN 'commun' THEN 'commun' WHEN 'rare' THEN 'rare'
+     WHEN 'epique' THEN 'epique' WHEN 'épique' THEN 'epique'
+     WHEN 'legendaire' THEN 'legendaire' WHEN 'légendaire' THEN 'legendaire' WHEN 'legendary' THEN 'legendaire'
+     WHEN 'divin' THEN 'divin' WHEN 'unique' THEN 'divin'
+     ELSE COALESCE(lower(i.rarity), 'commun') END`;
+  const where: string[] = [], args: any[] = [];
+  if (q) { where.push(`i.name ILIKE $${args.push(`%${q}%`)}`); }
+  if (rarity) { where.push(`(${rarNorm})=$${args.push(rarity)}`); }
+  if (slot === 'none') { where.push("(i.slot IS NULL OR i.slot='')"); }
+  else if (slot) { where.push(`i.slot=$${args.push(slot)}`); }
+  // Décompte « détenu par N » (instances du jeu qui le portent) par objet.
+  // rarity_n : rareté normalisée (affichage) ; i.* conserve les colonnes brutes
+  // (le formulaire d'édition reste alimenté par les vraies valeurs).
+  const { rows } = await pool.query(
+    `SELECT i.*, ${rarNorm} rarity_n, COALESCE(h.n,0) holders FROM items i
+     LEFT JOIN (SELECT item_id,count(*)::int n FROM character_items GROUP BY item_id) h ON h.item_id=i.id
+     ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY i.id`, args);
   return rows;
 });
 def(itemRoutes, 'post', '/admin/content/items', Item, async (c, b) => {
-  const row = await safeInsert('items', b as any);
+  const row = await safeInsert('items', usable(b) as any);
   await bumpContent(); await audit(c, 'item.create', 'item', row.id, null, b);
   return row;
 });
@@ -28,7 +55,7 @@ def(itemRoutes, 'get', '/admin/content/items/{id}', null, async c => {
   return { ...(await requireRow('items', id)), ...(await extras('item', id)) };
 });
 def(itemRoutes, 'put', '/admin/content/items/{id}', Item.partial(), async (c, b) => {
-  const row = await safeUpdate('items', P(c, 'id'), b as any);
+  const row = await safeUpdate('items', P(c, 'id'), usable(b) as any);
   await bumpContent(); await audit(c, 'item.update', 'item', P(c, 'id'), null, b);
   return row;
 });

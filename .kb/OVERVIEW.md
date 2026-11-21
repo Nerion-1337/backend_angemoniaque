@@ -63,11 +63,11 @@ _Généré par `kb overview` — ne pas éditer ici ; notes manuelles dans `.kb/
 - `src/routes/admin.ts` — Espace administrateur — monté dans app.ts sous la garde `admin` (rôle du JWT). — (header), adminRoutes
 - `src/routes/admin/bestiary.ts` — Statut bestiaire pour le dashboard (Étape 2 phase 2) : — bestiaryRoutes, Place
 - `src/routes/admin/buildings.ts` — (header), buildingRoutes, Building
-- `src/routes/admin/common.ts` — Table par type d'entité + colonnes « sûres » (INSERT/UPDATE ne touchent que celles-ci, vérifiées en base). — (header), TABLE, URL_KIND, kindOf, colsOf, jsonable, safeInsert, safeUpdate, requireRow, extras
+- `src/routes/admin/common.ts` — Table par type d'entité + colonnes « sûres » (INSERT/UPDATE ne touchent que celles-ci, vérifiées en base). — (header), TABLE, RARITIES, USABLE_KINDS, URL_KIND, kindOf, colsOf, jsonable, safeInsert, safeUpdate, requireRow, extras
 - `src/routes/admin/core.ts` — Catalogue des ressources des deux mondes (menus déroulants admin) — dédoublonné par id. — (header), RESCATALOG, coreRoutes
 - `src/routes/admin/entity.ts` — Règles transverses (D2) : coûts en ressources, plafonds (caps), modificateurs bonus/malus & effets. — (header), entityRoutes, refId, Cost, Cap, Mod
-- `src/routes/admin/items.ts` — (header), itemRoutes, Item
-- `src/routes/admin/monsterDetails.ts` — Étape 2 — Phase 3b : catalogue global de sorts (base de sorts du jeu), capacités des — (header), spellRoutes, Spell, monsterDetailRoutes, requireMonster, SLOTS
+- `src/routes/admin/items.ts` — Libre : les anciennes données conservent leurs valeurs (l'UI admin propose les 5 — (header), itemRoutes, Item, usable
+- `src/routes/admin/monsterDetails.ts` — Étape 2 — Phase 3b : catalogue global de sorts (base de sorts du jeu), capacités des — (header), spellRoutes, Spell, usable, monsterDetailRoutes, requireMonster, SLOTS
 - `src/routes/admin/monsters.ts` — (header), monsterRoutes, Monster, Loot, Spawn
 - `src/routes/admin/mounts.ts` — (header), mountRoutes, Mount
 - `src/routes/admin/players.ts` — Endpoints hérités de l'admin historique — complétés en phase 4 (modération, rôles mod). — (header), playerRoutes, STATS, GRANT
@@ -85,6 +85,4 @@ _Généré par `kb overview` — ne pas éditer ici ; notes manuelles dans `.kb/
 - `src/routes/messages.ts` — (header), messages, VISION
 - `src/routes/monsters.ts` — Invocation d'un monstre du bestiaire (sort/action) : l'invocation est soumise aux règles — monsters
 - `src/routes/mounts.ts` — mounts
-- `src/routes/pacts.ts` — Limites vérifiées à la conclusion : 1 pacte actif pour un Humain, selon le rang pour un Ange/Démon. — (header), pacts, maxPacts, BUFF_H, checkLimits
-- `src/routes/spells.ts` — spells
-- … 28 autres fichiers (utiliser `kb search`)
+- … 31 autres fichiers (utiliser `kb search`)

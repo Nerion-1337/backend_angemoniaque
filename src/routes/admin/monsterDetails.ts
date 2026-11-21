@@ -1,5 +1,6 @@
 import { def, router, z, P } from '../../lib/route.js'; import { pool, fail } from '../../lib/db.js';
 import { audit } from '../../lib/audit.js'; import { bumpContent } from '../../game/content.js';
+import { RARITIES, USABLE_KINDS } from './common.js';
 /**
  * Étape 2 — Phase 3b : catalogue global de sorts (base de sorts du jeu), capacités des
  * monstres (actives : sorts qu'ils peuvent LANCER ; passives : sorts appliqués EN CONTINU
@@ -8,31 +9,45 @@ import { audit } from '../../lib/audit.js'; import { bumpContent } from '../../g
  */
 export const spellRoutes = router();
 const Spell = z.object({
-  name: z.string().max(80), kind: z.string().max(20).optional(), energyCost: z.number().int().min(0).optional(),
+  name: z.string().max(80), kind: z.string().max(20).optional(),
+  rarity: z.enum(RARITIES).optional(),
+  /** Qui peut apprendre ce sort (sous-ensemble des 6 kinds ; vide = tout le monde). */
+  usableBy: z.array(z.enum(USABLE_KINDS)).max(6).optional(),
+  energyCost: z.number().int().min(0).optional(),
   damage: z.number().int().optional(), description: z.string().max(400).optional(),
   price: z.number().int().min(0).optional(), durationH: z.number().int().min(0).optional()
 });
+const usable = (b: any) => b.usableBy !== undefined ? { ...b, usable_by: JSON.stringify(b.usableBy) } : b;
 def(spellRoutes, 'get', '/admin/content/spells', null, async c => {
-  const q = c.req.query('q');
-  const { rows } = q ? await pool.query('SELECT * FROM spells WHERE name ILIKE $1 ORDER BY name', [`%${q}%`])
-    : await pool.query('SELECT * FROM spells ORDER BY name');
+  const q = c.req.query('q'), rarity = c.req.query('rarity');
+  const where: string[] = [], args: any[] = [];
+  if (q) { where.push(`s.name ILIKE $${args.push(`%${q}%`)}`); }
+  if (rarity) { where.push(`s.rarity=$${args.push(rarity)}`); }
+  // Décompte « appris par N » (personnages qui le possèdent) par sort.
+  const { rows } = await pool.query(
+    `SELECT s.*,COALESCE(l.n,0) learners FROM spells s
+     LEFT JOIN (SELECT spell_id,count(*)::int n FROM character_spells GROUP BY spell_id) l ON l.spell_id=s.id
+     ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY s.name`, args);
   return rows;
 });
 def(spellRoutes, 'post', '/admin/content/spells', Spell, async (c, b) => {
   const { rows: [row] } = await pool.query(
-    `INSERT INTO spells(name,kind,energy_cost,damage,description,price,duration_h)
-     VALUES ($1,$2,COALESCE($3,10),$4,$5,$6,$7) RETURNING *`,
-    [b.name, b.kind ?? null, b.energyCost ?? null, b.damage ?? null, b.description ?? null, b.price ?? null, b.durationH ?? null]);
+    `INSERT INTO spells(name,kind,energy_cost,damage,description,price,duration_h,rarity,usable_by)
+     VALUES ($1,$2,COALESCE($3,10),$4,$5,$6,$7,$8,$9) RETURNING *`,
+    [b.name, b.kind ?? null, b.energyCost ?? null, b.damage ?? null, b.description ?? null, b.price ?? null,
+     b.durationH ?? null, b.rarity ?? 'commun', JSON.stringify(b.usableBy ?? [])]);
   await audit(c, 'spell.create', 'spell', row.id, null, b);
   return row;
 });
 def(spellRoutes, 'put', '/admin/content/spells/{id}', Spell.partial(), async (c, b) => {
+  const u = usable(b);
   const { rows: [row] } = await pool.query(
     `UPDATE spells SET name=COALESCE($2,name), kind=COALESCE($3,kind), energy_cost=COALESCE($4,energy_cost),
       damage=COALESCE($5,damage), description=COALESCE($6,description), price=COALESCE($7,price),
-      duration_h=COALESCE($8,duration_h)
+      duration_h=COALESCE($8,duration_h), rarity=COALESCE($9,rarity),
+      usable_by=CASE WHEN $10::jsonb IS NULL THEN usable_by ELSE $10::jsonb END
      WHERE id=$1 RETURNING *`,
-    [P(c, 'id'), b.name, b.kind ?? null, b.energyCost ?? null, b.damage ?? null, b.description ?? null, b.price ?? null, b.durationH ?? null]);
+    [P(c, 'id'), b.name, b.kind ?? null, b.energyCost ?? null, b.damage ?? null, b.description ?? null, b.price ?? null, b.durationH ?? null, b.rarity ?? null, u.usable_by ?? null]);
   if (!row) fail(404, 'Sort inconnu');
   await audit(c, 'spell.update', 'spell', P(c, 'id'), null, b);
   return row;

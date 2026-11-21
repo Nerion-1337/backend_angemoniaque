@@ -96,6 +96,11 @@ live-ops) build on.
   rules, item+divine cap & transfer, mount+building creation and hourly production/cap, audit trail, legacy
   endpoints.
 
+- **Phase 4** : `items.ts` (liste `GET /admin/content/items`) renvoie `rarity_n` (rareté
+  normalisée des valeurs historiques libres) et `holders` (détenteurs via `character_items`),
+  et filtre `?rarity=` (normalisé) / `?slot=` ; les constantes partagées `RARITIES`/`USABLE_KINDS`
+  vivent dans `common.ts` (miroir front : `src/admin/rarity.js`).
+
 ## Gotchas
 - **URL vs stored kind**: the route param is the PLURAL table name; `entity_*` tables store the SINGULAR
   class. Use `URL_KIND`/`kindOf` (common.ts) to convert. Front mirrors this in `entityFields.js URL_KIND`.

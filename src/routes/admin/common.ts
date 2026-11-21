@@ -1,6 +1,11 @@
 import { pool, fail } from '../../lib/db.js';
 /** Table par type d'entité + colonnes « sûres » (INSERT/UPDATE ne touchent que celles-ci, vérifiées en base). */
 export const TABLE: Record<string, string> = { monster: 'monsters', item: 'items', mount: 'mounts', building: 'buildings' };
+/** Raretés (onglets admin Objets/Sorts) : « divin » regroupe les objets uniques
+ *  artefacts/arcanes/reliques (table divine_items). */
+export const RARITIES = ['commun', 'rare', 'epique', 'legendaire', 'divin'] as const;
+/** Qui peut s'équiper (objet) / apprendre (sort) : sous-ensemble de ces 6 kinds. */
+export const USABLE_KINDS = ['humain', 'ange', 'demon', 'monstre', 'structure', 'monture'] as const;
 /** Le paramètre d'URL est le nom PLURIEL (monsters/items/...) ; la classe stockée est singulière (monster/item/...). */
 export const URL_KIND: Record<string, string> = { monsters: 'monster', items: 'item', mounts: 'mount', buildings: 'building' };
 export const kindOf = (url: string) => { const k = URL_KIND[url]; if (!k) fail(400, `Type inconnu : ${url}`); return k; };

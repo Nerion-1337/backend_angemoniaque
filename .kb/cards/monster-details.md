@@ -117,6 +117,15 @@ réincarnation automatique après délai une fois tué.
   instance supprimée) ; rien ne fuit dans la base entre runs (les suites `features` comptent le
   catalogue seedé).
 
+- **Phase 4 (onglets Objets/Sorts)** : le catalogue des sorts a gagné `rarity` (enum
+  `commun/rare/epique/legendaire/divin`, colonne bornée par CHECK) et `usable_by` (jsonb,
+  6 kinds `humain/ange/demon/monstre/structure/monture` — vide = tout le monde) ;
+  `GET /admin/content/spells?rarity=` renvoie aussi `learners` (décompte `character_spells`).
+  Les objets : `usable_by` (jsonb) + `holders` (décompte `character_items`) et la liste
+  normalise la rareté historique (`rarity_n` : « Épique »/« unique »/« legendary » → les 5
+  valeurs canoniques ; la colonne `items.rarity` reste libre côté base). Constants partagées
+  : `RARITIES`/`USABLE_KINDS` dans `admin/common.ts` (miroir front : `src/admin/rarity.js`).
+
 ## Gotchas
 - **Le butin se tire à la mort, pas à la réincarnation** : le délai ne diffère que la
   réapparition ; changer cette sémantique casserait les récompenses du vainqueur.
