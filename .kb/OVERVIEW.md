@@ -15,7 +15,7 @@ _Généré par `kb overview` — ne pas éditer ici ; notes manuelles dans `.kb/
 - Docker test target : `npm run typecheck && npm test` (utilisé par le hook pre-commit et CI)
 - kb : backend d'embedding `hash` (offline) dans `.kb/config.json`
 
-## Features (14)
+## Features (15)
 - **admin-socle** [done] (.kb/cards/admin-socle.md) Socle admin (Étape 2 phase 1) : rôles, CRUD contenu, règles transverses, production, audit — Phase 1 (socle) of the admin back-office (Étape 2): a data-driven admin layer on top of the game content. — files: src/routes/admin.ts, src/routes/admin/core.ts, src/routes/admin/races.ts, src/routes/admin/monsters.ts (+11)
 - **bestiaire** [done] (.kb/cards/bestiaire.md) Bestiaire (phase 2): loot roll, hourly spawns, combat death, admin routes & status — Phase 2 (Bestiaire) game loop: monsters drop loot when killed (gold + weighted entries from `monster_loot`: items, resources, designated divine items), wild instances are spawned on the hourly tick fr — files: src/game/loot.ts, src/game/combatlib.ts, src/routes/admin/bestiary.ts, src/routes/admin/monsters.ts (+2)
 - **combat-realtime** [done] (.kb/cards/combat-realtime.md) Realtime combat events: broadcast combat outcomes to map spectators — Makes combat outcomes visible in real time to every other player on the same map: every resolved attack (direct `/combat/attack` or the "Trait de Lumière" attack spell) publishes a `combat` event on t — files: src/lib/events.ts, src/routes/combat.ts, src/routes/spells.ts
@@ -29,6 +29,7 @@ _Généré par `kb overview` — ne pas éditer ici ; notes manuelles dans `.kb/
 - **hono-skeleton** [done] (.kb/cards/hono-skeleton.md) Hono + Zod OpenAPI skeleton: entry, router, auth, realtime WS — The Hono + `@hono/zod-openapi` skeleton that serves the game REST API on port 3000: one OpenAPI app factory, per-domain route modules (`src/routes/*`) with per-endpoint Zod schemas, JWT auth middlewar — files: src/index.ts, src/app.ts, src/config/env.ts, src/lib/route.ts (+5)
 - **map-terrain-gather** [done] (.kb/cards/map-terrain-gather.md) Procedural map & terrain: resources, movement rules, spawn, map/action routes — The world model of the game: **the Human world (map 1) is a hand-drawn 200×200 grid** (RLE-encoded in `humanMap.ts`) while the other worlds keep the original procedural noise. — files: src/game/terrain.ts, src/game/humanMap.ts, src/game/resources.ts, src/game/burn.ts (+5)
 - **monster-details** [done] (.kb/cards/monster-details.md) Détails de monstre (phase 3) : compétences/sorts, équipement par slot, auras, placement spontané & réincarnation — Étape 2 phase 3 (et 3b — capacités) du bestiaire : l'admin complète la fiche d'un type de monstre — **capacités** actives (sorts qu'il peut LANCER, à la demande) et passives (sorts appliqués **en cont — files: src/routes/admin/monsterDetails.ts, src/routes/admin/bestiary.ts, src/game/combatlib.ts, src/game/spawn.ts (+2)
+- **tile-types** [done] (.kb/cards/tile-types.md) Types de case éditables par monde (admin « Cases ») : coût, description, sort passif — Rend les **types de case** éditables par monde depuis l'admin (section « Cases ») : nom, description, coût d'énergie d'un pas et, en option, un **sort appliqué en continu** (bonus/malus de PV à chaque — files: src/game/tileTypes.ts, src/routes/admin/tiles.ts
 - **world2-angel-demon** [done] (.kb/cards/world2-angel-demon.md) Monde Anges & Démons (carte 2, 300x300) : zones, ressources, logique partagée — La carte 2 est une grille de **zones** 300x300 : démons à l'ouest, anges à l'est, bande neutre du Voile au centre. — files: src/game/world2.ts, src/game/resources2.ts, src/game/angelDemonMap.ts, src/game/terrain.ts (+1)
 
 ## File map
@@ -51,6 +52,7 @@ _Généré par `kb overview` — ne pas éditer ici ; notes manuelles dans `.kb/
 - `src/game/spawn.ts` — Le rayon s’élargit si l’aire est saturée (capitale encombrée en base de dev) : on préfère — freeCell, CAPITAL, spawn, hourlySpawns, reincarnateDue, freeCellRect
 - `src/game/stats.ts` — Caractéristiques effectives : base + bonus d'équipement ; dégâts = arme × (Force − Force requise) ; armure = s — gearStats, maxSummons
 - `src/game/terrain.ts` — ⚠ GÉNÉRÉ par tools/gen_human_map.py — copie identique dans backend/src/game/terrain.ts et frontend/src/lib/ter — (header), MAP_HUMAN, WORLD, setWorld, BURN_DAMAGE, KIND_COST, KIND_LABEL, mk, hash, CELLS, BY_CODE, VOID, inMap, humanCell, VR, V, vAt, h0, procNoise, POOL, PROC, noiseAt, terrain, SAFE_ZONES, inSafeZone
+- `src/game/tileTypes.ts` — Types de case éditables (table tile_types, section admin « Cases ») : nom, description, — (header), TILE_KINDS, TileType, TTL, cache, key, loadTiles, invalidateTiles, setTilesForTest, tileOf, tileCost, tileHpDelta, tilePublic, applyTileSpells
 - `src/game/world2.ts` — ⚠ GÉNÉRÉ par tools/gen_angel_demon_map.py — copie identique dans backend/src/game/world2.ts et frontend/src/li — (header), MAP_ANGDEM, COST, ihash, CELLS, mk, ZBY, VOID, inMap, pick, terrain2, VR, V, vAt, noise2, lerpHex, FRONTIER_X, waterTint
 - `src/index.ts`
 - `src/lib/audit.ts` — Traile d'audit : qui a modifié quoi, avant/après. Appelé après chaque mutation d'administration. — (header), audit
@@ -72,17 +74,11 @@ _Généré par `kb overview` — ne pas éditer ici ; notes manuelles dans `.kb/
 - `src/routes/admin/mounts.ts` — (header), mountRoutes, Mount
 - `src/routes/admin/players.ts` — Endpoints hérités de l'admin historique — complétés en phase 4 (modération, rôles mod). — (header), playerRoutes, STATS, GRANT
 - `src/routes/admin/races.ts` — (header), raceRoutes, Race
+- `src/routes/admin/tiles.ts` — Section admin « Cases » : types de case par monde (nom, description, coût d'énergie, sort passif bonus/malus). — (header), tileRoutes, Tile
 - `src/routes/auth.ts` — (header), authRoutes, hash, check, Reg, Log
 - `src/routes/buildings.ts` — (header), buildings, BUILD_COST
 - `src/routes/characters.ts` — Kit de départ (équipement, sorts, monture) comme dans le dépôt d'origine — characters
 - `src/routes/combat.ts` — Attaquant : l'invocation contrôlée (ses stats) ou le héros (équipement). La monture peut cracher son souffle s — (header), combat, ATTACK_COST, attacker
 - `src/routes/divine.ts` — divine
 - `src/routes/faiths.ts` — (header), faiths, CHOICES, god
-- `src/routes/guilds.ts` — Membre de guilde avec son rang : le Chef a tous les droits. — (header), guilds, PERMS, ALL, words, member, need, lowestRank, joinRank, lastChef, effRead, checkPerms, Ranks, leaderRankName, topicOf
-- `src/routes/inventory.ts` — (header), inventory, GROUP
-- `src/routes/map.ts` — Confidentialité : jamais les PV exacts d'un autre joueur, seulement son état de forme. — (header), mapRoutes, SEL, pub
-- `src/routes/market.ts` — (header), market, TBL, BAG_MAX, atCapital, bagCount
-- `src/routes/messages.ts` — (header), messages, VISION
-- `src/routes/monsters.ts` — Invocation d'un monstre du bestiaire (sort/action) : l'invocation est soumise aux règles — monsters
-- `src/routes/mounts.ts` — mounts
-- … 31 autres fichiers (utiliser `kb search`)
+- … 40 autres fichiers (utiliser `kb search`)

@@ -1,4 +1,4 @@
-import { pool } from '../db/pool.js'; import { BURN_DAMAGE } from '../game/terrain.js'; import { cfgNum } from '../game/content.js'; import { hourlySpawns, reincarnateDue } from '../game/spawn.js';
+import { pool } from '../db/pool.js'; import { BURN_DAMAGE } from '../game/terrain.js'; import { cfgNum } from '../game/content.js'; import { hourlySpawns, reincarnateDue } from '../game/spawn.js'; import { applyTileSpells } from '../game/tileTypes.js';
 const REVERT = ['strength', 'agility', 'hp_max', 'recovery'];
 /** Tick horaire : XP/or (× multiplicateur global), régénération PV/énergie, production des bâtiments, expiration des buffs. */
 export async function hourlyTick() {
@@ -23,6 +23,7 @@ export async function hourlyTick() {
   await reincarnateDue(pool); // bestiaire (Étape 2 phase 3) : réincarnation différée des monstres tués avec délai
   // Brûlure du volcan : BURN_DAMAGE par heure tant que burn_until est dans le futur (jamais mortelle : PV min. 1)
   await pool.query('UPDATE characters SET hp_current=GREATEST(1,hp_current-$1) WHERE burn_until>now() AND NOT blocked', [BURN_DAMAGE]);
+  await applyTileSpells();   // sorts passifs des types de case (admin « Cases ») : bonus/malus de PV par heure passée sur la case
   const { rows } = await pool.query('DELETE FROM temp_buffs WHERE expires_at<=now() RETURNING character_id,stat,delta');
   for (const r of rows) if (REVERT.includes(r.stat)) await pool.query(`UPDATE characters SET ${r.stat}=${r.stat}-$2 WHERE id=$1`, [r.character_id, r.delta]);
 }

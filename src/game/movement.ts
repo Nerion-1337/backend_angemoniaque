@@ -1,10 +1,11 @@
-import { walk } from './rules.js'; import { ignite } from './burn.js'; import { terrain } from './terrain.js'; import { fail, posOf } from '../lib/db.js';
+import { walk } from './rules.js'; import { ignite } from './burn.js'; import { terrain } from './terrain.js'; import { tileCost, loadTiles } from './tileTypes.js'; import { fail, posOf } from '../lib/db.js';
 const MOUNT_SQL = `SELECT cm.*, m.name, m.hp_max, m.armor, m.strength, m.agility, m.energy_max, m.bonus_see, m.bonus_range, m.flying, m.aquatic, m.recovery, m.special_attack_name, m.special_attack_damage, m.special_attack_energy
   FROM character_mounts cm JOIN mounts m ON m.id=cm.mount_id WHERE cm.character_id=$1 AND cm.active`;
 export const activeMount = async (db: any, id: number) => (await db.query(MOUNT_SQL, [id])).rows[0];
 export const isWater = (kind: string) => kind === 'shallow' || kind === 'deep';
 /** Acteur courant : l'invocation contrôlée, sinon le héros (monté ou non). */
 export async function actor(db: any, ch: any) {
+  await loadTiles();   // coûts de case (admin « Cases ») à jour pour stepCost/pathCost, qui restent synchrones
   if (ch.controlled_summon_id) {
     const { rows: [sm] } = await db.query('SELECT * FROM summons WHERE id=$1 AND owner_id=$2', [ch.controlled_summon_id, ch.id]);
     if (sm) { const { rows: [mp] } = await db.query('SELECT * FROM positions WHERE summon_id=$1', [sm.id]); return { sm, mount: null, mp, see: sm.see, range: 1 }; }
@@ -13,11 +14,11 @@ export async function actor(db: any, ch: any) {
   return { sm: null, mount, mp, see: ch.see + (mount?.bonus_see ?? 0), range: ch.range + (mount?.bonus_range ?? 0) };
 }
 /** Coût d'une case selon l'acteur : monture volante = 1 partout ; monture aquatique/navire = 1 sur l'eau, rien sur terre ;
- *  à pied ou en monture terrestre : eau peu profonde = 4, eau profonde = interdite. */
+ *  à pied ou en monture terrestre : coût du type de case de CE monde (admin « Cases », défaut KIND_COST), eau profonde = interdite. */
 export function stepCost(t: { kind: string; cost: number }, a: any): number {
   const m = a.mount; if (m?.flying) return 1;
   if (m?.aquatic) return isWater(t.kind) ? 1 : Infinity;
-  return t.kind === 'deep' ? Infinity : t.cost;
+  return t.kind === 'deep' ? Infinity : tileCost(a.mp?.map_id, t.kind, t.cost);
 }
 const blockedMsg = (kind: string, a: any) => a.mount?.aquatic ? 'Une monture aquatique ne quitte pas l’eau' : kind === 'deep' ? 'Eau profonde : un navire, une monture volante ou aquatique est requis' : 'Terrain infranchissable';
 /** Paiement d'énergie : 'move' = déplacement (monture si invoquée), 'mount' = capacité de la monture, 'action' = énergie du personnage. L'invocation contrôlée paie tout. */

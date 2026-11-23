@@ -2,7 +2,7 @@
 title: Socle admin (Étape 2 phase 1) : rôles, CRUD contenu, règles transverses, production, audit
 slug: admin-socle
 status: done
-updated: 2026-11-21
+updated: 2026-11-23
 files:
   - src/routes/admin.ts
   - src/routes/admin/core.ts
@@ -71,6 +71,8 @@ live-ops) build on.
   `hourlySpawns` (bestiaire, phase 2 — see the `bestiaire` card).
 - **XP tick fix**: `hourlyTick()` XP/gold bonus is now a correlated subquery in the SET clause. The old
   `LATERAL (...) b` referencing the target table `c` was INVALID SQL, so the hourly tick silently failed.
+
+- **Section « Cases » (2026-11-24, card `tile-types`)** : `routes/admin.ts` monte aussi `tileRoutes` (`/admin/content/tiles`) ; `hourlyTick` appelle `applyTileSpells()` (sort passif des types de case, ±PV/h, plancher 1) avant l'expiration des buffs.
 
 ## Entry points
 - `src/app.ts` mounts `adminRoutes` (gated by `admin` middleware on `/admin/*`).
