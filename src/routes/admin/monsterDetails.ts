@@ -1,4 +1,5 @@
 import { def, router, z, P } from '../../lib/route.js'; import { pool, fail } from '../../lib/db.js';
+import { Effects } from '../../game/spellEffects.js';
 import { audit } from '../../lib/audit.js'; import { bumpContent } from '../../game/content.js';
 import { RARITIES, USABLE_KINDS } from './common.js';
 /**
@@ -17,7 +18,9 @@ const Spell = z.object({
   damage: z.number().int().optional(), description: z.string().max(400).optional(),
   price: z.number().int().min(0).optional(), durationH: z.number().int().min(0).optional(),
   /** Boutique de l'hôtel de ville : en vente ou non, et pour quelles races ([] = toutes). */
-  shop: z.boolean().optional(), shopRaces: z.array(z.string().max(40)).max(20).optional()
+  shop: z.boolean().optional(), shopRaces: z.array(z.string().max(40)).max(20).optional(),
+  /** Moteur de sorts (lot 2) : cible, portée, zone, camp, dégâts, soin, durée, caractéristiques. {} = sort historique. */
+  effects: z.union([Effects, z.object({}).strict()]).optional()
 });
 const usable = (b: any) => b.usableBy !== undefined ? { ...b, usable_by: JSON.stringify(b.usableBy) } : b;
 def(spellRoutes, 'get', '/admin/content/spells', null, async c => {
@@ -34,10 +37,10 @@ def(spellRoutes, 'get', '/admin/content/spells', null, async c => {
 });
 def(spellRoutes, 'post', '/admin/content/spells', Spell, async (c, b) => {
   const { rows: [row] } = await pool.query(
-    `INSERT INTO spells(name,kind,energy_cost,damage,description,price,duration_h,rarity,usable_by,shop,shop_races)
-     VALUES ($1,$2,COALESCE($3,10),$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+    `INSERT INTO spells(name,kind,energy_cost,damage,description,price,duration_h,rarity,usable_by,shop,shop_races,effects)
+     VALUES ($1,$2,COALESCE($3,10),$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
     [b.name, b.kind ?? null, b.energyCost ?? null, b.damage ?? null, b.description ?? null, b.price ?? null,
-     b.durationH ?? null, b.rarity ?? 'commun', JSON.stringify(b.usableBy ?? []), b.shop ?? true, JSON.stringify(b.shopRaces ?? [])]);
+     b.durationH ?? null, b.rarity ?? 'commun', JSON.stringify(b.usableBy ?? []), b.shop ?? true, JSON.stringify(b.shopRaces ?? []), JSON.stringify(b.effects ?? {})]);
   await audit(c, 'spell.create', 'spell', row.id, null, b);
   return row;
 });
@@ -48,10 +51,11 @@ def(spellRoutes, 'put', '/admin/content/spells/{id}', Spell.partial(), async (c,
       damage=COALESCE($5,damage), description=COALESCE($6,description), price=COALESCE($7,price),
       duration_h=COALESCE($8,duration_h), rarity=COALESCE($9,rarity),
       usable_by=CASE WHEN $10::jsonb IS NULL THEN usable_by ELSE $10::jsonb END,
-      shop=COALESCE($11,shop), shop_races=CASE WHEN $12::jsonb IS NULL THEN shop_races ELSE $12::jsonb END
+      shop=COALESCE($11,shop), shop_races=CASE WHEN $12::jsonb IS NULL THEN shop_races ELSE $12::jsonb END,
+      effects=CASE WHEN $13::jsonb IS NULL THEN effects ELSE $13::jsonb END
      WHERE id=$1 RETURNING *`,
     [P(c, 'id'), b.name, b.kind ?? null, b.energyCost ?? null, b.damage ?? null, b.description ?? null, b.price ?? null, b.durationH ?? null, b.rarity ?? null, u.usable_by ?? null,
-     b.shop ?? null, b.shopRaces !== undefined ? JSON.stringify(b.shopRaces) : null]);
+     b.shop ?? null, b.shopRaces !== undefined ? JSON.stringify(b.shopRaces) : null, b.effects !== undefined ? JSON.stringify(b.effects) : null]);
   if (!row) fail(404, 'Sort inconnu');
   await audit(c, 'spell.update', 'spell', P(c, 'id'), null, b);
   return row;
@@ -153,5 +157,35 @@ def(monsterDetailRoutes, 'delete', '/admin/content/monsters/{id}/slots/{slot}', 
   const r = await pool.query('DELETE FROM monster_slots WHERE monster_id=$1 AND slot=$2 RETURNING slot', [P(c, 'id'), P(c, 'slot')]);
   if (!r.rowCount) fail(404, 'Slot inconnu');
   await audit(c, 'monster.slot.delete', 'monster', P(c, 'id'), null, { slot: P(c, 'slot') });
+  return { ok: true };
+});
+
+// ── Liens d'un sort : monstres (monster_spells), objets, montures, bâtiments (entity_spells) ─────────
+const LINK_TBL: Record<string, string> = { monster: 'monsters', item: 'items', mount: 'mounts', building: 'buildings' };
+def(spellRoutes, 'get', '/admin/content/spells/{id}/links', null, async c => {
+  const id = P(c, 'id');
+  const mon = (await pool.query("SELECT ms.id, 'monster' kind, ms.monster_id ref_id, ms.mode, m.name FROM monster_spells ms JOIN monsters m ON m.id=ms.monster_id WHERE ms.spell_id=$1 ORDER BY m.name", [id])).rows;
+  const ent = (await pool.query(`SELECT es.id, es.kind, es.ref_id, es.mode, COALESCE(i.name, mo.name, b.name) name FROM entity_spells es
+    LEFT JOIN items i ON es.kind='item' AND i.id=es.ref_id LEFT JOIN mounts mo ON es.kind='mount' AND mo.id=es.ref_id LEFT JOIN buildings b ON es.kind='building' AND b.id=es.ref_id
+    WHERE es.spell_id=$1 ORDER BY es.kind, name`, [id])).rows;
+  return [...mon, ...ent];
+});
+def(spellRoutes, 'post', '/admin/content/spells/{id}/links', z.object({ kind: z.enum(['monster', 'item', 'mount', 'building']), refId: z.number().int(), mode: z.enum(['active', 'passive']).default('active') }), async (c, b) => {
+  const id = P(c, 'id');
+  if (!(await pool.query('SELECT 1 FROM spells WHERE id=$1', [id])).rowCount) fail(404, 'Sort inconnu');
+  if (!(await pool.query(`SELECT 1 FROM ${LINK_TBL[b.kind]} WHERE id=$1`, [b.refId])).rowCount) fail(404, 'Élément inconnu');
+  const r = b.kind === 'monster'
+    ? await pool.query("INSERT INTO monster_spells(monster_id,spell_id,mode,radius) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING RETURNING id", [b.refId, id, b.mode, b.mode === 'passive' ? 3 : null])
+    : await pool.query('INSERT INTO entity_spells(kind,ref_id,spell_id,mode) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING RETURNING id', [b.kind, b.refId, id, b.mode]);
+  if (!r.rowCount) fail(409, 'Lien déjà existant');
+  await bumpContent(); await audit(c, 'spell.link', 'spell', id, null, b);
+  return { ok: true, id: r.rows[0].id };
+});
+def(spellRoutes, 'delete', '/admin/content/spells/{id}/links/{kind}/{linkId}', null, async c => {
+  const kind = c.req.param('kind'), linkId = P(c, 'linkId');
+  const r = kind === 'monster' ? await pool.query('DELETE FROM monster_spells WHERE id=$1 AND spell_id=$2', [linkId, P(c, 'id')])
+    : await pool.query('DELETE FROM entity_spells WHERE id=$1 AND spell_id=$2', [linkId, P(c, 'id')]);
+  if (!r.rowCount) fail(404, 'Lien inconnu');
+  await bumpContent(); await audit(c, 'spell.unlink', 'spell', P(c, 'id'), { kind, linkId }, null);
   return { ok: true };
 });

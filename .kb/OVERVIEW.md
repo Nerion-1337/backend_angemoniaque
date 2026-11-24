@@ -15,7 +15,7 @@ _Généré par `kb overview` — ne pas éditer ici ; notes manuelles dans `.kb/
 - Docker test target : `npm run typecheck && npm test` (utilisé par le hook pre-commit et CI)
 - kb : backend d'embedding `hash` (offline) dans `.kb/config.json`
 
-## Features (18)
+## Features (19)
 - **admin-players-divine** [done] (.kb/cards/admin-players-divine.md) Admin « Joueurs » (liste paginée + fiche éditable) et objets divins à familles libres — Section admin « Joueurs » (liste paginée par race, fiche éditable : caractéristiques, XP, or, rang, objets équipés / sac / coffre, sorts, montures, bâtiments, divins) et objets divins gérés comme les  — files: src/routes/admin/players.ts, src/routes/admin/items.ts, src/game/content.ts
 - **admin-socle** [done] (.kb/cards/admin-socle.md) Socle admin (Étape 2 phase 1) : rôles, CRUD contenu, règles transverses, production, audit — Socle du back-office (Étape 2) : rôles de compte, CRUD générique du contenu (races, rangs, monstres, objets, montures, bâtiments), règles transverses (coûts, plafonds, modificateurs), cache de configu — files: src/routes/admin.ts, src/routes/admin/core.ts, src/routes/admin/races.ts, src/routes/admin/monsters.ts (+11)
 - **bestiaire** [done] (.kb/cards/bestiaire.md) Bestiaire (phase 2): loot roll, hourly spawns, combat death, admin routes & status — Boucle du bestiaire (phase 2) : un monstre tué donne son butin (or + entrées pondérées de `monster_loot` : objets, ressources, exemplaires divins), des instances sauvages apparaissent au tick horaire  — files: src/game/loot.ts, src/game/combatlib.ts, src/routes/admin/bestiary.ts, src/routes/admin/monsters.ts (+2)
@@ -32,6 +32,7 @@ _Généré par `kb overview` — ne pas éditer ici ; notes manuelles dans `.kb/
 - **map-terrain-gather** [done] (.kb/cards/map-terrain-gather.md) Procedural map & terrain: resources, movement rules, spawn, map/action routes — Modèle du monde : Monde des Hommes (carte 1, grille 200×200 dessinée), autres mondes générés ; chaque case a un type (9), un coût, une ressource récoltable et un drapeau de brûlure. — files: src/game/terrain.ts, src/game/humanMap.ts, src/game/resources.ts, src/game/burn.ts (+5)
 - **monster-details** [done] (.kb/cards/monster-details.md) Détails de monstre (phase 3) : compétences/sorts, équipement par slot, auras, placement spontané & réincarnation — Fiche détaillée d'un type de monstre (phase 3) : capacités actives/passives, équipement par partie du corps, placement d'instances sur les cartes avec leurs butins, déplacement, liaison à un personnag — files: src/routes/admin/monsterDetails.ts, src/routes/admin/bestiary.ts, src/game/combatlib.ts, src/game/spawn.ts (+2)
 - **races-spawn-clock** [done] (.kb/cards/races-spawn-clock.md) Races (apparition, limites, équipement de départ, races libres, admin sans limite) et horloge du monde persistante — Races : zone d'apparition, limites de personnages, équipement de départ et races libres jouables ; compte admin sans limite. — files: src/game/clock.ts, src/routes/characters.ts, src/game/spawn.ts, src/routes/admin/races.ts (+2)
+- **spell-engine** [done] (.kb/cards/spell-engine.md) Moteur de sorts paramétrable (zone, cible, dégâts, durée, caractéristiques) et liens sort ↔ objet / monture / monstre — Moteur de sorts paramétrable (`spells.effects`) : cible, portée, zone, camp visé, dégâts instantanés, soin, dégâts sur la durée, modifications de caractéristiques ; et liens d'un sort avec des objets, — files: src/game/spellEffects.ts, src/game/spellTick.ts, src/routes/spells.ts
 - **tile-types** [done] (.kb/cards/tile-types.md) Types de case éditables par monde (admin « Cases ») : coût, description, sort passif — Types de case éditables par monde (admin « Cases ») : nom, description, coût d'énergie d'un pas et sort passif appliqué en continu aux personnages qui s'y tiennent. — files: src/game/tileTypes.ts, src/routes/admin/tiles.ts
 - **world2-angel-demon** [done] (.kb/cards/world2-angel-demon.md) Monde Anges & Démons (carte 2, 300x300) : zones, ressources, logique partagée — Monde 2 (Anges & Démons) : grille de zones 300×300 — démons à l'ouest, anges à l'est, bande neutre du Voile au centre. — files: src/game/world2.ts, src/game/resources2.ts, src/game/angelDemonMap.ts, src/game/terrain.ts (+1)
 
@@ -54,6 +55,8 @@ _Généré par `kb overview` — ne pas éditer ici ; notes manuelles dans `.kb/
 - `src/game/resources2.ts` — ⚠ GÉNÉRÉ par tools/gen_angel_demon_map.py — catalogue du monde Anges & Démons (zones, ressources, apparence 3D — SIDES, RESOURCES2, ZONES2, RES2_BY_ID
 - `src/game/rules.ts` — Coût XP du prochain point : base × multiplicateur du palier (hypothèse : palier = floor(achats / numb_up), pla — StatRule, statUpgradeCost, pathEnergy, totalEnergy, effectiveRank, inVision, walk, routeEnergy, computeCharacterDamage, getPublicHealthState, computePactStatTransfer, canUseDivineEnergy, computeHitChance, applyArmor
 - `src/game/spawn.ts` — Le rayon s’élargit si l’aire est saturée (capitale encombrée en base de dev) : on préfère — freeCell, CAPITAL, spawnZone, spawn, hourlySpawns, reincarnateDue, freeCellRect
+- `src/game/spellEffects.ts` — Moteur de sorts paramétrable (spells.effects, migration 20). Un sort sans effets ({}) garde son comportement h — CAPS, POOLS, STAT_KEYS, Effects, EffectsT, hasEffects, isHarmful, isAlly, keepTarget, poolValue, applyEffects, pickTargets, checkSafe
+- `src/game/spellTick.ts` — Tick horaire des sorts : (1) dégâts sur la durée (spell_dots) — jamais mortels (PV min 1), lignes expirées sup — hourlySpellEffects
 - `src/game/startKit.ts` — Équipement de départ d'une race (races.start_kit, migration 18) : rang, or, XP, ressources, objets (sac / coff — Kit, KitT, resourceExists, checkKit, startRank, grantKit
 - `src/game/stats.ts` — Caractéristiques effectives : base + bonus d'équipement ; dégâts = arme × (Force − Force requise) ; armure = s — gearStats, maxSummons
 - `src/game/terrain.ts` — ⚠ GÉNÉRÉ par tools/gen_human_map.py — copie identique dans backend/src/game/terrain.ts et frontend/src/lib/ter — (header), MAP_HUMAN, WORLD, setWorld, BURN_DAMAGE, KIND_COST, KIND_LABEL, mk, hash, CELLS, BY_CODE, VOID, inMap, humanCell, VR, V, vAt, h0, procNoise, POOL, PROC, noiseAt, terrain, SAFE_ZONES, inSafeZone
@@ -64,11 +67,4 @@ _Généré par `kb overview` — ne pas éditer ici ; notes manuelles dans `.kb/
 - `src/lib/db.ts` — (header), HttpError, fail, tx, ownChar, posOf, dist, log, trimLog
 - `src/lib/events.ts` — Événements de combat pour les spectateurs de la carte : données publiques uniquement — combatEvent
 - `src/lib/route.ts` — Déclare une route OpenAPI en une ligne ; le handler retourne l'objet JSON (erreurs via fail()). — (header), def, P, router
-- `src/middleware/auth.ts` — (header), signToken, roleOf, auth, admin, mod
-- `src/realtime/ws.ts` — (header), pub, sockets, joinMap, leave, broadcast
-- `src/routes/actions.ts` — Récolte : sur place, ou à distance (trajet + 4 énergie). — (header), actions, XY
-- `src/routes/admin.ts` — Espace administrateur — monté dans app.ts sous la garde `admin` (rôle du JWT). — (header), adminRoutes
-- `src/routes/admin/bestiary.ts` — Statut bestiaire pour le dashboard (Étape 2 phase 2) : — bestiaryRoutes, Place
-- `src/routes/admin/buildings.ts` — (header), buildingRoutes, Building
-- `src/routes/admin/common.ts` — Table par type d'entité + colonnes « sûres » (INSERT/UPDATE ne touchent que celles-ci, vérifiées en base). — (header), TABLE, RARITIES, USABLE_KINDS, URL_KIND, kindOf, colsOf, jsonable, safeInsert, safeUpdate, requireRow, extras
-- … 62 autres fichiers (utiliser `kb search`)
+- … 71 autres fichiers (utiliser `kb search`)

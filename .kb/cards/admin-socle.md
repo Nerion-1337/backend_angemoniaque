@@ -46,6 +46,7 @@ Les phases suivantes (bestiaire, cases, joueurs, divins, races) s'y branchent (c
 - La production d'un bâtiment (`data.production` + `data.collection`, par ressource et par heure) crédite `characters.resources` du propriétaire.
 - Liste des objets : `rarity_n` = rareté normalisée des valeurs historiques libres ; filtres `?rarity=` / `?slot=` ; `RARITIES`/`USABLE_KINDS` dans `common.ts` (miroir front `rarity.js`).
 - `GET /admin/dashboard` : compteurs, personnages par race, `clock.last_tick_at`.
+- Le tick rétablit toute capacité modifiée temporairement (liste `CAPS` du moteur de sorts) et ramène la réserve au max ; il applique ensuite dégâts sur la durée et sorts passifs (card `spell-engine`).
 
 ## Gotchas
 - Jamais de `LATERAL` référençant la table cible d'un UPDATE (l'ancien tick échouait silencieusement) : sous-requête corrélée dans le SET.

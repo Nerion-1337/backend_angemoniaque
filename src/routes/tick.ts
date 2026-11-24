@@ -1,5 +1,6 @@
 import { pool } from '../db/pool.js'; import { BURN_DAMAGE } from '../game/terrain.js'; import { cfgNum } from '../game/content.js'; import { hourlySpawns, reincarnateDue } from '../game/spawn.js'; import { applyTileSpells } from '../game/tileTypes.js';
-const REVERT = ['strength', 'agility', 'hp_max', 'recovery'];
+import { CAPS, POOLS } from '../game/spellEffects.js'; import { hourlySpellEffects } from '../game/spellTick.js';
+const REVERT: readonly string[] = CAPS;   // toute capacité modifiée temporairement (buff de sort, pacte) est rétablie à l'expiration
 /** Tick horaire : XP/or (× multiplicateur global), régénération PV/énergie, production des bâtiments, expiration des buffs. */
 export async function hourlyTick() {
   const xpRate = await cfgNum('xp_rate', 1);
@@ -25,7 +26,11 @@ export async function hourlyTick() {
   await pool.query('UPDATE characters SET hp_current=GREATEST(1,hp_current-$1) WHERE burn_until>now() AND NOT blocked', [BURN_DAMAGE]);
   await applyTileSpells();   // sorts passifs des types de case (admin « Cases ») : bonus/malus de PV par heure passée sur la case
   const { rows } = await pool.query('DELETE FROM temp_buffs WHERE expires_at<=now() RETURNING character_id,stat,delta');
-  for (const r of rows) if (REVERT.includes(r.stat)) await pool.query(`UPDATE characters SET ${r.stat}=${r.stat}-$2 WHERE id=$1`, [r.character_id, r.delta]);
+  for (const r of rows) if (REVERT.includes(r.stat)) {
+    await pool.query(`UPDATE characters SET ${r.stat}=GREATEST(0, ${r.stat}-$2) WHERE id=$1`, [r.character_id, r.delta]);
+    for (const [cur, max] of Object.values(POOLS)) if (max === r.stat) await pool.query(`UPDATE characters SET ${cur}=LEAST(${cur}, ${max}) WHERE id=$1`, [r.character_id]);
+  }
+  await hourlySpellEffects();   // dégâts sur la durée + sorts passifs des objets équipés / montures actives
 }
 /** Gain horaire d'un bâtiment : data JSONB { production: {ressource: rendement/h}, collection: {ressource: rendement/h} }. */
 export const buildingGains = (data: any): Record<string, number> => {

@@ -26,6 +26,7 @@ publie un événement `combat` public sur le canal Redis de la carte, et les cli
 - Zone sacrée : aucun combat joueur contre joueur si l'attaquant OU la cible est dans la zone (403 « Zone sacrée… ») ; les monstres restent attaquables.
 - La mort d'un personnage n'est pas une suppression : `die()` l'envoie au Monde des Morts (carte 3) avec ses PV restaurés.
 - Rien n'est persisté : Redis pub/sub seulement.
+- Un sort du moteur publie un événement `combat` par cible touchée (card `spell-engine`).
 
 ## Gotchas
 - Supprimer la diffusion du raté réintroduit 8 s de retard chez les spectateurs (rafraîchissement par sondage).

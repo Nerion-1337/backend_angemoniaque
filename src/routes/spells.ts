@@ -1,11 +1,37 @@
 import { def, router, z, P } from '../lib/route.js'; import { tx, ownChar, fail, log, dist } from '../lib/db.js';
-import { actor, spend } from '../game/movement.js'; import { maxSummons } from '../game/stats.js'; import { terrain, inSafeZone } from '../game/terrain.js'; import { targetAt, applyDamage } from '../game/combatlib.js'; import { applyArmor } from '../game/rules.js'; import { broadcast } from '../realtime/ws.js'; import { combatEvent } from '../lib/events.js';
+import { actor, spend } from '../game/movement.js'; import { maxSummons } from '../game/stats.js'; import { terrain, inSafeZone } from '../game/terrain.js'; import { targetAt, applyDamage } from '../game/combatlib.js'; import { applyArmor } from '../game/rules.js'; import { broadcast } from '../realtime/ws.js'; import { combatEvent } from '../lib/events.js'; import { Effects, hasEffects, pickTargets, checkSafe, applyEffects } from '../game/spellEffects.js'; import { loadTarget } from '../game/combatlib.js';
+/** Sorts lançables : appris, ou liés (mode actif) à un objet ÉQUIPÉ ou à la monture ACTIVE (table entity_spells). */
+const CASTABLE = `SELECT s.*, src.source FROM spells s JOIN (
+    SELECT spell_id, 'appris' source FROM character_spells WHERE character_id=$1
+    UNION SELECT es.spell_id, 'objet : ' || i.name FROM entity_spells es JOIN character_items ci ON ci.item_id=es.ref_id JOIN items i ON i.id=es.ref_id
+      WHERE es.kind='item' AND es.mode='active' AND ci.character_id=$1 AND ci.equipped_slot IS NOT NULL
+    UNION SELECT es.spell_id, 'monture : ' || m.name FROM entity_spells es JOIN character_mounts cm ON cm.mount_id=es.ref_id JOIN mounts m ON m.id=es.ref_id
+      WHERE es.kind='mount' AND es.mode='active' AND cm.character_id=$1 AND cm.active
+  ) src ON src.spell_id=s.id`;
 export const spells = router();
 def(spells, 'get', '/spells/{characterId}', null, c => tx(async db => { const me = await ownChar(db, c, P(c, 'characterId'));
-  return { spells: (await db.query('SELECT s.* FROM character_spells cs JOIN spells s ON s.id=cs.spell_id WHERE cs.character_id=$1 ORDER BY s.id', [me.id])).rows, maxSummons: await maxSummons(db, me), active: (await db.query('SELECT count(*)::int n FROM summons WHERE owner_id=$1', [me.id])).rows[0].n }; }));
+  return { spells: (await db.query(`SELECT DISTINCT ON (s.id) * FROM (${CASTABLE}) s ORDER BY s.id`, [me.id])).rows, maxSummons: await maxSummons(db, me), active: (await db.query('SELECT count(*)::int n FROM summons WHERE owner_id=$1', [me.id])).rows[0].n }; }));
 def(spells, 'post', '/spells/cast', z.object({ characterId: z.number(), spellId: z.number(), x: z.number().int().optional(), y: z.number().int().optional() }), (c, b) => tx(async db => {
   const me = await ownChar(db, c, b.characterId), a = await actor(db, me);
-  const { rows: [sp] } = await db.query('SELECT s.* FROM character_spells cs JOIN spells s ON s.id=cs.spell_id WHERE cs.character_id=$1 AND s.id=$2', [me.id, b.spellId]); if (!sp) fail(404, 'Sort inconnu');
+  const { rows: [sp] } = await db.query(`${CASTABLE} WHERE s.id=$2 LIMIT 1`, [me.id, b.spellId]); if (!sp) fail(404, 'Sort inconnu');
+  if (hasEffects(sp.effects)) {   // moteur paramétrable (spells.effects) : cible, portée, zone, camp, dégâts, soin, durée, caractéristiques
+    const e = Effects.parse(sp.effects), from = { x: a.mp.coord_x, y: a.mp.coord_y };
+    const center = e.target === 'self' ? from : { x: b.x ?? from.x, y: b.y ?? from.y };
+    if (e.target !== 'self' && Math.max(Math.abs(center.x - from.x), Math.abs(center.y - from.y)) > e.range) fail(409, `Cible hors de portée (${e.range} case(s) max)`);
+    const r = e.target === 'area' ? e.radius : 0;
+    const { rows: ps } = await db.query('SELECT * FROM positions WHERE map_id=$1 AND coord_x BETWEEN $2 AND $3 AND coord_y BETWEEN $4 AND $5 AND item_id IS NULL AND (character_id IS NOT NULL OR monsters_id IS NOT NULL OR summon_id IS NOT NULL)',
+      [a.mp.map_id, center.x - r, center.x + r, center.y - r, center.y + r]);
+    const all = (await Promise.all(ps.map((p: any) => loadTarget(db, p)))).filter(Boolean) as any[];
+    const targets = pickTargets(e, me, center, all);
+    if (!targets.length) fail(409, 'Aucune cible valable');
+    checkSafe(e, a.mp.map_id, me, from, targets);
+    await spend(db, me, a, sp.energy_cost);
+    const results = [];
+    for (const t of targets) results.push({ target: t.name, effect: await applyEffects(db, me, sp.id, e, t) });
+    await log(db, me.id, `${sp.name} : ${results.map(x => `${x.target} ${x.effect}`).join(' ; ')}`.slice(0, 300));
+    for (const t of targets) broadcast(a.mp.map_id, combatEvent(t.id, false));
+    return { ok: true, results };
+  }
   const tx_ = b.x ?? a.mp.coord_x, ty = b.y ?? a.mp.coord_y, d = Math.max(Math.abs(tx_ - a.mp.coord_x), Math.abs(ty - a.mp.coord_y));
   if (sp.kind === 'summon') {
     if (d !== 1) fail(409, 'Choisissez une case adjacente'); const cap = await maxSummons(db, me), n = (await db.query('SELECT count(*)::int n FROM summons WHERE owner_id=$1', [me.id])).rows[0].n;
