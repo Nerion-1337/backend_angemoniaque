@@ -32,6 +32,7 @@ modifications de caractéristiques ; et liens d'un sort avec des objets, monture
 - Sorts lançables = appris ∪ liés en ACTIF à un objet ÉQUIPÉ ∪ liés en ACTIF à la monture ACTIVE ; la liste indique la provenance.
 - Sort lié en PASSIF à un objet équipé ou à la monture active : ses effets instantanés sur soi (soin, réserves ±) s'appliquent une fois par heure ; capacités et dégâts ignorés.
 - Liens admin : monstre (table `monster_spells`), objet, monture, bâtiment (`entity_spells`) ; doublon → 409 ; élément ou sort inconnu → 404.
+- Sorts liés aux bâtiments : actifs pour le propriétaire sur la case ou à côté, passifs chaque heure depuis la case (card `buildings-occupy`).
 
 ## Gotchas
 - Les monstres et invocations ne reçoivent que dégâts, soin, dégâts sur la durée et PV.

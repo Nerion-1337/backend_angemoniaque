@@ -27,6 +27,7 @@ publie un événement `combat` public sur le canal Redis de la carte, et les cli
 - La mort d'un personnage n'est pas une suppression : `die()` l'envoie au Monde des Morts (carte 3) avec ses PV restaurés.
 - Rien n'est persisté : Redis pub/sub seulement.
 - Un sort du moteur publie un événement `combat` par cible touchée (card `spell-engine`).
+- Un personnage sur un bâtiment occupable peut être protégé contre le corps à corps, la distance ou les sorts (403, card `buildings-occupy`).
 
 ## Gotchas
 - Supprimer la diffusion du raté réintroduit 8 s de retard chez les spectateurs (rafraîchissement par sondage).

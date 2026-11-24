@@ -1,5 +1,5 @@
 import { def, router, z, P } from '../lib/route.js'; import { tx, ownChar, fail, log, dist } from '../lib/db.js';
-import { actor, spend } from '../game/movement.js'; import { maxSummons } from '../game/stats.js'; import { terrain, inSafeZone } from '../game/terrain.js'; import { targetAt, applyDamage } from '../game/combatlib.js'; import { applyArmor } from '../game/rules.js'; import { broadcast } from '../realtime/ws.js'; import { combatEvent } from '../lib/events.js'; import { Effects, hasEffects, pickTargets, checkSafe, applyEffects } from '../game/spellEffects.js'; import { loadTarget } from '../game/combatlib.js';
+import { actor, spend } from '../game/movement.js'; import { maxSummons } from '../game/stats.js'; import { terrain, inSafeZone } from '../game/terrain.js'; import { targetAt, applyDamage } from '../game/combatlib.js'; import { applyArmor } from '../game/rules.js'; import { broadcast } from '../realtime/ws.js'; import { combatEvent } from '../lib/events.js'; import { Effects, hasEffects, pickTargets, checkSafe, applyEffects } from '../game/spellEffects.js'; import { loadTarget } from '../game/combatlib.js'; import { checkOccupantAttack, occupiableAt, attackAllowed } from '../game/buildingCell.js'; import { isHarmful } from '../game/spellEffects.js';
 /** Sorts lançables : appris, ou liés (mode actif) à un objet ÉQUIPÉ ou à la monture ACTIVE (table entity_spells). */
 const CASTABLE = `SELECT s.*, src.source FROM spells s JOIN (
     SELECT spell_id, 'appris' source FROM character_spells WHERE character_id=$1
@@ -7,6 +7,9 @@ const CASTABLE = `SELECT s.*, src.source FROM spells s JOIN (
       WHERE es.kind='item' AND es.mode='active' AND ci.character_id=$1 AND ci.equipped_slot IS NOT NULL
     UNION SELECT es.spell_id, 'monture : ' || m.name FROM entity_spells es JOIN character_mounts cm ON cm.mount_id=es.ref_id JOIN mounts m ON m.id=es.ref_id
       WHERE es.kind='mount' AND es.mode='active' AND cm.character_id=$1 AND cm.active
+    UNION SELECT es.spell_id, 'bâtiment : ' || b.name FROM entity_spells es JOIN buildings b ON b.id=es.ref_id JOIN positions bp ON bp.building_id=b.id
+      JOIN positions me ON me.character_id=$1 AND me.map_id=bp.map_id AND GREATEST(abs(me.coord_x-bp.coord_x), abs(me.coord_y-bp.coord_y)) <= 1
+      WHERE es.kind='building' AND es.mode='active' AND b.owner_id=$1
   ) src ON src.spell_id=s.id`;
 export const spells = router();
 def(spells, 'get', '/spells/{characterId}', null, c => tx(async db => { const me = await ownChar(db, c, P(c, 'characterId'));
@@ -22,7 +25,12 @@ def(spells, 'post', '/spells/cast', z.object({ characterId: z.number(), spellId:
     const { rows: ps } = await db.query('SELECT * FROM positions WHERE map_id=$1 AND coord_x BETWEEN $2 AND $3 AND coord_y BETWEEN $4 AND $5 AND item_id IS NULL AND (character_id IS NOT NULL OR monsters_id IS NOT NULL OR summon_id IS NOT NULL)',
       [a.mp.map_id, center.x - r, center.x + r, center.y - r, center.y + r]);
     const all = (await Promise.all(ps.map((p: any) => loadTarget(db, p)))).filter(Boolean) as any[];
-    const targets = pickTargets(e, me, center, all);
+    let targets = pickTargets(e, me, center, all);
+    if (isHarmful(e)) {   // personnages protégés par le bâtiment qu'ils occupent (occupant_attack.spell = faux)
+      const ok = []; for (const t of targets) { const bc = t.kind === 'character' && t.id !== me.id ? await occupiableAt(db, t.pos.map_id, t.pos.coord_x, t.pos.coord_y) : null; if (attackAllowed(bc, 'spell')) ok.push(t); }
+      if (targets.length && !ok.length) fail(403, 'Cible protégée par un bâtiment contre les sorts');
+      targets = ok;
+    }
     if (!targets.length) fail(409, 'Aucune cible valable');
     checkSafe(e, a.mp.map_id, me, from, targets);
     await spend(db, me, a, sp.energy_cost);
@@ -44,7 +52,7 @@ def(spells, 'post', '/spells/cast', z.object({ characterId: z.number(), spellId:
   else if (sp.kind === 'buff') { await spend(db, me, a, sp.energy_cost);
     for (const stat of ['strength', 'agility']) { await db.query(`UPDATE characters SET ${stat}=${stat}+4 WHERE id=$1`, [me.id]); await db.query("INSERT INTO temp_buffs(character_id,stat,delta,source,expires_at) VALUES ($1,$2,4,$3,now()+interval '1 hour')", [me.id, stat, `spell:${sp.id}`]); } }
   else if (sp.kind === 'attack') {
-    if (d > 4) fail(409, 'Cible hors de portée (4 cases max)'); const t = await targetAt(db, a.mp.map_id, tx_, ty); if (!t) fail(409, 'Aucune cible sur cette case'); if (t.kind === 'character' && t.id === me.id) fail(400, 'Cible invalide');
+    if (d > 4) fail(409, 'Cible hors de portée (4 cases max)'); const t = await targetAt(db, a.mp.map_id, tx_, ty); if (!t) fail(409, 'Aucune cible sur cette case'); if (t.kind === 'character' && t.id === me.id) fail(400, 'Cible invalide'); await checkOccupantAttack(db, t, 'spell');
     if (t.kind !== 'monster' && (inSafeZone(a.mp.map_id, a.mp.coord_x, a.mp.coord_y) || inSafeZone(a.mp.map_id, tx_, ty))) fail(403, 'Zone sacrée : aucun combat entre joueurs');
     await spend(db, me, a, sp.energy_cost); const dmg = applyArmor(sp.damage, t.magicArmor), r = await applyDamage(db, t, dmg, me.id); await log(db, me.id, `${sp.name} sur ${t.name} : -${dmg} PV`); broadcast(a.mp.map_id, combatEvent(t.id, r.killed)); return { ok: true, dmg, killed: r.killed };
   }

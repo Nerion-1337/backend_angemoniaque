@@ -1,4 +1,5 @@
 import { def, router, z, P } from '../lib/route.js';
+import { checkOccupantAttack } from '../game/buildingCell.js';
 import { tx, ownChar, fail, log, dist, trimLog } from '../lib/db.js';
 import { actor, travel, spend } from '../game/movement.js';
 import { gearStats } from '../game/stats.js';
@@ -25,6 +26,7 @@ def(combat, 'post', '/combat/attack', z.object({ characterId: z.number(), target
   const { rows: [tp] } = await db.query(`SELECT * FROM positions WHERE ${col[0]}=$1`, [col[1]]); if (!tp || tp.map_id !== a.mp.map_id) fail(409, 'Cible introuvable sur cette carte');
   const t = (await loadTarget(db, tp))!; if (t.kind === 'character' && t.id === me.id) fail(400, 'Vous ne pouvez pas vous attaquer');
   if (t.kind !== 'monster' && (inSafeZone(a.mp.map_id, a.mp.coord_x, a.mp.coord_y) || inSafeZone(tp.map_id, tp.coord_x, tp.coord_y))) fail(403, 'Zone sacrée : aucun combat entre joueurs');
+  await checkOccupantAttack(db, t, Math.min(dist(a.mp, tp), a.range) <= 1 ? 'melee' : 'ranged');   // personnage protégé par le bâtiment qu'il occupe
   const breath = !!b.useMountBreath && a.mount?.special_attack_name; if (b.useMountBreath && !breath) fail(409, 'Aucune attaque spéciale de monture');
   const cost = breath ? a.mount.special_attack_energy : ATTACK_COST, at = await attacker(db, me, a);
   if (dist(a.mp, tp) > a.range) await travel(db, me, a, { x: tp.coord_x, y: tp.coord_y }, a.range, breath ? 0 : cost);       // trajet (monture) + action (personnage)

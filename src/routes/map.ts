@@ -13,7 +13,7 @@ def(mapRoutes, 'get', '/map/{mapId}/area', null, async c => {
   return (await pool.query(`${SEL} WHERE p.map_id=$1 AND p.coord_x BETWEEN $2 AND $3 AND p.coord_y BETWEEN $4 AND $5`, [P(c, 'mapId'), x - r, x + r, y - r, y + r])).rows.map(pub);
 });
 def(mapRoutes, 'get', '/map/{mapId}/cell', null, async c => {
-  const q = c.req.query(), x = +q.x, y = +q.y, e = (await pool.query(`${SEL} WHERE p.map_id=$1 AND p.coord_x=$2 AND p.coord_y=$3 AND p.item_id IS NULL`, [P(c, 'mapId'), x, y])).rows[0];
+  const q = c.req.query(), x = +q.x, y = +q.y, e = (await pool.query(`${SEL} WHERE p.map_id=$1 AND p.coord_x=$2 AND p.coord_y=$3 AND p.item_id IS NULL ORDER BY (p.building_id IS NOT NULL)`, [P(c, 'mapId'), x, y])).rows[0];
   const out: any = e ? pub(e) : null;
   if (out?.kind === 'character' && q.details) out.visibleGear = (await pool.query('SELECT i.name FROM character_items ci JOIN items i ON i.id=ci.item_id WHERE ci.character_id=$1 AND ci.equipped_slot IS NOT NULL', [out.char_id])).rows.map((r: any) => r.name);
   await loadTiles(); const t = terrain(x, y, P(c, 'mapId'));

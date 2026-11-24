@@ -5,7 +5,11 @@ export const buildingRoutes = router();
 const Building = z.object({
   name: z.string().max(80), kind: z.string().max(30).optional(), invulnerable: z.boolean().optional(), owner_id: z.number().int().optional(),
   structure: z.number().int().optional(), size: z.number().int().optional(),
-  prerequisites: z.record(z.any()).optional(), data: z.record(z.any()).optional()
+  prerequisites: z.record(z.any()).optional(), data: z.record(z.any()).optional(),
+  /** Lot 4 : armure de la structure ; case occupable ; bonus de l'occupant ; attaques possibles contre l'occupant. */
+  armor: z.number().int().min(0).optional(), occupiable: z.boolean().optional(),
+  bonus_armor: z.number().int().optional(), bonus_see: z.number().int().optional(), bonus_range: z.number().int().optional(),
+  occupant_attack: z.object({ melee: z.boolean(), ranged: z.boolean(), spell: z.boolean() }).optional()
 });
 def(buildingRoutes, 'get', '/admin/content/buildings', null, async c => {
   const q = c.req.query('q');
@@ -35,3 +39,6 @@ def(buildingRoutes, 'delete', '/admin/content/buildings/{id}', null, async c => 
   await bumpContent(); await audit(c, 'building.delete', 'building', id, null, null);
   return { ok: true };
 });
+/** Sorts liés à un bâtiment (entity_spells, lot 4) : actifs = lançables par le propriétaire à côté, passifs = appliqués chaque heure. */
+def(buildingRoutes, 'get', '/admin/content/buildings/{id}/spells', null, async c => (await pool.query(
+  "SELECT es.id, es.spell_id, es.mode, s.name, s.effects FROM entity_spells es JOIN spells s ON s.id=es.spell_id WHERE es.kind='building' AND es.ref_id=$1 ORDER BY s.name", [P(c, 'id')])).rows);
