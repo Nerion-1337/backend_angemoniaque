@@ -15,7 +15,9 @@ const Spell = z.object({
   usableBy: z.array(z.enum(USABLE_KINDS)).max(6).optional(),
   energyCost: z.number().int().min(0).optional(),
   damage: z.number().int().optional(), description: z.string().max(400).optional(),
-  price: z.number().int().min(0).optional(), durationH: z.number().int().min(0).optional()
+  price: z.number().int().min(0).optional(), durationH: z.number().int().min(0).optional(),
+  /** Boutique de l'hôtel de ville : en vente ou non, et pour quelles races ([] = toutes). */
+  shop: z.boolean().optional(), shopRaces: z.array(z.string().max(40)).max(20).optional()
 });
 const usable = (b: any) => b.usableBy !== undefined ? { ...b, usable_by: JSON.stringify(b.usableBy) } : b;
 def(spellRoutes, 'get', '/admin/content/spells', null, async c => {
@@ -32,10 +34,10 @@ def(spellRoutes, 'get', '/admin/content/spells', null, async c => {
 });
 def(spellRoutes, 'post', '/admin/content/spells', Spell, async (c, b) => {
   const { rows: [row] } = await pool.query(
-    `INSERT INTO spells(name,kind,energy_cost,damage,description,price,duration_h,rarity,usable_by)
-     VALUES ($1,$2,COALESCE($3,10),$4,$5,$6,$7,$8,$9) RETURNING *`,
+    `INSERT INTO spells(name,kind,energy_cost,damage,description,price,duration_h,rarity,usable_by,shop,shop_races)
+     VALUES ($1,$2,COALESCE($3,10),$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
     [b.name, b.kind ?? null, b.energyCost ?? null, b.damage ?? null, b.description ?? null, b.price ?? null,
-     b.durationH ?? null, b.rarity ?? 'commun', JSON.stringify(b.usableBy ?? [])]);
+     b.durationH ?? null, b.rarity ?? 'commun', JSON.stringify(b.usableBy ?? []), b.shop ?? true, JSON.stringify(b.shopRaces ?? [])]);
   await audit(c, 'spell.create', 'spell', row.id, null, b);
   return row;
 });
@@ -45,9 +47,11 @@ def(spellRoutes, 'put', '/admin/content/spells/{id}', Spell.partial(), async (c,
     `UPDATE spells SET name=COALESCE($2,name), kind=COALESCE($3,kind), energy_cost=COALESCE($4,energy_cost),
       damage=COALESCE($5,damage), description=COALESCE($6,description), price=COALESCE($7,price),
       duration_h=COALESCE($8,duration_h), rarity=COALESCE($9,rarity),
-      usable_by=CASE WHEN $10::jsonb IS NULL THEN usable_by ELSE $10::jsonb END
+      usable_by=CASE WHEN $10::jsonb IS NULL THEN usable_by ELSE $10::jsonb END,
+      shop=COALESCE($11,shop), shop_races=CASE WHEN $12::jsonb IS NULL THEN shop_races ELSE $12::jsonb END
      WHERE id=$1 RETURNING *`,
-    [P(c, 'id'), b.name, b.kind ?? null, b.energyCost ?? null, b.damage ?? null, b.description ?? null, b.price ?? null, b.durationH ?? null, b.rarity ?? null, u.usable_by ?? null]);
+    [P(c, 'id'), b.name, b.kind ?? null, b.energyCost ?? null, b.damage ?? null, b.description ?? null, b.price ?? null, b.durationH ?? null, b.rarity ?? null, u.usable_by ?? null,
+     b.shop ?? null, b.shopRaces !== undefined ? JSON.stringify(b.shopRaces) : null]);
   if (!row) fail(404, 'Sort inconnu');
   await audit(c, 'spell.update', 'spell', P(c, 'id'), null, b);
   return row;

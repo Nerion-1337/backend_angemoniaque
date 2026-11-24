@@ -14,10 +14,12 @@ const Item = z.object({
   armor: z.number().int().optional(), strength_bonus: z.number().int().optional(), agility_bonus: z.number().int().optional(),
   req_strength: z.number().int().optional(), weapon_damage: z.number().int().optional(), magic_armor: z.number().int().optional(),
   data: z.record(z.any()).optional(),
+  /** Races qui trouvent l'objet dans la boutique de leur hôtel de ville ([] = toutes) — avec `shop`. */
+  shop_races: z.array(z.string().max(40)).max(20).optional(),
   /** Famille d'objet divin (rareté « divin » uniquement) : clé de divine_families. */
   divine_family: z.string().max(30).nullable().optional()
 });
-const usable = (b: any) => b.usable_by !== undefined ? { ...b, usable_by: JSON.stringify(b.usable_by) } : b;
+const usable = (b: any) => ({ ...b, ...(b.usable_by !== undefined ? { usable_by: JSON.stringify(b.usable_by) } : {}), ...(b.shop_races !== undefined ? { shop_races: JSON.stringify(b.shop_races) } : {}) });
 def(itemRoutes, 'get', '/admin/content/items', null, async c => {
   const q = c.req.query('q'), kind = c.req.query('kind'), rarity = c.req.query('rarity'), slot = c.req.query('slot');
   if (kind === 'divine') {

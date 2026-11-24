@@ -31,6 +31,7 @@ sorts, montures, bâtiments, divins) et objets divins gérés comme les autres o
 - Relique, arcane, artefact ne sont pas supprimables (règles du jeu) ; une famille encore utilisée non plus (409).
 - Exemplaires : créés dans la limite du plafond de la famille (409) ; un exemplaire détenu ne se supprime pas (409) ; un objet avec exemplaires ne se supprime pas (409).
 - `divineCap` lit la famille, sinon `game_config.divine_caps`.
+- Objets : `shop_races` (races qui le voient en boutique, [] = toutes) en plus de `shop` / `shop_stock` (card `craft-shop`).
 
 ## Gotchas
 - Seules relique/arcane/artefact donnent des rangs par race ; une famille libre est un objet unique sans effet de rang ; `monsters.guards_item` reste limité à ces 3.

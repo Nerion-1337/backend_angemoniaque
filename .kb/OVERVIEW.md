@@ -15,11 +15,12 @@ _Généré par `kb overview` — ne pas éditer ici ; notes manuelles dans `.kb/
 - Docker test target : `npm run typecheck && npm test` (utilisé par le hook pre-commit et CI)
 - kb : backend d'embedding `hash` (offline) dans `.kb/config.json`
 
-## Features (17)
+## Features (18)
 - **admin-players-divine** [done] (.kb/cards/admin-players-divine.md) Admin « Joueurs » (liste paginée + fiche éditable) et objets divins à familles libres — Section admin « Joueurs » (liste paginée par race, fiche éditable : caractéristiques, XP, or, rang, objets équipés / sac / coffre, sorts, montures, bâtiments, divins) et objets divins gérés comme les  — files: src/routes/admin/players.ts, src/routes/admin/items.ts, src/game/content.ts
 - **admin-socle** [done] (.kb/cards/admin-socle.md) Socle admin (Étape 2 phase 1) : rôles, CRUD contenu, règles transverses, production, audit — Socle du back-office (Étape 2) : rôles de compte, CRUD générique du contenu (races, rangs, monstres, objets, montures, bâtiments), règles transverses (coûts, plafonds, modificateurs), cache de configu — files: src/routes/admin.ts, src/routes/admin/core.ts, src/routes/admin/races.ts, src/routes/admin/monsters.ts (+11)
 - **bestiaire** [done] (.kb/cards/bestiaire.md) Bestiaire (phase 2): loot roll, hourly spawns, combat death, admin routes & status — Boucle du bestiaire (phase 2) : un monstre tué donne son butin (or + entrées pondérées de `monster_loot` : objets, ressources, exemplaires divins), des instances sauvages apparaissent au tick horaire  — files: src/game/loot.ts, src/game/combatlib.ts, src/routes/admin/bestiary.ts, src/routes/admin/monsters.ts (+2)
 - **combat-realtime** [done] (.kb/cards/combat-realtime.md) Realtime combat events: broadcast combat outcomes to map spectators — Rend chaque combat visible en temps réel aux autres joueurs de la carte : toute attaque résolue (directe ou sort d'attaque) publie un événement `combat` public sur le canal Redis de la carte, et les c — files: src/lib/events.ts, src/routes/combat.ts, src/routes/spells.ts
+- **craft-shop** [done] (.kb/cards/craft-shop.md) Boutique par race et parchemins de fabrication (objet, sort, bâtiment) — Boutique de l'hôtel de ville filtrée par race (objets et sorts) et fabrication par parchemin : un parchemin dans le sac + les ressources de sa recette donnent un objet, un sort appris ou un bâtiment ( — files: src/routes/craft.ts, src/routes/admin/recipes.ts, src/routes/market.ts
 - **guild-default-rank** [done] (.kb/cards/guild-default-rank.md) Guilde : rang par défaut des nouveaux arrivants (option unique default_rank_id) — Le Chef choisit UN rang par défaut attribué aux nouveaux membres (candidature acceptée ou invitation acceptée) ; sans choix, le nouveau membre reçoit le rang non-Chef le plus bas (comportement histori — files: src/routes/guilds.ts, test/integration/guild-default-rank.test.ts
 - **guild-forum-edit** [done] (.kb/cards/guild-forum-edit.md) Guilde : droits d'édition des catégories et sujets (auteur / create_topics / écriture catégorie) — Droit de modifier un sujet du forum de guilde (titre, description) : auteur, gestionnaires, rangs qui écrivent dans la catégorie parente et Chef ; modification des catégories réservée aux gestionnaire — files: src/routes/guilds.ts, test/integration/guild-forum-edit.test.ts
 - **guild-forum-manage** [done] (.kb/cards/guild-forum-manage.md) Guilde : suppression en cascade et transfert de sujet du forum — Gestion du forum de guilde : suppression d'une catégorie (avec ses sujets, messages et états de lecture) ou d'un sujet, réservée au Chef ; transfert d'un sujet vers une autre catégorie pour les gestio — files: src/routes/guilds.ts, test/integration/guild-forum-manage.test.ts
@@ -35,17 +36,6 @@ _Généré par `kb overview` — ne pas éditer ici ; notes manuelles dans `.kb/
 - **world2-angel-demon** [done] (.kb/cards/world2-angel-demon.md) Monde Anges & Démons (carte 2, 300x300) : zones, ressources, logique partagée — Monde 2 (Anges & Démons) : grille de zones 300×300 — démons à l'ouest, anges à l'est, bande neutre du Voile au centre. — files: src/game/world2.ts, src/game/resources2.ts, src/game/angelDemonMap.ts, src/game/terrain.ts (+1)
 
 ## File map
-- `graphify-out/.graphify_build_state.json`
-- `graphify-out/.graphify_labels.json`
-- `graphify-out/.graphify_labels.pending.json`
-- `graphify-out/.graphify_partition_cache.json`
-- `graphify-out/cache/ast/v0.9.118-s53-gd93bdf18e146/35c2688b100024aa7009fd2be0e35506a92a777caa543a8a773f8cbd60b89bba.json`
-- `graphify-out/cache/ast/v0.9.118-s53-gd93bdf18e146/4a08712cf3f26b2b6fa4821c5727567953e1700f69ac0b1654c88b9bd37b0223.json`
-- `graphify-out/cache/ast/v0.9.118-s53-gd93bdf18e146/62f8421df6611bbd46b7492437601706d31cf6b7475fb5c0c6d1cde8eb425427.json`
-- `graphify-out/cache/ast/v0.9.118-s53-gd93bdf18e146/88af8d3773652aaae0af1abb31440188353b3700afad77735e996027c60f39ac.json`
-- `graphify-out/cache/ast/v0.9.118-s53-gd93bdf18e146/ab6257d950d72cc1f86c1874deb28f4b27e7d1099b0e2561e360294cfe08175a.json`
-- `graphify-out/cache/stat-index.json`
-- `graphify-out/manifest.json`
 - `package.json`
 - `src/app.ts` — app
 - `src/config/env.ts` — env
@@ -78,4 +68,7 @@ _Généré par `kb overview` — ne pas éditer ici ; notes manuelles dans `.kb/
 - `src/realtime/ws.ts` — (header), pub, sockets, joinMap, leave, broadcast
 - `src/routes/actions.ts` — Récolte : sur place, ou à distance (trajet + 4 énergie). — (header), actions, XY
 - `src/routes/admin.ts` — Espace administrateur — monté dans app.ts sous la garde `admin` (rôle du JWT). — (header), adminRoutes
+- `src/routes/admin/bestiary.ts` — Statut bestiaire pour le dashboard (Étape 2 phase 2) : — bestiaryRoutes, Place
+- `src/routes/admin/buildings.ts` — (header), buildingRoutes, Building
+- `src/routes/admin/common.ts` — Table par type d'entité + colonnes « sûres » (INSERT/UPDATE ne touchent que celles-ci, vérifiées en base). — (header), TABLE, RARITIES, USABLE_KINDS, URL_KIND, kindOf, colsOf, jsonable, safeInsert, safeUpdate, requireRow, extras
 - … 62 autres fichiers (utiliser `kb search`)

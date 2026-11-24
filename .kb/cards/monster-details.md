@@ -35,6 +35,7 @@ catalogue global des sorts (rareté, qui peut l'apprendre).
 - Un monstre en attente de réincarnation ne régénère pas au tick.
 - Statut : chaque instance indique `linked` (lié à un personnage via `character_monster`, sinon « natif »).
 - Sorts : rareté ∈ {commun, rare, epique, legendaire, divin} (CHECK) ; `usable_by` ⊂ {humain, ange, demon, monstre, structure, monture}, vide = tout le monde ; `learners` = nombre de personnages qui le possèdent.
+- Sorts : `shop` (défaut vrai) et `shopRaces` (races autorisées, [] = toutes) règlent la boutique de l'hôtel de ville (card `craft-shop`).
 
 ## Gotchas
 - La garde `hp_current <= 0` en tête de `monsterDeath` est obligatoire (sinon double butin et or dupliqué).
