@@ -2,7 +2,7 @@
 title: Monde Anges & Démons (carte 2, 300x300) : zones, ressources, logique partagée
 slug: world2-angel-demon
 status: done
-updated: 2026-10-21
+updated: 2026-11-24
 files:
   - src/game/world2.ts
   - src/game/resources2.ts
@@ -18,22 +18,23 @@ tests:
   - test/world2.test.ts
 ---
 ## Purpose
-La carte 2 est une grille de **zones** 300x300 : démons à l'ouest, anges à l'est, bande neutre du Voile au centre. Chaque zone fixe le type de case, la couleur de sol, l'apparence 3D ET la liste des ressources récoltables : le sol affiché et la récolte ne peuvent pas diverger.
+Monde 2 (Anges & Démons) : grille de zones 300×300 — démons à l'ouest, anges à l'est, bande neutre du Voile au centre.
+Chaque zone fixe le type de case, l'apparence 3D et les ressources récoltables : le sol affiché et la récolte ne divergent jamais.
 
-## How it works
-- `angelDemonMap.ts` (généré) : lignes RLE d'une lettre de zone par case + `FEATURES2` (capitales, portes, arrivées des 4 portails humains, monstres). `resources2.ts` (généré) : `ZONES2` (type, sol, roche, herbe, arbre isolé, ressources avec poids %), `RESOURCES2` (37, avec `look` 3D), `RES2_BY_ID`, `SIDES`.
-- `world2.ts` : `terrain2(x,y)` renvoie l'objet figé de la case ; la ressource est tirée dans la zone avec un hash **entier** (`Math.imul`) : poids < 20 % = rare, semé case par case ; sinon taches irrégulières d'environ 4 cases. `noise2` = élévation interpolée (la lave est en contrebas : cratères et rivières). `waterTint(mapId, x)` : eau sombre côté démons, claire côté anges.
-- `terrain.ts` délègue : `noiseAt`/`terrain` appellent `noise2`/`terrain2` pour `mapId === 2` (3 lignes, **à reporter dans le gabarit de `tools/gen_human_map.py`** : `terrain.ts` est un fichier généré). Les objets de case ont en plus `zone`, `zoneId`, `ground`, `rock`, `grass`, `lone`, `flat`.
-- La lave (`champs_lave`, type `volcano`) brûle 10/h comme le volcan des Hommes (`ignite` dans `movement.ts`, inchangé) et n'existe que côté démons ; des « ponts de basalte » garantissent un chemin sans lave entre capitale, portes et frontière.
-
-## Entry points
-`terrain(x, y, 2)` / `noiseAt(x, y, 2)` ; `/map/2/cell` renvoie `zone` ; positions des bâtiments et monstres : infra `09_world2.sql`.
-
-## Tests
-`test/world2.test.ts` : coût/brûlure identiques à `terrain.ts` ; ressource ∈ zone ∈ groupe du type de case ; `look` obligatoire sauf eaux profondes, type de look ↔ type de sol ; toutes zones/ressources présentes ; camps par moitié ; lave seulement côté démons ; rares ≈ poids ; capitales dégagées ; accessibilité sans lave ; eau teintée ; déterminisme.
+## Business rules
+- La ressource d'une case est tirée dans les ressources de SA zone, avec un hash ENTIER (même résultat serveur et navigateurs) ; poids < 20 % = rare, semé case par case ; sinon taches d'environ 4 cases.
+- La ressource appartient au groupe du type de case de la zone.
+- La lave (zone `champs_lave`, type volcano) n'existe que côté démons et brûle comme le volcan des Hommes (10 PV/h, jamais mortel).
+- Un chemin sans lave relie toujours capitale, portes et frontière (ponts de basalte).
+- Eau sombre côté démons, claire côté anges.
+- Les coûts et la brûlure sont identiques à ceux de `terrain.ts` (surchargés par l'admin « Cases » pour ce monde).
 
 ## Gotchas
-- Le monde 2 n'est plus procédural : les tests « terrain procédural » de `rules.test.ts` utilisent la carte 3.
-- Ne pas utiliser `Math.sin` pour choisir une ressource (résultats différents selon les moteurs) : serveur et clients doivent voir la même case.
-- Changer un poids ou une zone dans `tools/catalogue2.py` impose de régénérer (`gen_angel_demon_map.py`) : le sol 3D, la légende et la récolte suivent seuls.
-- Base existante : `maps.width/height` de la carte 2 passent à 300 et les positions changent (`make dev-reset`).
+- Fichiers générés (`angelDemonMap.ts`, `resources2.ts`, `world2.ts`) : modifier `tools/catalogue2.py` puis régénérer (`gen_angel_demon_map.py`).
+- `terrain.ts` est aussi généré : la délégation au monde 2 se reporte dans le gabarit de `tools/gen_human_map.py`.
+- Jamais `Math.sin` pour choisir une ressource.
+- Les tests « terrain procédural » utilisent la carte 3 (le monde 2 n'est plus procédural).
+- Base existante : la carte 2 passe à 300×300 et les positions changent (`make dev-reset`).
+
+## Tests
+`test/world2.test.ts` (coûts/brûlure, ressource ∈ zone ∈ groupe, `look` 3D, zones/ressources présentes, camps, lave côté démons, rares ≈ poids, capitales dégagées, chemin sans lave, eau teintée, déterminisme).

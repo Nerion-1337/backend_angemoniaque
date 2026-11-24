@@ -2,7 +2,7 @@
 title: Types de case éditables par monde (admin « Cases ») : coût, description, sort passif
 slug: tile-types
 status: done
-updated: 2026-11-23
+updated: 2026-11-24
 files:
   - src/game/tileTypes.ts
   - src/routes/admin/tiles.ts
@@ -16,41 +16,22 @@ tests:
   - test/integration/tiles.test.ts
 ---
 ## Purpose
-Rend les **types de case** éditables par monde depuis l'admin (section « Cases ») : nom, description, coût d'énergie
-d'un pas et, en option, un **sort appliqué en continu** (bonus/malus de PV à chaque tick horaire) aux personnages qui s'y tiennent.
-La géométrie des cartes (quel type sur quelle case) reste générée dans le code (`humanMap`, `world2`, bruit procédural).
+Types de case éditables par monde (admin « Cases ») : nom, description, coût d'énergie d'un pas et sort passif appliqué en continu
+aux personnages qui s'y tiennent. La géométrie des cartes reste générée dans le code.
 
-## How it works
-- `tileTypes.ts` : cache mémoire `Map<"map:kind", TileType>` lu dans `tile_types` (+ nom/dégâts du sort), TTL 30 s ; `invalidateTiles()`
-  après une écriture admin sur cette instance (les autres instances convergent en ≤ 30 s). Table absente → cache vide + avertissement unique.
-- `tileCost(mapId, kind, def)` : coût admin du monde, sinon `def` (= `KIND_COST` via `t.cost`). `movement.ts` `stepCost` l'utilise
-  (`a.mp.map_id`) ; `actor()` appelle `await loadTiles()` pour que `stepCost`/`pathCost` restent synchrones avec un cache chaud.
-- `tileHpDelta(mode, damage)` : bonus = +|damage|, malus = -|damage| PV/heure ; `applyTileSpells()` (appelée par `hourlyTick`) groupe
-  les personnages non bloqués par delta et fait `hp_current = LEAST(hp_max, GREATEST(1, hp_current+delta))`.
-- `tilePublic(mapId, kind)` : `{kind, name, description, cost, spell:{name, mode, hpPerHour}|null}` pour le jeu.
-- `routes/admin/tiles.ts` : `GET /admin/content/tiles` (toutes les lignes + `map_name`, `spell_name/kind/damage`),
-  `PUT /admin/content/tiles/{mapId}/{kind}` (Zod : name 1..80, description ≤ 500, energyCost 0..99, spellId?, spellMode? ; sort sans mode → 400,
-  sort inconnu → 404, type inconnu → 400 / absent du monde → 404) ; audit `tile.update` (before/after) + `bumpContent`.
-
-## Entry points
-- Admin : `GET/PUT /admin/content/tiles…` (front `src/admin/TilesTab.jsx`, card front `admin-tiles-ui`).
-- Jeu : `GET /map/{mapId}/cell` renvoie `tile: tilePublic(...)` ; `GET /map/{mapId}/tile-types` (les 9 kinds, défauts si absents) pour l'estimation d'énergie du front.
-- `movement.ts:stepCost` (tous les trajets : move/approach/gather/attaques à distance/construction) ; `routes/tick.ts:hourlyTick` → `applyTileSpells`.
-
-## Data flow
-Lit `tile_types` (+ `spells`), `characters` ⨝ `positions` ; écrit `tile_types` (admin), `characters.hp_current` (tick), `admin_audit`.
-Schéma : migration infra `db/15_types_de_case.sql` (card infra `tile-types-schema`), seedée avec les valeurs du code → aucun changement de jeu à l'application.
-
-## Tests
-- `test/tileTypes.test.ts` (unit) : défauts = `KIND_COST`, coût propre à chaque monde dans `stepCost`, monture volante = 1, eau profonde
-  infranchissable à pied quel que soit le coût, `tileHpDelta` et `tilePublic`.
-- `test/integration/tiles.test.ts` (DB) : 9/9/5 types par monde, 403 joueur, validations 400/404, coût + nom édités visibles dans `/map/1/cell`
-  et `/map/1/tile-types` et payés par `/actions/move`, malus -7 PV / bonus +7 / plancher 1 PV via `applyTileSpells`. Restaure les lignes et supprime son sort.
+## Business rules
+- Un type de case par (monde, kind) ; sans ligne en base, les constantes du code s'appliquent (aucun changement de jeu à la migration).
+- Le coût d'un pas = coût du type de case DE CE MONDE (0 à 99) ; l'eau profonde reste interdite à pied quel que soit le coût ; monture volante = 1 partout.
+- Sort passif : bonus = +|dégâts du sort| PV par heure, malus = −|dégâts| ; dégâts 0 ou mode absent = aucun effet ; PV bornés à [1, PV max] (jamais mortel).
+- L'effet s'applique au tick horaire, aux PERSONNAGES non bloqués seulement (pas aux monstres ni aux invocations).
+- Un sort exige un mode bonus/malus (400) et doit exister (404) ; kind inconnu → 400 ; type absent du monde → 404.
+- La carte de case du jeu reçoit `tile` (nom, description, coût, sort) ; `/map/{id}/tile-types` donne les 9 kinds du monde.
+- Cache 30 s, invalidé à chaque écriture admin sur l'instance ; les autres instances suivent sous 30 s.
 
 ## Gotchas
-- `deep` : le coût saisi est affiché mais l'eau profonde reste **interdite à pied** (règle `stepCost`), monture volante = 1 partout, aquatique inchangée.
-- La brûlure du volcan (`burn.ts`, `BURN_DAMAGE`) est indépendante du sort de case.
-- L'effet passif = `spells.damage` par heure : un sort à 0 dégât n'a aucun effet. Il ne s'applique qu'aux **personnages** (pas monstres/invocations).
-- Base partagée en test : `features.test.ts` compte les sorts (4) → tout test qui crée un sort doit le supprimer.
-- Les coûts sont aussi dupliqués côté front (`front/src/lib/tiles.js`, alimenté par `/map/{id}/tile-types`) : garder la même règle.
+- La brûlure du volcan est indépendante du sort de case.
+- Le front duplique les coûts (`lib/tiles.js`) pour l'estimation affichée : garder la même règle.
+- Un test qui crée un sort doit le supprimer (`features.test.ts` compte les sorts).
 
+## Tests
+`test/tileTypes.test.ts` (défauts, coût par monde dans `stepCost`, volante, eau profonde, bonus/malus) ; `test/integration/tiles.test.ts` (9/9/5 types, 403, validations, coût payé par `/actions/move`, malus −7 / bonus +7 / plancher 1).

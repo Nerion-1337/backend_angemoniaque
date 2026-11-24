@@ -35,48 +35,27 @@ tests:
   - test/integration/map-gather.test.ts
 ---
 ## Purpose
-The world model of the game: **the Human world (map 1) is a hand-drawn 200×200 grid** (RLE-encoded in `humanMap.ts`) while the other worlds keep the original procedural noise. Every cell carries a kind (9 of them: plain/forest/mountain/arid/snow/ether/volcano/shallow/deep), a movement cost, a harvestable resource from a stable catalog and a burn flag (volcano). It defines the movement rules (on foot / ground mount / aquatic / flying), travel + energy payment, spawn, the "no PvP around the capital" safe zone, and the HTTP surface exposing a map area to clients (`/map/*`) and the move/gather/approach actions (`/actions/*`). The front keeps a byte-equivalent mirror for client-side previews.
+Modèle du monde : Monde des Hommes (carte 1, grille 200×200 dessinée), autres mondes générés ; chaque case a un type (9),
+un coût, une ressource récoltable et un drapeau de brûlure. Règles de déplacement, de récolte, d'apparition, zone sacrée,
+et API des cartes (`/map/*`) et actions (`/actions/*`). Le front en garde un miroir identique.
 
-## How it works
-- `humanMap.ts` (generated): `W×H` RLE rows decoded once into a `Uint8Array` of codes; `CODES` maps each code to `[kind, resourceId]` (e.g. `Y` = yggdrasil in forest, `v` = volcano/verre_dragon). `FEATURES` locates the hotel (100,100, `safeRadius` 10), the 4 portals and the Minotaure tree.
-- `terrain.ts`: for map 1 each cell is a frozen `{kind, cost, resourceId, resource (catalog display name), burn}`; elevation per kind (`VR` ranges) feeds `noiseAt(x, y, mapId)` (a 0..1 scalar, bilinearly interpolated, exact on integer cells). Other maps: the original `procNoise` (lattice 8), kind from thresholds, resource = deterministic hash-pick from the per-kind `POOL` (e.g. deep → `granit_marin/corail_abyssal/sable_noir/perle_ecume`). `KIND_COST` (plain 1, forest 2, mountain 3, arid 2, snow/ether/volcano 3, shallow 4, deep 99), `inSafeZone` (Chebyshev ≤ 10 of the hotel, map 1 only), `setWorld` (the front's "current world"; back always passes `mapId` explicitly).
-- `resources.ts` (generated): `RESOURCES` catalog (id/name/group/color/rarity/where/count), `GROUPS` (bois→forest, minerai→mountain, abysses→deep, eaux→shallow, plaines→plain, arides→arid), `RES_BY_ID`. Harvesting stores the **stable id** (not the name) in `characters.resources`.
-- `movement.ts`: `actor(db, ch)` = controlled summon (its own stats, no mount) or hero + active mount (bonus_see/bonus_range). `stepCost`: flying = 1 everywhere; aquatic = 1 on water / Infinity on land; on foot/ground = deep → Infinity, else the cell cost. `travel` walks the 8-direction straight line, enforces map bounds (409), refuses paths crossing an occupied cell (`item_id IS NULL` filter, 409 `Chemin bloqué`), stops at `stopAt`, pays via `spend()` (summon pays all; mount pays travel, hero pays actions; 409 when short), updates `positions`, and — new — **ignites the hero if the path crossed a volcano cell** (`ignite`: `burn_until = now()+3h`; `hourlyTick` then deals `BURN_DAMAGE=10`/h, HP floor 1).
-- `actions.ts`: `POST /actions/move` = `travel` + log + WS `moved`. `POST /actions/gather` = harvest the target cell's resource in place (4 energy) or at range (travel first, +4): the water rule fires **before** travel (deep on foot → 409 `Rien à récolter ici`, deterministic), then `characters.resources = jsonb_set(resources, {resourceId}, +1)`. `POST /actions/approach` = `travel(stopAt=1)`.
-- `map.ts`: one big join over `positions`; `GET /map/{id}/area` (r ≤ 25), `GET /map/{id}/cell` returns `{terrain(x, y, mapId), safe: inSafeZone(...), entity}` (+ `visibleGear` when `details=1`), `GET /map/{id}/landmarks`. `pub()` strips exact HP (4-level public state).
-- Safe zone (PvP): `combat.ts` and `spells.ts` refuse any non-monster target when **either** side is inside a safe zone (403 `Zone sacrée : aucun combat entre joueurs`).
-- `spawn.ts`: `freeCell` scans random cells around the race capital, refusing water **and volcano** cells; the radius expands by 2 per round when saturated (only a fully-occupied map fails 503). `spawn` places the character in a `positions` row. Phase 2 added `hourlySpawns` (called by `hourlyTick`) + `freeCellRect`: wild monster instances on the hourly tick — see card `bestiaire` for caps/probability/despawn details.
-- `inventory.ts`: `GET /inventory/{characterId}` returns equipped + bag items with the 12 h equip lock remaining (`lock_seconds` computed from `equipped_at`, GREATEST 0), the stacked `ci.qty`, `lockHours: 12`, `specialSlots` (5 human / 4 others) and `bagMax: 20`; `POST /inventory/equip` enforces per-slot compatibility (`GROUP` map), the 12 h lock on unequip (409 with remaining h/min), occupied-slot 409 and the two-handed rule (`i.data->>'hands'='2'` on the equipped main weapon → 409 on offhand).
-
-- **Types de case éditables (2026-11-24, card `tile-types`)** : `stepCost` prend le coût du type de case **du monde** via `tileCost(a.mp.map_id, kind, t.cost)` (défaut `KIND_COST`) ; `actor()` réchauffe le cache (`loadTiles`). `GET /map/{id}/cell` ajoute `tile` (nom, description, coût, sort passif) ; nouvelle route `GET /map/{id}/tile-types`. Eau profonde toujours interdite à pied.
-
-- **2026-11-24 (card `races-spawn-clock`)** : `spawn()` passe par `spawnZone(race)` : zone réglée en admin (monde, centre, rayon), sinon capitale (rayon 4).
-
-## Entry points
-- `POST /actions/move|gather|approach` (`routes/actions.ts`) — front `TileCard` action menu.
-- `GET /map/{id}/area|cell|landmarks` (`routes/map.ts`) — front `GameCanvas` re-fetches on every WS event + 8 s poll.
-- `spawn()` from `routes/characters.ts`; `freeCell` from `routes/divine.ts` (summon, r=3), `routes/admin.ts` (r=2), `game/divine.ts` (resurrection on map 3, r=20); `buildings.ts` reuses the same water/volcano check for placement. `hourlySpawns` is fired from `routes/tick.ts` `hourlyTick` (bestiaire); `spawn.ts` also
-exports `reincarnateDue` (phase 3 — deferred monster resurrection, card `monster-details`),
-called at the end of `hourlyTick`.
-- `travel`/`spend`/`actor` shared by `combat.ts` (long-range attacks) and `spells.ts`.
-- `terrain.setWorld` is called by the front `GameCanvas` on every `me` refresh so the mirror defaults to the right world.
-- Realtime: move/gather/approach broadcast `{type:'moved'}` via Redis `map:{id}` (multi-instance fan-out).
-
-## Data flow
-Reads: `positions` (placement of everything), `maps` (bounds), `characters/monsters/summons/buildings/character_mounts+mounts`, `specializations` (public health state). Writes: `positions` (travel endpoint), `characters.resources` JSONB (+1 per harvest, **keyed by stable catalog id**), `characters.burn_until` (volcano crossing), `history_action` (log, trimmed at 100). No per-cell storage: map 1 is the decoded `humanMap` grid, the other worlds are pure functions of (x, y).
-
-## Tests
-- `test/rules.test.ts` (unit): stat tiers, 8-direction walk, terrain determinism, **catalog name ⇄ stable id on all 3 maps**, resource group follows the terrain kind on procedural worlds, new kinds (arid cost 2, volcano burn = 10 = `BURN_DAMAGE`), water rules (shallow 4 on foot, deep forbidden, aquatic/flying mounts), damage/armor/pact/divine-energy rules.
-- `test/world.test.ts` (unit, generated invariants): hotel exactly at (100,100) on a plain; safe radius 10 (map 1 only) with plain/forest only inside; 4 portals on firm land; every catalog resource present on the map; Yggdrasil = exactly 8 cells; `verre_dragon` only on volcano cells; shallow=4/deep=99 costs; elevation coherence with the original noise thresholds; procedural worlds deterministic.
-- `test/integration/map-gather.test.ts` (skipped without `DATABASE_URL` + `REDIS_URL`; runs in CI and `stack exec backend`): full journey — create a human, move to a free plain cell (out-of-map 409), in-place + ranged gather (stable `resourceId` lands in `resources` via `/inventory`), deep-water gather on foot → 409 `Rien à récolter ici`, **safe zone: two fresh humans cannot fight each other (403 `Zone sacrée`) and `/cell` exposes `safe: true`**, and the privacy rule (no exact HP, `visibleGear` only).
+## Business rules
+- Types de case : plain, forest, mountain, arid, snow, ether, volcano, shallow, deep. Coût d'un pas = coût du type DANS CE MONDE (admin « Cases », card `tile-types`), défaut `KIND_COST` (1, 2, 3, 2, 3, 3, 3, 4, 99).
+- Coût réel (`stepCost`) : monture volante = 1 partout ; monture aquatique = 1 sur l'eau, impossible sur terre ; à pied / monture terrestre = coût de la case, eau profonde impossible.
+- Déplacement en ligne droite (8 directions, Chebyshev), sans contournement : une case occupée sur le trajet bloque tout le déplacement (409 « Chemin bloqué ») ; hors carte → 409.
+- Paiement : l'invocation contrôlée paie tout ; sinon la monture paie le trajet et le héros les actions ; énergie insuffisante → 409.
+- Traverser une case de lave enflamme le HÉROS (pas les invocations) : `burn_until = now + 3 h`, 10 PV/h au tick, jamais mortel (PV min 1).
+- Récolte : 4 énergie, sur place ou à distance (trajet d'abord) ; eau profonde à pied → 409 « Rien à récolter ici » AVANT tout trajet ; stockée sous l'id STABLE du catalogue.
+- Zone sacrée : Chebyshev ≤ 10 de l'Hôtel de ville (carte 1) ; aucun combat joueur contre joueur si l'un des deux y est ; monstres exemptés.
+- Apparition d'un personnage : zone de sa race (card `races-spawn-clock`), sinon capitale ; case libre jamais sur eau ni lave, rayon élargi par pas de 2 si plein (503 seulement si la carte est pleine).
+- Les réponses de carte ne donnent jamais de PV exacts (état public sur 4 niveaux) ; `/map/{id}/area` limité à r ≤ 25.
+- Inventaire : verrou de 12 h au déséquipement, compatibilité slot/objet, arme à deux mains interdit la main secondaire, 5 emplacements spéciaux pour un humain (4 sinon), sac de 20.
 
 ## Gotchas
-- **The terrain is duplicated in two repos** (`back/src/game/terrain.ts` ⇄ `front/src/lib/terrain.js`, plus the generated `humanMap`/`resources` pairs): any change must be mirrored in both repos; the generated files say so at the top — edit `tools/gen_human_map.py`, never the generated files. `test/rules.test.ts` (back) + `test/lib.test.js`/`test/world.test.js` (front) lock the mapping.
-- `terrain(x, y)` without `mapId` uses the front's global `setWorld` state — the back always passes `mapId` explicitly; the front must `setWorld` on every `me` refresh (a character crossing worlds changes everything).
-- `deep` cost 99 is display-only; the effective rule is `stepCost` (Infinity on foot). Never sum `t.cost` for travel.
-- Harvest stores the **resource id** (e.g. `perle_ecume`), not the display name; the log line shows the name. Any new consumer of `characters.resources` must key by catalog id.
-- Volcano: crossing a cell ignites the **hero only** (summons don't burn: `if (lava && !a.sm)`); `burn_until` is renewed on each crossing and the hourly tick deals 10/h with HP floor 1 — the burn is never lethal.
-- The safe zone is purely positional (Chebyshev ≤ 10 of the hotel, map 1): both the attacker's and the target's position are checked, monsters are exempt; the front `TileCard` hides the attack option on the same rule — keep both in sync.
-- `freeCell` refuses water **and volcano** cells; its radius now expands (saturated dev DBs) — don't rely on a character spawning near the capital.
-- `/map/{id}/area` caps `r` at 25; map payloads never carry exact HP (rule enforced in `pub()`, see `combat-realtime`).
-- 8-direction walk is a straight Chebyshev line — no pathfinding around obstacles: a blocked cell blocks the whole move.
+- Terrain dupliqué back ⇄ front (fichiers générés : modifier les scripts `tools/gen_*`, jamais les fichiers générés).
+- Le coût 99 de l'eau profonde n'est qu'affiché : ne jamais additionner `t.cost` pour un trajet, passer par `stepCost`.
+- Toujours passer `mapId` à `terrain()` côté back (sans lui, c'est le monde « courant » du front).
+- Tout consommateur de `characters.resources` doit utiliser l'id du catalogue, pas le nom affiché.
+
+## Tests
+`test/rules.test.ts` (déterminisme, id ⇄ nom sur les 3 cartes, règles de l'eau, lave = 10) ; `test/world.test.ts` (invariants générés : hôtel, zone sacrée, portails, ressources) ; `test/integration/map-gather.test.ts` (déplacement, récolte, eau profonde, zone sacrée, confidentialité).

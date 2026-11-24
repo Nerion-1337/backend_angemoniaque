@@ -1,5 +1,5 @@
 import { def, router, z, P } from '../../lib/route.js'; import { pool, fail } from '../../lib/db.js';
-import { audit } from '../../lib/audit.js'; import { bumpContent } from '../../game/content.js';
+import { audit } from '../../lib/audit.js'; import { Kit, checkKit } from '../../game/startKit.js'; import { bumpContent } from '../../game/content.js';
 export const raceRoutes = router();
 const nInt = (max: number) => z.number().int().min(0).max(max).nullable().optional();
 const Race = z.object({ key: z.string().max(40), name: z.string().max(80), base_stats: z.record(z.number()).optional(), color: z.string().max(30).optional(), active: z.boolean().optional(),
@@ -94,4 +94,15 @@ def(raceRoutes, 'delete', '/admin/content/ranks/{id}', null, async c => {
   await pool.query('DELETE FROM specializations WHERE id=$1', [id]);
   await bumpContent(); await audit(c, 'rank.delete', 'rank', id, null, null);
   return { ok: true };
+});
+
+/** Équipement de départ d'une race (rang, or, XP, ressources, objets sac/coffre, sorts, montures) : remplace le kit entier. */
+def(raceRoutes, 'put', '/admin/content/races/{id}/start-kit', Kit, async (c, b) => {
+  const id = P(c, 'id');
+  const { rows: [r] } = await pool.query('SELECT key, start_kit FROM races WHERE id=$1', [id]);
+  if (!r) fail(404, 'Race inconnue');
+  await checkKit(pool, r.key, b);
+  const { rows: [row] } = await pool.query('UPDATE races SET start_kit=$2 WHERE id=$1 RETURNING *', [id, JSON.stringify(b)]);
+  await bumpContent(); await audit(c, 'race.start_kit', 'race', id, r.start_kit, b);
+  return row;
 });

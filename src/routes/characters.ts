@@ -1,5 +1,5 @@
 import { OpenAPIHono } from '@hono/zod-openapi'; import { def, router, z, P } from '../lib/route.js'; import { pool, tx, ownChar, posOf, fail } from '../lib/db.js';
-import { statUpgradeCost } from '../game/rules.js'; import { applySpec } from '../game/divine.js'; import { spawn } from '../game/spawn.js'; import { activeMount, actor } from '../game/movement.js'; import { gearStats, maxSummons } from '../game/stats.js'; import { canUseDivineEnergy } from '../game/rules.js';
+import { statUpgradeCost } from '../game/rules.js'; import { applySpec } from '../game/divine.js'; import { spawn } from '../game/spawn.js'; import { Kit, startRank, grantKit } from '../game/startKit.js'; import { activeMount, actor } from '../game/movement.js'; import { gearStats, maxSummons } from '../game/stats.js'; import { canUseDivineEnergy } from '../game/rules.js';
 export const characters = router();
 /**
  * Règles de création (vérifiées côté serveur) : race existante, active et dotée d'un premier rang ;
@@ -36,14 +36,15 @@ def(characters, 'get', '/characters/races', null, async c => {
 });
 def(characters, 'get', '/characters', null, async c => (await pool.query('SELECT c.id,c.pseudo,c.race,p.map_id,p.coord_x x,p.coord_y y FROM characters c LEFT JOIN positions p ON p.character_id=c.id WHERE c.account_id=$1 ORDER BY c.id', [c.get('acc').sub])).rows);
 def(characters, 'post', '/characters', z.object({ pseudo: z.string().min(3, '3 caractères minimum').max(20, '20 caractères maximum').regex(/^[\p{L}0-9_-]+$/u, 'lettres, chiffres, _ et - uniquement'), race: z.string().max(40) }), (c, b) => tx(async db => {
-  await checkCreation(db, c.get('acc'), b.race);
-  const { rows: [s] } = await db.query('SELECT * FROM specializations WHERE race=$1 ORDER BY current_rank LIMIT 1', [b.race]);
-  const { rows: [ch] } = await db.query(`INSERT INTO characters(account_id,pseudo,race,specialization_id,hp_current,hp_max,recovery,energy_current,energy_max,divine_energy_current,divine_energy_max,strength,agility,see,gold)
-    VALUES ($1,$2,$3,$4,$5,$5,$6,$7,$7,$8,$8,$9,$10,$11,150) RETURNING id`, [c.get('acc').sub, b.pseudo, b.race, s.id, s.hp_max, s.recovery, s.energy_max, s.divine_energy_max, s.strength, s.agility, s.see]);
+  const race = await checkCreation(db, c.get('acc'), b.race);
+  // Équipement de départ de la race (races.start_kit, réglé en admin) : rang, or, XP, ressources, objets, sorts, montures.
+  const kit = Kit.safeParse(race.start_kit ?? {}).success ? Kit.parse(race.start_kit ?? {}) : {};
+  const s = await startRank(db, b.race, kit);
+  const { rows: [ch] } = await db.query(`INSERT INTO characters(account_id,pseudo,race,specialization_id,hp_current,hp_max,recovery,energy_current,energy_max,divine_energy_current,divine_energy_max,strength,agility,see,gold,xp)
+    VALUES ($1,$2,$3,$4,$5,$5,$6,$7,$7,$8,$8,$9,$10,$11,$12,$13) RETURNING id`, [c.get('acc').sub, b.pseudo, b.race, s.id, s.hp_max, s.recovery, s.energy_max, s.divine_energy_max, s.strength, s.agility, s.see, kit.gold ?? 0, kit.xp ?? 0]);
   await spawn(db, ch.id, b.race);
-  // Kit de départ (équipement, sorts, monture) comme dans le dépôt d'origine
-  await db.query("INSERT INTO character_items(character_id,item_id) SELECT $1,id FROM items WHERE name=ANY($2)", [ch.id, ['Épée Sanctifiée', 'Écu de la Garde', 'Casque de Fer Forgé', 'Plastron du Lion', 'Bottes de Célérité', 'Anneau de Rubis']]);
-    await db.query("INSERT INTO character_mounts(character_id,mount_id,energy_current,hp_current) SELECT $1,id,energy_max,hp_max FROM mounts WHERE name='Destrier Céleste Cuirassé'", [ch.id]); return ch;
+  await grantKit(db, ch.id, kit);
+  return ch;
 }));
 def(characters, 'get', '/characters/{id}', null, (c) => tx(async db => {
   const ch = await ownChar(db, c, P(c, 'id')), a = await actor(db, ch), st = await gearStats(db, ch), mount = await activeMount(db, ch.id);

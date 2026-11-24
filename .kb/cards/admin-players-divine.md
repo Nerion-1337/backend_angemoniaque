@@ -17,47 +17,25 @@ tests:
   - test/content.test.ts
 ---
 ## Purpose
-Deux fonctions du back-office : (1) la section **Joueurs** — liste paginée de tous les personnages par race et fiche
-complète éditable (caractéristiques, XP, or, rang, objets du sac / équipés / coffre-fort, sorts, montures, bâtiments,
-objets divins) ; (2) les **objets divins** gérés comme les autres objets (ligne `items` de rareté « divin ») rattachés à
-une **famille** (relique / arcane / artefact + familles libres créées en admin, avec plafond), les exemplaires uniques
-restant des lignes `divine_items`.
+Section admin « Joueurs » (liste paginée par race, fiche éditable : caractéristiques, XP, or, rang, objets équipés / sac / coffre,
+sorts, montures, bâtiments, divins) et objets divins gérés comme les autres objets, rattachés à des familles plafonnées.
 
-## How it works
-- `GET /admin/players?race=&q=&page=&per=` → `{ total, page, per, pages, races:[{race,n}], rows }` (rows : pseudo, race,
-  rang `specializations.name/current_rank`, position, XP, or, bloqué, e-mail ; tri race puis pseudo ; per ≤ 100).
-- `GET /admin/players/{id}` → `{ character, ranks (de sa race), items (place = equipped | bag | chest), spells, mounts, buildings, divine }`.
-- `PUT /admin/players/{id}` : valeurs ABSOLUES des colonnes `EDITABLE` (entiers ≥ 0) + `specialization_id` (doit être de la race) ; audit before/after.
-- Objets : `POST /admin/players/{id}/items {itemId, qty, place: bag|chest}` (empile sur la ligne existante du même emplacement,
-  hors équipement) ; `DELETE /admin/players/{id}/items/{itemId}?place=bag|chest|equipped` (une ligne, par `ctid`).
-- `DELETE …/spells/{spellId}`, `…/mounts/{mountId}`, `…/buildings/{buildingId}` (supprime aussi la position), `POST …/divine/{divineId}/release`.
-  Ajouts de sort / monture / divin : route historique `POST /admin/players/{id}/grant`.
-- Divins : `GET/POST/PUT/DELETE /admin/content/divine-families[/{key}]` (clé `^[a-z][a-z0-9_]{1,29}$`, plafond `cap` NULL = illimité ;
-  relique/arcane/artefact non supprimables ; plafond < exemplaires existants → 409). `items.divine_family` validé (`checkFamily`) :
-  famille existante et rareté « divin ». `GET /admin/content/items` ajoute `copies`, `family_name`, `family_cap` et compte les
-  exemplaires détenus dans `holders`. `POST /admin/content/divine {itemId, n}` crée n exemplaires de l'objet (famille = celle de
-  l'objet, plafond de la famille) ; `{kind, n}` reste accepté (rattaché au premier objet de la famille). `DELETE /admin/content/divine/{id}`
-  seulement si non détenu (nettoie `monster_loot`).
-- `divineCap(kind)` lit `divine_families.cap` (ligne dont `key` = kind), repli `game_config.divine_caps`.
-
-## Entry points
-Front : `src/admin/PlayersTab.jsx`, `src/admin/ItemsTab.jsx` + `Divine.jsx` (card front `admin-players-divine-ui`).
-`grantDivine` / `die` / portes (`game/divine.ts`, `routes/divine.ts`) inchangés : ils utilisent toujours `divine_items.kind`.
-
-## Data flow
-Lit/écrit `characters`, `character_items` (pas de PK : ciblage par `ctid`), `character_spells`, `character_mounts`, `buildings`
-+ `positions`, `divine_items`, `divine_families`, `items` ; audit `player.*`, `divine_family.*`, `divine.*`. Schéma : infra
-`db/16_familles_divines.sql` (card infra `divine-families-schema`).
-
-## Tests
-`test/integration/adminPlayersDivine.test.ts` : reprise (aucun exemplaire sans objet, 3 familles du jeu), nouvelle famille + objet
-divin au format standard + plafond 409, suppressions refusées (famille utilisée / du jeu / plafond < exemplaires) ; liste paginée,
-filtre race + recherche, 403 joueur ; fiche : PUT absolu (négatif → 400), sac empilé, coffre, sort, monture, divin attribué puis libéré.
-`test/content.test.ts` : `divineCap` lit d'abord les familles, repli `game_config`.
+## Business rules
+- Liste : 20 par page (max 100), filtre race et recherche pseudo/e-mail, effectifs par race.
+- Fiche : caractéristiques modifiées en valeur ABSOLUE, entiers ≥ 0 (négatif → 400) ; le rang doit appartenir à la race du joueur (400).
+- Ajout d'objet : au sac ou au coffre, empilé sur la ligne existante du même emplacement (jamais sur une pièce équipée) ; retrait d'une ligne par emplacement (404 si absent).
+- Supprimer un bâtiment du joueur supprime aussi sa position sur la carte.
+- Libérer un exemplaire divin le rend libre, sans gardien.
+- Objet divin = objet du catalogue de rareté « divin » + famille ; une famille exige la rareté divin (400) et doit exister (404).
+- Famille : clé `^[a-z][a-z0-9_]{1,29}$` ; plafond = nombre max d'exemplaires (NULL = illimité) ; plafond < exemplaires existants → 409.
+- Relique, arcane, artefact ne sont pas supprimables (règles du jeu) ; une famille encore utilisée non plus (409).
+- Exemplaires : créés dans la limite du plafond de la famille (409) ; un exemplaire détenu ne se supprime pas (409) ; un objet avec exemplaires ne se supprime pas (409).
+- `divineCap` lit la famille, sinon `game_config.divine_caps`.
 
 ## Gotchas
-- `GET /admin/players` renvoie désormais un objet paginé (plus un tableau) : aucun appelant historique dans le front.
-- Les règles de jeu par race (`KIND` dans `game/divine.ts`) ne connaissent que relique/arcane/artefact : une famille libre est un
-  objet unique sans effet de rang. `monsters.guards_item` reste limité à ces 3 familles.
-- Un nouveau personnage reçoit des objets de départ dans le sac : tout test d'empilement doit partir de la quantité existante.
-- Supprimer un objet divin exige d'abord de supprimer ses exemplaires (409).
+- Seules relique/arcane/artefact donnent des rangs par race ; une famille libre est un objet unique sans effet de rang ; `monsters.guards_item` reste limité à ces 3.
+- `character_items` n'a pas de clé : les retraits ciblent une ligne par `ctid`.
+- Un nouveau personnage a déjà des objets de départ : tester l'empilement à partir de la quantité existante.
+
+## Tests
+`test/integration/adminPlayersDivine.test.ts` (reprise des exemplaires, famille libre + plafond, refus de suppression, pagination, filtre, 403, fiche complète) ; `test/content.test.ts` (`divineCap`).

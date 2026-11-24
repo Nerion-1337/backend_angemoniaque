@@ -27,41 +27,27 @@ tests:
   - test/integration/api.test.ts
 ---
 ## Purpose
-The Hono + `@hono/zod-openapi` skeleton that serves the game REST API on port 3000: one OpenAPI app factory, per-domain route modules (`src/routes/*`) with per-endpoint Zod schemas, JWT auth middleware, a WebSocket gateway fanned out over Redis pub/sub, and an hourly world tick. The whole surface is documented at `/openapi.json`.
+Socle de l'API du jeu : application Hono + `@hono/zod-openapi` (port 3000), un module de routes par domaine, authentification JWT,
+passerelle WebSocket diffusée par Redis, horloge du monde. Documentation de toute la surface sur `/openapi.json`.
 
-## How it works
-- `src/index.ts` boots the process: `createNodeWebSocket({ app })` exposes `GET /ws?map=N` (handler calls `joinMap` / `leave` from `realtime/ws.ts`), then `injectWebSocket(serve({ fetch: app.fetch, port: env.port }))`; a `setInterval` (3 600 000 ms) fires `hourlyTick()` with a `.catch(console.error)`.
-- `src/app.ts` builds the app: `router()` (from `lib/route.ts`) creates an `OpenAPIHono` whose `defaultHook` turns Zod validation failures into `400 {error: "..."}`; it mounts `app.use('*', cors())`, the global `auth` middleware, `admin` on `/admin/*`, then registers the 17 route modules (auth, spells, characters, actions, combat, divine, map, pacts, faiths, guilds, messages, buildings, market, inventory, mounts, monsters — the phase-2 summoning routes, see card `bestiaire` — and `admin`, now an aggregator of 9 sub-routers under `routes/admin/`, see card `admin-socle`) with `app.route('/', r)`, adds `app.doc('/openapi.json')`, and a global `onError` mapping `HttpError` → its status, PG `23505` → 409 "Déjà existant ou case occupée", `P0001`/`23514` → 400, anything else → 500 "Erreur interne".
-- `lib/route.ts` gives the one-line endpoint idiom: `def(app, method, path, schema, handler)` wraps `createRoute` + `c.req.valid('json')` (Zod body) and returns `c.json(await handler(c, body))`; `P(c, key)` parses numeric path params. `router()` is shared by every module so errors stay uniform.
-- `lib/db.ts` / `db/pool.ts`: `pool` is a `pg` Pool on `env.pg` with `-c search_path=game_schema`; `fail(status, msg)` throws `HttpError`; `tx(fn)` wraps a pool connection in BEGIN/COMMIT/ROLLBACK; helpers `ownChar` (ownership + blocked check), `posOf`, `dist` (Chebyshev), `log` + `trimLog` (history capped at 100 rows per character).
-- `middleware/auth.ts`: HS256 JWT (hono/jwt, 24 h expiry, payload `{sub, role}`, secret from `env.jwt`); the `auth` middleware verifies the Bearer token and stores it via `c.set('acc', …)`, whitelisting `/auth/login`, `/auth/register`, `/ws`, `/openapi*`; `admin` returns 403 unless `role==='admin'`; a `mod` guard (role mod|admin, phase 4) is exported for moderation endpoints. Old tokens without a `role` claim degrade to 'player'.
-- `realtime/ws.ts`: two ioredis clients on `env.redis`; `sockets` is `Map<mapId, Set<ws>>`; `broadcast(mapId, evt)` publishes `map:{mapId}`; a psubscribed `map:*` listener forwards each message to that map's sockets, so several backend instances scale out behind one Redis.
-- `routes/auth.ts` shows the module idiom: scrypt-hashed passwords (`salt:hash`, `timingSafeEqual`), register (auto-login + admin bootstrap when email === `env.adminEmail` → `role='admin'` in `accounts`), login, `/auth/me` (returns `role` + legacy `admin` bool).
-
-- **2026-11-24** : `index.ts` démarre l'horloge persistante `startClock()` (`game/clock.ts`, card `races-spawn-clock`) au lieu d'un `setInterval` d'une heure.
-
-## Entry points
-- Node entry: `src/index.ts` (`npm run dev` → tsx watch; `npm run build` + `start` in prod)
-- App factory: `src/app.ts` exports `app` (also imported directly by integration tests)
-- Auth flow: `src/routes/auth.ts` — `/auth/register`, `/auth/login`, `/auth/me`
-- Every route module imports `def`, `router`, `z` from `lib/route.ts` and `pool` / `fail` / `tx` from `lib/db.ts`
-
-## Data flow
-- HTTP JSON → per-endpoint Zod schema (validated by the shared `defaultHook`) → handler → `pg` Pool (game_schema tables) → JSON response `{...}` or `{error}`; the OpenAPI document is derived from the `createRoute` schemas at `/openapi.json`
-- WS: `GET /ws?map=N` (no JWT — game-time sessions) → per-map socket sets in memory; cross-instance fan-out via Redis pub/sub `map:{id}`
-- Persistence: Postgres owns durable state (accounts, characters, positions, items, guilds, spells, summons…); Redis is transient (pub/sub only, no persistence assumption); sessions are stateless JWTs kept in the client (`localStorage` on the front)
-- Errors: `HttpError{status, message}` → `{error: message}`; DB constraint violations are translated once in `app.onError`
-
-## Tests
-- `test/rules.test.ts` — pure unit tests of the game formulas reused by routes: stat upgrade costs by tier, path energy, 8-direction walk, terrain determinism, damage / hit chance / divine energy rules.
-- `test/integration/*.ts` — vitest against the real app with Postgres + Redis (skipped when `DATABASE_URL` is unset; run in CI with services and via `make test-int`): `api.test.ts` covers register → create character → move, same-race SQL trigger, 401 on protected routes, 403 on admin routes; `auth.test.ts`, `gameplay.test.ts`, `features.test.ts` extend the same harness.
+## Business rules
+- Chaque endpoint déclare son schéma Zod via `def()` (`lib/route.ts`) ; une erreur de validation renvoie 400 `{error}` lisible.
+- Les erreurs sont traduites une seule fois dans `app.onError` : `HttpError` → son statut, PG 23505 → 409, P0001/23514 → 400, le reste → 500 « Erreur interne ».
+- Toute route exige un JWT HS256 (24 h, `{sub, role}`) SAUF `/auth/login`, `/auth/register`, `/ws`, `/openapi*` (liste blanche par regex dans `middleware/auth.ts`).
+- `/admin/*` exige `role === 'admin'` ; un jeton sans rôle vaut `player`. Le compte dont l'e-mail = `ADMIN_EMAIL` devient admin à l'inscription.
+- Mots de passe : scrypt `salt:hash`, comparaison à temps constant.
+- Toutes les requêtes SQL tournent dans `search_path=game_schema` ; le schéma appartient au dépôt infra (aucune table créée ici).
+- Les événements temps réel passent par Redis `map:{id}` et sont redistribués aux WebSocket de cette carte : plusieurs instances backend sont possibles.
+- L'horloge du monde est démarrée par `startClock()` (card `races-spawn-clock`) ; jamais de `setInterval` d'une heure.
+- L'historique d'un personnage est plafonné à 100 lignes (`trimLog`).
 
 ## Gotchas
-- `tsconfig` has `strict: false` and `noImplicitAny: false` — handlers are typed loosely (`any`); keep the existing looseness, do not mix in strict patterns that break `skipLibCheck` assumptions.
-- The `auth` middleware runs on every path and whitelists public paths by regex in `middleware/auth.ts` — any new public endpoint MUST be added to that regex or it will 401.
-- The pool pins `search_path=game_schema` per connection: queries must not assume the `public` schema; the schema itself is owned by the infra repo (migrations) — never create tables here.
-- `/ws` is deliberately outside JWT auth; map joining is the only realtime gate.
-- The hourly tick is fire-and-forget (`catch(console.error)`): a failing tick does not crash the server but also does not retry — do not build logic that assumes ticks are lossless.
-- The global 23505 → 409 mapping is a unique-collision message; do not rely on 23505 for flows that need a specific error body.
-- The Dockerfile `test` target runs `npm run typecheck && npm test` (used by the pre-commit hook and CI) — both must stay green.
-- Env defaults in `config/env.ts` are dev-only (`dev-secret` JWT, `ange/ange` Postgres); prod values are injected by the infra compose files.
+- Nouvel endpoint public : l'ajouter à la regex de `auth`, sinon 401.
+- `/ws` est hors JWT volontairement : rejoindre une carte est la seule barrière temps réel.
+- 23505 → message générique « Déjà existant ou case occupée » : ne pas s'en servir pour un message métier précis.
+- `tsconfig` non strict (`any` toléré) : garder ce style.
+- La cible Docker `test` lance `typecheck` + `test` (pré-commit et CI) : les deux doivent rester verts.
+- Les valeurs par défaut de `config/env.ts` (JWT `dev-secret`, `ange/ange`) sont pour le dev ; la prod les reçoit de l'infra.
+
+## Tests
+`test/rules.test.ts` (formules) ; `test/integration/*` (app réelle + Postgres + Redis, ignorés sans `DATABASE_URL`) : `api.test.ts` (inscription → personnage → déplacement, trigger même race, 401/403), `auth.test.ts`, `gameplay.test.ts`, `features.test.ts`.

@@ -2,7 +2,7 @@
 title: Guilde : ordre persisté des rangs, label Chef renommable, visibilités par défaut dynamiques
 slug: guild-ranks-order
 status: done
-updated: 2026-10-20
+updated: 2026-11-24
 files:
   - src/routes/guilds.ts
   - test/integration/guild-ranks-order.test.ts
@@ -12,32 +12,19 @@ tests:
   - test/integration/guild-ranks-order.test.ts
 ---
 ## Purpose
-Server half of the "Rangs & privilèges" revamp: guild ranks have a persistent display order (`sort_order`, migration `infra/db/05_rank_order.sql`); reordering is leader-only; new ranks are created at the end of the list; the Chef rank label is now **renamable** like any other label (only the name uniqueness stays enforced); and the forum default visibility (no rank chosen) now follows the guild's actual leader-rank name instead of the hardcoded `'Chef'`.
+Ordre d'affichage persistant des rangs de guilde, réordonnancement par le Chef, nouveaux rangs en fin de liste, et visibilité
+par défaut du forum qui suit le nom réel du rang Chef.
 
-## How it works
-All in `src/routes/guilds.ts` (house `def()` idiom, `tx` transactions):
-- `GET /guilds/{characterId}`: `ranks` ordered by `sort_order, id` (default 0 keeps the historical id order; consumed by the front Members `<select>`, forum `RankPick`, manage cards).
-- `POST /guilds/reorder` — extended with `kind: 'ranks'`: reserved to the leader (`403 'Réservé au Chef'` for non-leaders), assigns `sort_order = index` over the ids (`WHERE id=$ AND guild_id=$` → foreign ids are no-ops). Folders/topics kinds are unchanged (`create_topics`).
-- `POST /guilds/ranks` (create): computes `sort_order = COALESCE(MAX(sort_order),0)+1` → new ranks appear **last**.
-- `POST /guilds/ranks/{id}/rename`: the `is_leader` 403 guard was **removed** — the Chef label is editable. Remaining guards: unique name in the guild (409), 2–24 chars; the forum `visible_ranks` cascade (folders + topics) still runs for every rank including the leader one.
-- `leaderRankName(db, gid)` helper: `SELECT name FROM guild_ranks WHERE guild_id=$1 AND is_leader LIMIT 1` (fallback `'Chef'`). `POST /guilds/folders` with no `visibleRanks` still defaults to `[leaderRankName]` instead of `['Chef']` — so the default follows a renamed Chef label. `POST /guilds/topics` without a choice now stores `[]` = **inherited read from the category** (forum v2, card `guild-forum-perms`); the folder default remains the leader's rank name.
-
-## Entry points
-- `POST /guilds/reorder` (`kind: 'ranks'`) — called by the up/down arrows of the front manage cards (`Guild.jsx:Manage`/`Arrows`).
-- `GET /guilds/{characterId}` ranks list — front renders cards, Members select options, forum rank pills in this order.
-- Rename / create endpoints — front manage tab (pencil now available on the Chef card, `Guild.jsx:Manage`).
-
-## Data flow
-- Arrow click → `POST /guilds/reorder` {kind: 'ranks', ids (complete new order)} → tx: `UPDATE guild_ranks SET sort_order=index` → `{ ok: true }` → front `load()` re-fetches the ordered list.
-- Create → `sort_order = max+1` (last card, before the "add" placeholder card which is a front-side display position, not persisted).
-- Rename → `guild_ranks.name` + cascade `guild_folders.visible_ranks` / `guild_topics.visible_ranks` (name swap, only rows referencing the old name); holders' displayed rank follows via `me.rank` (name-based).
-
-## Tests
-- `test/integration/guild-ranks-order.test.ts` (needs `DATABASE_URL`; CI + `stack exec backend -- npx vitest run`): new rank lands last (`['Chef','Officier','Membre','Éclaireur']`); reorder by a non-leader → 403; reorder by the leader persists (`['Éclaireur','Officier','Chef','Membre']`) and foreign ids are ignored; renaming the Chef rank to 'Commandant' → 200, holder's `me.rank` follows, unchosen folder visibility defaults to `['Commandant']` (topics now default to `[]` = inherit from the category, forum v2), other holders unaffected; « séquence front (toggle) » test: create + reorder reproduces the front's au-dessus/below toggle (mid-list insertion, then a later create lands at the end again).
-- `test/integration/guild-ranks.test.ts` (previous feature) was updated: the "Chef protégé" assertion now expects 200 (label renamable) + holder follows.
+## Business rules
+- Rangs triés par `sort_order` puis id ; un nouveau rang arrive en dernier (`max + 1`).
+- Réordonner les rangs : Chef seul (403) ; ids d'une autre guilde sans effet.
+- Une catégorie créée sans rang choisi est visible du rang Chef SOUS SON NOM ACTUEL (`leaderRankName`), jamais d'un « Chef » codé en dur.
+- Un sujet créé sans choix hérite de la lecture de sa catégorie (card `guild-forum-perms`).
+- « Rang le plus bas » (arrivée d'un membre) reste défini par l'id, pas par l'ordre d'affichage.
 
 ## Gotchas
-- `lowestRank` (member join) still uses `ORDER BY id DESC` over non-leader ranks — deliberately untouched: "lowest" is a semantic id-based concept, not a display order.
-- Removing the leader-rename guard only made sense **with** the `leaderRankName` fallback: had we renamed the Chef label without it, every "no rank chosen" folder/topic would have silently defaulted to a name matching no rank. Keep the two together.
-- The forum `RankPick` default selections in the front (`NewFolderModal`/`NewTopicModal` initial `g.ranks.map(r => r.name)`) still hardcode-ish via the ranks list — if a rank is later renamed, only *new* component mounts see the new names (useState initial value); re-open the modal after a rename to get fresh defaults.
-- `guild_ranks.sort_order` is a dense index written per row (O(n) small updates, one tx) — guild-scale only (schema caps ids at 200 per reorder body).
+- Le libellé Chef renommable n'est sûr qu'avec `leaderRankName` : garder les deux ensemble.
+- Les modales du front initialisent leurs choix de rangs au montage : rouvrir après un renommage.
+
+## Tests
+`test/integration/guild-ranks-order.test.ts` (rang ajouté en dernier, 403 non-Chef, ordre persistant, renommage du Chef suivi par le défaut du forum) ; `guild-ranks.test.ts`.

@@ -1,0 +1,9 @@
+# Carte graphify (.kb/graph) : code seulement, jamais de secrets ni de dépendances.
+node_modules/
+dist/
+graphify-out/
+.kb/
+.env
+.env.*
+*.pem
+*.key
