@@ -13,10 +13,17 @@ export async function freeCell(db: any, mapId: number, cx: number, cy: number, r
   }
 }
 const CAPITAL: Record<string, string> = { human: 'Hôtel de ville', demon: 'Bastion Infernal', angel: 'Sanctuaire de la Providence' };
-export async function spawn(db: any, charId: number, race: string) {
+/** Zone d'apparition d'une race : réglage admin (races.spawn_*), sinon la capitale de la race (rayon 4). */
+export async function spawnZone(db: any, race: string): Promise<{ m: number; x: number; y: number; r: number }> {
+  const { rows: [z] } = await db.query('SELECT spawn_map_id m, spawn_x x, spawn_y y, spawn_radius r FROM races WHERE key=$1', [race]).catch(() => ({ rows: [] }));
+  if (z?.m != null && z.x != null && z.y != null) return { m: z.m, x: z.x, y: z.y, r: z.r ?? 4 };
   const { rows: [b] } = await db.query('SELECT p.map_id m,p.coord_x x,p.coord_y y FROM buildings b JOIN positions p ON p.building_id=b.id WHERE b.name=$1', [CAPITAL[race] ?? CAPITAL.human]);
-  const c = await freeCell(db, b.m, b.x, b.y, 4);
-  await db.query('INSERT INTO positions(map_id,coord_x,coord_y,character_id) VALUES ($1,$2,$3,$4)', [b.m, c.x, c.y, charId]);
+  return { ...b, r: 4 };
+}
+export async function spawn(db: any, charId: number, race: string) {
+  const z = await spawnZone(db, race);
+  const c = await freeCell(db, z.m, z.x, z.y, z.r);
+  await db.query('INSERT INTO positions(map_id,coord_x,coord_y,character_id) VALUES ($1,$2,$3,$4)', [z.m, c.x, c.y, charId]);
 }
 /**
  * Spawn horaire (Étape 2 phase 2) : pour chaque spawn_rules actif, si la fréquence (interval_h)

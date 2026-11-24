@@ -1,8 +1,42 @@
 import { OpenAPIHono } from '@hono/zod-openapi'; import { def, router, z, P } from '../lib/route.js'; import { pool, tx, ownChar, posOf, fail } from '../lib/db.js';
 import { statUpgradeCost } from '../game/rules.js'; import { applySpec } from '../game/divine.js'; import { spawn } from '../game/spawn.js'; import { activeMount, actor } from '../game/movement.js'; import { gearStats, maxSummons } from '../game/stats.js'; import { canUseDivineEnergy } from '../game/rules.js';
 export const characters = router();
+/**
+ * Règles de création (vérifiées côté serveur) : race existante, active et dotée d'un premier rang ;
+ * pour un compte joueur : une seule race par compte, au plus races.max_per_account personnages de cette race
+ * (NULL = illimité) et population de la race < races.max_total (NULL = illimité). Le compte admin est exempté.
+ */
+export async function checkCreation(db: any, acc: any, race: string) {
+  const { rows: [r] } = await db.query('SELECT * FROM races WHERE key=$1', [race]);
+  if (!r || !r.active) fail(400, 'Race indisponible');
+  if (!(await db.query('SELECT 1 FROM specializations WHERE race=$1', [race])).rowCount) fail(409, 'Cette race n’a pas encore de rang');
+  if (acc?.role === 'admin') return r;
+  const { rows: mine } = await db.query('SELECT race FROM characters WHERE account_id=$1', [acc.sub]);
+  if (mine.some((m: any) => m.race !== race)) fail(400, 'Tous vos personnages partagent la même race');
+  if (r.max_per_account != null && mine.length >= r.max_per_account) fail(409, `${r.max_per_account} personnage(s) ${r.name} maximum par compte`);
+  if (r.max_total != null && (await db.query('SELECT count(*)::int n FROM characters WHERE race=$1', [race])).rows[0].n >= r.max_total) fail(409, `Population maximale atteinte pour la race ${r.name}`);
+  return r;
+}
+/** Races jouables pour CE compte : places restantes et raison d'un refus (écran de création). */
+def(characters, 'get', '/characters/races', null, async c => {
+  const acc = c.get('acc'), admin = acc?.role === 'admin';
+  const { rows: mine } = await pool.query('SELECT race FROM characters WHERE account_id=$1', [acc.sub]);
+  const locked = admin ? null : mine[0]?.race ?? null;
+  const { rows } = await pool.query(`SELECT r.key, r.name, r.color, r.max_per_account, r.max_total,
+      (SELECT count(*)::int FROM characters ch WHERE ch.race=r.key) population,
+      EXISTS (SELECT 1 FROM specializations s WHERE s.race=r.key) has_rank
+    FROM races r WHERE r.active ORDER BY r.id`);
+  return { admin, locked, count: mine.length, races: rows.map((r: any) => {
+    const reason = !r.has_rank ? 'Pas encore de rang' : admin ? null
+      : locked && locked !== r.key ? 'Une seule race par compte'
+      : r.max_per_account != null && mine.length >= r.max_per_account ? `${r.max_per_account} personnage(s) maximum`
+      : r.max_total != null && r.population >= r.max_total ? 'Population maximale atteinte' : null;
+    return { key: r.key, name: r.name, color: r.color, max: admin ? null : r.max_per_account, allowed: !reason, reason };
+  }) };
+});
 def(characters, 'get', '/characters', null, async c => (await pool.query('SELECT c.id,c.pseudo,c.race,p.map_id,p.coord_x x,p.coord_y y FROM characters c LEFT JOIN positions p ON p.character_id=c.id WHERE c.account_id=$1 ORDER BY c.id', [c.get('acc').sub])).rows);
-def(characters, 'post', '/characters', z.object({ pseudo: z.string().min(3, '3 caractères minimum').max(20, '20 caractères maximum').regex(/^[\p{L}0-9_-]+$/u, 'lettres, chiffres, _ et - uniquement'), race: z.enum(['human', 'demon', 'angel']) }), (c, b) => tx(async db => {
+def(characters, 'post', '/characters', z.object({ pseudo: z.string().min(3, '3 caractères minimum').max(20, '20 caractères maximum').regex(/^[\p{L}0-9_-]+$/u, 'lettres, chiffres, _ et - uniquement'), race: z.string().max(40) }), (c, b) => tx(async db => {
+  await checkCreation(db, c.get('acc'), b.race);
   const { rows: [s] } = await db.query('SELECT * FROM specializations WHERE race=$1 ORDER BY current_rank LIMIT 1', [b.race]);
   const { rows: [ch] } = await db.query(`INSERT INTO characters(account_id,pseudo,race,specialization_id,hp_current,hp_max,recovery,energy_current,energy_max,divine_energy_current,divine_energy_max,strength,agility,see,gold)
     VALUES ($1,$2,$3,$4,$5,$5,$6,$7,$7,$8,$8,$9,$10,$11,150) RETURNING id`, [c.get('acc').sub, b.pseudo, b.race, s.id, s.hp_max, s.recovery, s.energy_max, s.divine_energy_max, s.strength, s.agility, s.see]);

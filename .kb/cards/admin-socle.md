@@ -76,6 +76,8 @@ live-ops) build on.
 
 - **2026-11-24 (card `admin-players-divine`)** : `GET /admin/players` devient paginé (`{total,page,per,pages,races,rows}`) + fiche `GET/PUT /admin/players/{id}` et routes d'ajout/retrait ; objets divins : familles `divine_families` (`/admin/content/divine-families`), `items.divine_family`, exemplaires liés à un objet (`POST /admin/content/divine {itemId,n}`, `DELETE /admin/content/divine/{id}`) ; `divineCap` lit les familles.
 
+- **2026-11-24 (card `races-spawn-clock`)** : races = zone d'apparition (`spawn_*`) + limites (`max_per_account`, `max_total`) ; `/admin/dashboard` expose `clock.last_tick_at` ; `/admin/tick` = tick supplémentaire hors horloge.
+
 ## Entry points
 - `src/app.ts` mounts `adminRoutes` (gated by `admin` middleware on `/admin/*`).
 - `src/index.ts` `setInterval(hourlyTick, 3600e3)` + `POST /admin/tick` (manual trigger).

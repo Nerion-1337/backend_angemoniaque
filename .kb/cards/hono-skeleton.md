@@ -2,7 +2,7 @@
 title: Hono + Zod OpenAPI skeleton: entry, router, auth, realtime WS
 slug: hono-skeleton
 status: done
-updated: 2026-11-04
+updated: 2026-11-24
 files:
   - src/index.ts
   - src/app.ts
@@ -37,6 +37,8 @@ The Hono + `@hono/zod-openapi` skeleton that serves the game REST API on port 30
 - `middleware/auth.ts`: HS256 JWT (hono/jwt, 24 h expiry, payload `{sub, role}`, secret from `env.jwt`); the `auth` middleware verifies the Bearer token and stores it via `c.set('acc', …)`, whitelisting `/auth/login`, `/auth/register`, `/ws`, `/openapi*`; `admin` returns 403 unless `role==='admin'`; a `mod` guard (role mod|admin, phase 4) is exported for moderation endpoints. Old tokens without a `role` claim degrade to 'player'.
 - `realtime/ws.ts`: two ioredis clients on `env.redis`; `sockets` is `Map<mapId, Set<ws>>`; `broadcast(mapId, evt)` publishes `map:{mapId}`; a psubscribed `map:*` listener forwards each message to that map's sockets, so several backend instances scale out behind one Redis.
 - `routes/auth.ts` shows the module idiom: scrypt-hashed passwords (`salt:hash`, `timingSafeEqual`), register (auto-login + admin bootstrap when email === `env.adminEmail` → `role='admin'` in `accounts`), login, `/auth/me` (returns `role` + legacy `admin` bool).
+
+- **2026-11-24** : `index.ts` démarre l'horloge persistante `startClock()` (`game/clock.ts`, card `races-spawn-clock`) au lieu d'un `setInterval` d'une heure.
 
 ## Entry points
 - Node entry: `src/index.ts` (`npm run dev` → tsx watch; `npm run build` + `start` in prod)

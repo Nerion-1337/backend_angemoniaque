@@ -1,26 +1,48 @@
 import { def, router, z, P } from '../../lib/route.js'; import { pool, fail } from '../../lib/db.js';
 import { audit } from '../../lib/audit.js'; import { bumpContent } from '../../game/content.js';
 export const raceRoutes = router();
-const Race = z.object({ key: z.string().max(40), name: z.string().max(80), base_stats: z.record(z.number()).optional(), color: z.string().max(30).optional(), active: z.boolean().optional() });
+const nInt = (max: number) => z.number().int().min(0).max(max).nullable().optional();
+const Race = z.object({ key: z.string().max(40), name: z.string().max(80), base_stats: z.record(z.number()).optional(), color: z.string().max(30).optional(), active: z.boolean().optional(),
+  /** Apparition des nouveaux personnages : monde + centre + rayon (null = capitale de la race). */
+  spawn_map_id: nInt(1_000_000), spawn_x: nInt(10_000), spawn_y: nInt(10_000), spawn_radius: z.number().int().min(0).max(100).optional(),
+  /** Limites : par compte (null = illimité) et population totale (null = illimité). Le compte admin est exempté. */
+  max_per_account: nInt(1000), max_total: nInt(1_000_000) });
+const SPAWN_COLS = ['spawn_map_id', 'spawn_x', 'spawn_y', 'spawn_radius', 'max_per_account', 'max_total'] as const;
+/** Zone d'apparition cohérente : carte existante et centre dans ses bornes. */
+const checkSpawn = async (b: any) => {
+  if (b.spawn_map_id == null) return;
+  const { rows: [m] } = await pool.query('SELECT width w, height h FROM maps WHERE id=$1', [b.spawn_map_id]);
+  if (!m) fail(404, `Monde n°${b.spawn_map_id} inconnu`);
+  if (b.spawn_x == null || b.spawn_y == null) fail(400, 'Centre de la zone d’apparition (x, y) requis');
+  if (b.spawn_x >= m.w || b.spawn_y >= m.h) fail(400, `Centre hors du monde (${m.w}×${m.h})`);
+};
+const setSpawn = async (id: number, b: any) => {
+  const cols = SPAWN_COLS.filter(k => b[k] !== undefined);
+  if (cols.length) await pool.query(`UPDATE races SET ${cols.map((k, i) => `${k}=$${i + 2}`).join(',')} WHERE id=$1`, [id, ...cols.map(k => b[k])]);
+};
 def(raceRoutes, 'get', '/admin/content/races', null, async () => {
   const { rows: races } = await pool.query('SELECT * FROM races ORDER BY key');
   const { rows: ranks } = await pool.query('SELECT * FROM specializations ORDER BY race, current_rank');
   return races.map((r: any) => ({ ...r, ranks: ranks.filter((s: any) => s.race === r.key) }));
 });
 def(raceRoutes, 'post', '/admin/content/races', Race, async (c, b) => {
+  await checkSpawn(b);
   const { rows: [row] } = await pool.query(
     'INSERT INTO races(key,name,base_stats,color,active) VALUES ($1,$2,$3,$4,$5) ON CONFLICT (key) DO NOTHING RETURNING *',
     [b.key, b.name, b.base_stats ?? {}, b.color ?? null, b.active ?? true]);
   if (!row) fail(409, 'Race déjà existante');
+  await setSpawn(row.id, b);
   await bumpContent(); await audit(c, 'race.create', 'race', row.id, null, b);
   return row;
 });
 def(raceRoutes, 'put', '/admin/content/races/{id}', Race.partial(), async (c, b) => {
+  await checkSpawn(b);
   const { rows: [row] } = await pool.query('UPDATE races SET name=$1,base_stats=COALESCE($2,base_stats),color=COALESCE($3,color),active=COALESCE($4,active) WHERE id=$5 RETURNING *',
     [b.name, b.base_stats ? JSON.stringify(b.base_stats) : null, b.color, b.active, P(c, 'id')]);
   if (!row) fail(404, 'Race inconnue');
+  await setSpawn(P(c, 'id'), b);
   await bumpContent(); await audit(c, 'race.update', 'race', P(c, 'id'), null, b);
-  return row;
+  return (await pool.query('SELECT * FROM races WHERE id=$1', [P(c, 'id')])).rows[0];
 });
 def(raceRoutes, 'delete', '/admin/content/races/{id}', null, async c => {
   const id = P(c, 'id');

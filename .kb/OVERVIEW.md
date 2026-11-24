@@ -15,7 +15,7 @@ _Généré par `kb overview` — ne pas éditer ici ; notes manuelles dans `.kb/
 - Docker test target : `npm run typecheck && npm test` (utilisé par le hook pre-commit et CI)
 - kb : backend d'embedding `hash` (offline) dans `.kb/config.json`
 
-## Features (16)
+## Features (17)
 - **admin-players-divine** [done] (.kb/cards/admin-players-divine.md) Admin « Joueurs » (liste paginée + fiche éditable) et objets divins à familles libres — Deux fonctions du back-office : (1) la section **Joueurs** — liste paginée de tous les personnages par race et fiche complète éditable (caractéristiques, XP, or, rang, objets du sac / équipés / coffre — files: src/routes/admin/players.ts, src/routes/admin/items.ts, src/game/content.ts
 - **admin-socle** [done] (.kb/cards/admin-socle.md) Socle admin (Étape 2 phase 1) : rôles, CRUD contenu, règles transverses, production, audit — Phase 1 (socle) of the admin back-office (Étape 2): a data-driven admin layer on top of the game content. — files: src/routes/admin.ts, src/routes/admin/core.ts, src/routes/admin/races.ts, src/routes/admin/monsters.ts (+11)
 - **bestiaire** [done] (.kb/cards/bestiaire.md) Bestiaire (phase 2): loot roll, hourly spawns, combat death, admin routes & status — Phase 2 (Bestiaire) game loop: monsters drop loot when killed (gold + weighted entries from `monster_loot`: items, resources, designated divine items), wild instances are spawned on the hourly tick fr — files: src/game/loot.ts, src/game/combatlib.ts, src/routes/admin/bestiary.ts, src/routes/admin/monsters.ts (+2)
@@ -30,6 +30,7 @@ _Généré par `kb overview` — ne pas éditer ici ; notes manuelles dans `.kb/
 - **hono-skeleton** [done] (.kb/cards/hono-skeleton.md) Hono + Zod OpenAPI skeleton: entry, router, auth, realtime WS — The Hono + `@hono/zod-openapi` skeleton that serves the game REST API on port 3000: one OpenAPI app factory, per-domain route modules (`src/routes/*`) with per-endpoint Zod schemas, JWT auth middlewar — files: src/index.ts, src/app.ts, src/config/env.ts, src/lib/route.ts (+5)
 - **map-terrain-gather** [done] (.kb/cards/map-terrain-gather.md) Procedural map & terrain: resources, movement rules, spawn, map/action routes — The world model of the game: **the Human world (map 1) is a hand-drawn 200×200 grid** (RLE-encoded in `humanMap.ts`) while the other worlds keep the original procedural noise. — files: src/game/terrain.ts, src/game/humanMap.ts, src/game/resources.ts, src/game/burn.ts (+5)
 - **monster-details** [done] (.kb/cards/monster-details.md) Détails de monstre (phase 3) : compétences/sorts, équipement par slot, auras, placement spontané & réincarnation — Étape 2 phase 3 (et 3b — capacités) du bestiaire : l'admin complète la fiche d'un type de monstre — **capacités** actives (sorts qu'il peut LANCER, à la demande) et passives (sorts appliqués **en cont — files: src/routes/admin/monsterDetails.ts, src/routes/admin/bestiary.ts, src/game/combatlib.ts, src/game/spawn.ts (+2)
+- **races-spawn-clock** [done] (.kb/cards/races-spawn-clock.md) Races (zone d'apparition, limites de personnages, admin sans limite) et horloge du monde persistante — (1) Chaque race définit où naissent ses nouveaux personnages (monde, centre, rayon) et ses limites (par compte, population totale) ; le compte admin n'a aucune limite ni règle de race. — files: src/game/clock.ts, src/routes/characters.ts, src/game/spawn.ts, src/routes/admin/races.ts (+1)
 - **tile-types** [done] (.kb/cards/tile-types.md) Types de case éditables par monde (admin « Cases ») : coût, description, sort passif — Rend les **types de case** éditables par monde depuis l'admin (section « Cases ») : nom, description, coût d'énergie d'un pas et, en option, un **sort appliqué en continu** (bonus/malus de PV à chaque — files: src/game/tileTypes.ts, src/routes/admin/tiles.ts
 - **world2-angel-demon** [done] (.kb/cards/world2-angel-demon.md) Monde Anges & Démons (carte 2, 300x300) : zones, ressources, logique partagée — La carte 2 est une grille de **zones** 300x300 : démons à l'ouest, anges à l'est, bande neutre du Voile au centre. — files: src/game/world2.ts, src/game/resources2.ts, src/game/angelDemonMap.ts, src/game/terrain.ts (+1)
 
@@ -40,6 +41,7 @@ _Généré par `kb overview` — ne pas éditer ici ; notes manuelles dans `.kb/
 - `src/db/pool.ts` — (header), pool
 - `src/game/angelDemonMap.ts` — ⚠ GÉNÉRÉ par tools/gen_angel_demon_map.py — monde Anges & Démons : ne pas éditer à la main. — W2, ROWS2, FEATURES2
 - `src/game/burn.ts` — Durée d'une brûlure après passage sur une case de volcan (renouvelée à chaque passage). Dégâts : BURN_DAMAGE p — (header), BURN_HOURS, ignite
+- `src/game/clock.ts` — Horloge du monde persistante (table game_clock, migration 17). — MAX_CATCHUP_H, LOCK, hoursDue, catchUp, startClock
 - `src/game/combatlib.ts` — Applique des dégâts ; gère la mort (joueur → Monde des Morts + objets divins, boss → butin au vainqueur, invoc — (header), Target, loadTarget, targetAt, applyDamage, scheduleRespawn, monsterDeath
 - `src/game/content.ts` — Cache des paramètres globaux (game_config) et invalideur du cache de contenu : — (header), cfg, cfgAll, cfgNum, bumpContent, divineCap
 - `src/game/divine.ts` — Surcharge divine : plus d'objets que requis => rang supérieur gratuit, quota ignoré. — (header), KIND, required, held, applySpec, refreshSurcharge, die, grantDivine
@@ -50,7 +52,7 @@ _Généré par `kb overview` — ne pas éditer ici ; notes manuelles dans `.kb/
 - `src/game/resources.ts` — ⚠ GÉNÉRÉ par tools/gen_human_map.py — catalogue des ressources et légende de la carte. — RESOURCES, GROUPS, RES_BY_ID
 - `src/game/resources2.ts` — ⚠ GÉNÉRÉ par tools/gen_angel_demon_map.py — catalogue du monde Anges & Démons (zones, ressources, apparence 3D — SIDES, RESOURCES2, ZONES2, RES2_BY_ID
 - `src/game/rules.ts` — Coût XP du prochain point : base × multiplicateur du palier (hypothèse : palier = floor(achats / numb_up), pla — StatRule, statUpgradeCost, pathEnergy, totalEnergy, effectiveRank, inVision, walk, routeEnergy, computeCharacterDamage, getPublicHealthState, computePactStatTransfer, canUseDivineEnergy, computeHitChance, applyArmor
-- `src/game/spawn.ts` — Le rayon s’élargit si l’aire est saturée (capitale encombrée en base de dev) : on préfère — freeCell, CAPITAL, spawn, hourlySpawns, reincarnateDue, freeCellRect
+- `src/game/spawn.ts` — Le rayon s’élargit si l’aire est saturée (capitale encombrée en base de dev) : on préfère — freeCell, CAPITAL, spawnZone, spawn, hourlySpawns, reincarnateDue, freeCellRect
 - `src/game/stats.ts` — Caractéristiques effectives : base + bonus d'équipement ; dégâts = arme × (Force − Force requise) ; armure = s — gearStats, maxSummons
 - `src/game/terrain.ts` — ⚠ GÉNÉRÉ par tools/gen_human_map.py — copie identique dans backend/src/game/terrain.ts et frontend/src/lib/ter — (header), MAP_HUMAN, WORLD, setWorld, BURN_DAMAGE, KIND_COST, KIND_LABEL, mk, hash, CELLS, BY_CODE, VOID, inMap, humanCell, VR, V, vAt, h0, procNoise, POOL, PROC, noiseAt, terrain, SAFE_ZONES, inSafeZone
 - `src/game/tileTypes.ts` — Types de case éditables (table tile_types, section admin « Cases ») : nom, description, — (header), TILE_KINDS, TileType, TTL, cache, key, loadTiles, invalidateTiles, setTilesForTest, tileOf, tileCost, tileHpDelta, tilePublic, applyTileSpells
@@ -70,10 +72,4 @@ _Généré par `kb overview` — ne pas éditer ici ; notes manuelles dans `.kb/
 - `src/routes/admin/core.ts` — Catalogue des ressources des deux mondes (menus déroulants admin) — dédoublonné par id. — (header), RESCATALOG, coreRoutes
 - `src/routes/admin/entity.ts` — Règles transverses (D2) : coûts en ressources, plafonds (caps), modificateurs bonus/malus & effets. — (header), entityRoutes, refId, Cost, Cap, Mod
 - `src/routes/admin/items.ts` — Libre : les anciennes données conservent leurs valeurs (l'UI admin propose les 5 — (header), itemRoutes, Item, usable, checkFamily, Family, CORE_FAMILIES
-- `src/routes/admin/monsterDetails.ts` — Étape 2 — Phase 3b : catalogue global de sorts (base de sorts du jeu), capacités des — (header), spellRoutes, Spell, usable, monsterDetailRoutes, requireMonster, SLOTS
-- `src/routes/admin/monsters.ts` — (header), monsterRoutes, Monster, Loot, Spawn
-- `src/routes/admin/mounts.ts` — (header), mountRoutes, Mount
-- `src/routes/admin/players.ts` — Endpoints hérités de l'admin historique — complétés en phase 4 (modération, rôles mod). — (header), playerRoutes, STATS, GRANT, EDITABLE, LIST_SQL, Edit
-- `src/routes/admin/races.ts` — (header), raceRoutes, Race
-- `src/routes/admin/tiles.ts` — Section admin « Cases » : types de case par monde (nom, description, coût d'énergie, sort passif bonus/malus). — (header), tileRoutes, Tile
-- … 47 autres fichiers (utiliser `kb search`)
+- … 55 autres fichiers (utiliser `kb search`)

@@ -2,7 +2,7 @@
 title: Procedural map & terrain: resources, movement rules, spawn, map/action routes
 slug: map-terrain-gather
 status: done
-updated: 2026-11-23
+updated: 2026-11-24
 files:
   - src/game/terrain.ts
   - src/game/humanMap.ts
@@ -49,6 +49,8 @@ The world model of the game: **the Human world (map 1) is a hand-drawn 200×200 
 - `inventory.ts`: `GET /inventory/{characterId}` returns equipped + bag items with the 12 h equip lock remaining (`lock_seconds` computed from `equipped_at`, GREATEST 0), the stacked `ci.qty`, `lockHours: 12`, `specialSlots` (5 human / 4 others) and `bagMax: 20`; `POST /inventory/equip` enforces per-slot compatibility (`GROUP` map), the 12 h lock on unequip (409 with remaining h/min), occupied-slot 409 and the two-handed rule (`i.data->>'hands'='2'` on the equipped main weapon → 409 on offhand).
 
 - **Types de case éditables (2026-11-24, card `tile-types`)** : `stepCost` prend le coût du type de case **du monde** via `tileCost(a.mp.map_id, kind, t.cost)` (défaut `KIND_COST`) ; `actor()` réchauffe le cache (`loadTiles`). `GET /map/{id}/cell` ajoute `tile` (nom, description, coût, sort passif) ; nouvelle route `GET /map/{id}/tile-types`. Eau profonde toujours interdite à pied.
+
+- **2026-11-24 (card `races-spawn-clock`)** : `spawn()` passe par `spawnZone(race)` : zone réglée en admin (monde, centre, rayon), sinon capitale (rayon 4).
 
 ## Entry points
 - `POST /actions/move|gather|approach` (`routes/actions.ts`) — front `TileCard` action menu.

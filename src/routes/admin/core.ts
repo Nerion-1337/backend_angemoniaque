@@ -9,6 +9,7 @@ export const RESCATALOG = [...RESOURCES, ...RESOURCES2].reduce((acc, r) => {
 export const coreRoutes = router();
 def(coreRoutes, 'get', '/admin/dashboard', null, async () => ({
   byRace: (await pool.query('SELECT race,count(*)::int n FROM characters GROUP BY race')).rows,
+  clock: (await pool.query('SELECT last_tick_at FROM game_clock WHERE id=1').catch(() => ({ rows: [] }))).rows[0] ?? null,
   counts: (await pool.query('SELECT (SELECT count(*)::int FROM characters) characters,(SELECT count(*)::int FROM buildings) buildings,(SELECT count(*)::int FROM items) items,(SELECT count(*)::int FROM messages) messages')).rows[0] }));
 def(coreRoutes, 'post', '/admin/tick', null, async () => { await hourlyTick(); return { ok: true }; });   // simule la mise à jour horaire
 def(coreRoutes, 'get', '/admin/catalog', null, async () => ({
