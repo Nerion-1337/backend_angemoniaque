@@ -48,6 +48,7 @@ Les phases suivantes (bestiaire, cases, joueurs, divins, races) s'y branchent (c
 - `GET /admin/dashboard` : compteurs, personnages par race, `clock.last_tick_at`.
 - Le tick rétablit toute capacité modifiée temporairement (liste `CAPS` du moteur de sorts) et ramène la réserve au max ; il applique ensuite dégâts sur la durée et sorts passifs (card `spell-engine`).
 - Le tick rétablit aussi les rangs temporaires échus (card `rank-up`).
+- Le tick régénère aussi les gisements de ressources (card `deposits`).
 
 ## Gotchas
 - Jamais de `LATERAL` référençant la table cible d'un UPDATE (l'ancien tick échouait silencieusement) : sous-requête corrélée dans le SET.

@@ -51,6 +51,7 @@ et API des cartes (`/map/*`) et actions (`/actions/*`). Le front en garde un mir
 - Les réponses de carte ne donnent jamais de PV exacts (état public sur 4 niveaux) ; `/map/{id}/area` limité à r ≤ 25.
 - Inventaire : verrou de 12 h au déséquipement, compatibilité slot/objet, arme à deux mains interdit la main secondaire, 5 emplacements spéciaux pour un humain (4 sinon), sac de 20.
 - Un bâtiment occupable ne bloque pas le trajet (`BLOCKING`) ; son occupant reçoit ses bonus de vue / portée (card `buildings-occupy`).
+- Récolte sur une case couverte par un gisement : sa ressource, son stock et son rendement priment (card `deposits`) ; `/map/{id}/cell` expose `deposit`.
 
 ## Gotchas
 - Terrain dupliqué back ⇄ front (fichiers générés : modifier les scripts `tools/gen_*`, jamais les fichiers générés).
