@@ -26,4 +26,12 @@ describe('game/content : cache des paramètres globaux', () => {
     expect(await divineCap('arcane')).toBe(4);
     expect(await divineCap('inconnu')).toBeNull();
   });
+  test('divineCap lit d’abord divine_families (familles libres, migration 16) ; cap NULL = illimité', async () => {
+    (pool.query as any).mockImplementation(async (sql: string, p: any[]) => sql.includes('divine_families')
+      ? { rows: p[0] === 'sceau' ? [{ key: 'sceau', cap: 2 }] : p[0] === 'libre' ? [{ key: 'libre', cap: null }] : [] }
+      : { rows: [{ key: 'divine_caps', value: { relique: 4 } }] });
+    expect(await divineCap('sceau')).toBe(2);
+    expect(await divineCap('libre')).toBeNull();
+    expect(await divineCap('relique')).toBe(4);   // repli game_config
+  });
 });

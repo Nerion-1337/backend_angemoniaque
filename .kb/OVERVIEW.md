@@ -15,7 +15,8 @@ _Généré par `kb overview` — ne pas éditer ici ; notes manuelles dans `.kb/
 - Docker test target : `npm run typecheck && npm test` (utilisé par le hook pre-commit et CI)
 - kb : backend d'embedding `hash` (offline) dans `.kb/config.json`
 
-## Features (15)
+## Features (16)
+- **admin-players-divine** [done] (.kb/cards/admin-players-divine.md) Admin « Joueurs » (liste paginée + fiche éditable) et objets divins à familles libres — Deux fonctions du back-office : (1) la section **Joueurs** — liste paginée de tous les personnages par race et fiche complète éditable (caractéristiques, XP, or, rang, objets du sac / équipés / coffre — files: src/routes/admin/players.ts, src/routes/admin/items.ts, src/game/content.ts
 - **admin-socle** [done] (.kb/cards/admin-socle.md) Socle admin (Étape 2 phase 1) : rôles, CRUD contenu, règles transverses, production, audit — Phase 1 (socle) of the admin back-office (Étape 2): a data-driven admin layer on top of the game content. — files: src/routes/admin.ts, src/routes/admin/core.ts, src/routes/admin/races.ts, src/routes/admin/monsters.ts (+11)
 - **bestiaire** [done] (.kb/cards/bestiaire.md) Bestiaire (phase 2): loot roll, hourly spawns, combat death, admin routes & status — Phase 2 (Bestiaire) game loop: monsters drop loot when killed (gold + weighted entries from `monster_loot`: items, resources, designated divine items), wild instances are spawned on the hourly tick fr — files: src/game/loot.ts, src/game/combatlib.ts, src/routes/admin/bestiary.ts, src/routes/admin/monsters.ts (+2)
 - **combat-realtime** [done] (.kb/cards/combat-realtime.md) Realtime combat events: broadcast combat outcomes to map spectators — Makes combat outcomes visible in real time to every other player on the same map: every resolved attack (direct `/combat/attack` or the "Trait de Lumière" attack spell) publishes a `combat` event on t — files: src/lib/events.ts, src/routes/combat.ts, src/routes/spells.ts
@@ -68,17 +69,11 @@ _Généré par `kb overview` — ne pas éditer ici ; notes manuelles dans `.kb/
 - `src/routes/admin/common.ts` — Table par type d'entité + colonnes « sûres » (INSERT/UPDATE ne touchent que celles-ci, vérifiées en base). — (header), TABLE, RARITIES, USABLE_KINDS, URL_KIND, kindOf, colsOf, jsonable, safeInsert, safeUpdate, requireRow, extras
 - `src/routes/admin/core.ts` — Catalogue des ressources des deux mondes (menus déroulants admin) — dédoublonné par id. — (header), RESCATALOG, coreRoutes
 - `src/routes/admin/entity.ts` — Règles transverses (D2) : coûts en ressources, plafonds (caps), modificateurs bonus/malus & effets. — (header), entityRoutes, refId, Cost, Cap, Mod
-- `src/routes/admin/items.ts` — Libre : les anciennes données conservent leurs valeurs (l'UI admin propose les 5 — (header), itemRoutes, Item, usable
+- `src/routes/admin/items.ts` — Libre : les anciennes données conservent leurs valeurs (l'UI admin propose les 5 — (header), itemRoutes, Item, usable, checkFamily, Family, CORE_FAMILIES
 - `src/routes/admin/monsterDetails.ts` — Étape 2 — Phase 3b : catalogue global de sorts (base de sorts du jeu), capacités des — (header), spellRoutes, Spell, usable, monsterDetailRoutes, requireMonster, SLOTS
 - `src/routes/admin/monsters.ts` — (header), monsterRoutes, Monster, Loot, Spawn
 - `src/routes/admin/mounts.ts` — (header), mountRoutes, Mount
-- `src/routes/admin/players.ts` — Endpoints hérités de l'admin historique — complétés en phase 4 (modération, rôles mod). — (header), playerRoutes, STATS, GRANT
+- `src/routes/admin/players.ts` — Endpoints hérités de l'admin historique — complétés en phase 4 (modération, rôles mod). — (header), playerRoutes, STATS, GRANT, EDITABLE, LIST_SQL, Edit
 - `src/routes/admin/races.ts` — (header), raceRoutes, Race
 - `src/routes/admin/tiles.ts` — Section admin « Cases » : types de case par monde (nom, description, coût d'énergie, sort passif bonus/malus). — (header), tileRoutes, Tile
-- `src/routes/auth.ts` — (header), authRoutes, hash, check, Reg, Log
-- `src/routes/buildings.ts` — (header), buildings, BUILD_COST
-- `src/routes/characters.ts` — Kit de départ (équipement, sorts, monture) comme dans le dépôt d'origine — characters
-- `src/routes/combat.ts` — Attaquant : l'invocation contrôlée (ses stats) ou le héros (équipement). La monture peut cracher son souffle s — (header), combat, ATTACK_COST, attacker
-- `src/routes/divine.ts` — divine
-- `src/routes/faiths.ts` — (header), faiths, CHOICES, god
-- … 40 autres fichiers (utiliser `kb search`)
+- … 47 autres fichiers (utiliser `kb search`)

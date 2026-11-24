@@ -2,7 +2,7 @@
 title: Socle admin (Étape 2 phase 1) : rôles, CRUD contenu, règles transverses, production, audit
 slug: admin-socle
 status: done
-updated: 2026-11-23
+updated: 2026-11-24
 files:
   - src/routes/admin.ts
   - src/routes/admin/core.ts
@@ -73,6 +73,8 @@ live-ops) build on.
   `LATERAL (...) b` referencing the target table `c` was INVALID SQL, so the hourly tick silently failed.
 
 - **Section « Cases » (2026-11-24, card `tile-types`)** : `routes/admin.ts` monte aussi `tileRoutes` (`/admin/content/tiles`) ; `hourlyTick` appelle `applyTileSpells()` (sort passif des types de case, ±PV/h, plancher 1) avant l'expiration des buffs.
+
+- **2026-11-24 (card `admin-players-divine`)** : `GET /admin/players` devient paginé (`{total,page,per,pages,races,rows}`) + fiche `GET/PUT /admin/players/{id}` et routes d'ajout/retrait ; objets divins : familles `divine_families` (`/admin/content/divine-families`), `items.divine_family`, exemplaires liés à un objet (`POST /admin/content/divine {itemId,n}`, `DELETE /admin/content/divine/{id}`) ; `divineCap` lit les familles.
 
 ## Entry points
 - `src/app.ts` mounts `adminRoutes` (gated by `admin` middleware on `/admin/*`).

@@ -14,8 +14,13 @@ export const cfgAll = async (): Promise<Record<string, any>> => {
 export const cfgNum = async (key: string, def: number) => (await cfgAll())[key] ?? def;
 /** Appelé par les routes admin après toute mutation de contenu/config. */
 export const bumpContent = () => { cfg = null; };
-/** Plafond global des objets divins par kind (relique/arcane/artefact) : null = illimité. */
-export const divineCap = async (kind: string): Promise<number | null> => {
+/** Plafond global des objets divins d'une famille (table divine_families, migration 16) : null = illimité.
+ *  Repli sur game_config.divine_caps si la table n'existe pas encore. */
+export const divineCap = async (kind: string | null): Promise<number | null> => {
+  try {
+    const { rows: [f] } = await pool.query('SELECT key, cap FROM divine_families WHERE key=$1', [kind]);
+    if (f && f.key === kind) return f.cap ?? null;
+  } catch { /* base sans migration 16 */ }
   const caps = ((await cfgAll()).divine_caps ?? {}) as Record<string, number>;
-  return caps[kind] ?? null;
+  return caps[kind ?? ''] ?? null;
 };
