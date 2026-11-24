@@ -38,6 +38,7 @@ Horloge du monde persistante : le temps de jeu avance même serveur arrêté.
 - Apparition : zone de la race (monde, centre, rayon ; centre dans les bornes du monde) sinon capitale de la race (rayon 4).
 - Équipement de départ (`races.start_kit`) : palier (sinon le premier), or, XP, ressources (id du catalogue), objets au sac ou au coffre, sorts, montures (une seule active) ; chaque référence est vérifiée à l'enregistrement (400/404).
 - Kit vide = premier palier, 0 or, rien d'autre ; la migration 18 a repris le kit historique (150 or, 6 objets au sac, Destrier) pour les races existantes.
+- Passage de rang par conditions (`/characters/{id}/rank-up`, conditions par rang) : card `rank-up` ; le tick rétablit les rangs temporaires échus.
 
 ## Gotchas
 - Ne jamais réintroduire un `setInterval` d'une heure : tout passe par `catchUp`.

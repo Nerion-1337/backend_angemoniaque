@@ -1,5 +1,5 @@
 import { OpenAPIHono } from '@hono/zod-openapi'; import { def, router, z, P } from '../lib/route.js'; import { pool, tx, ownChar, posOf, fail } from '../lib/db.js';
-import { statUpgradeCost } from '../game/rules.js'; import { applySpec } from '../game/divine.js'; import { spawn } from '../game/spawn.js'; import { Kit, startRank, grantKit } from '../game/startKit.js'; import { activeMount, actor } from '../game/movement.js'; import { gearStats, maxSummons } from '../game/stats.js'; import { canUseDivineEnergy } from '../game/rules.js';
+import { statUpgradeCost } from '../game/rules.js'; import { applySpec } from '../game/divine.js'; import { spawn } from '../game/spawn.js'; import { Kit, startRank, grantKit } from '../game/startKit.js'; import { nextRank, rankUp } from '../game/rankUp.js'; import { activeMount, actor } from '../game/movement.js'; import { gearStats, maxSummons } from '../game/stats.js'; import { canUseDivineEnergy } from '../game/rules.js';
 export const characters = router();
 /**
  * Règles de création (vérifiées côté serveur) : race existante, active et dotée d'un premier rang ;
@@ -46,6 +46,12 @@ def(characters, 'post', '/characters', z.object({ pseudo: z.string().min(3, '3 c
   await grantKit(db, ch.id, kit);
   return ch;
 }));
+/** Passage au rang suivant par conditions (lot 3) : aperçu (conditions, ce qui manque, rang temporaire en cours) puis passage. */
+def(characters, 'get', '/characters/{id}/rank-up', null, (c) => tx(async db => {
+  const ch = await ownChar(db, c, P(c, 'id')), n = await nextRank(db, ch);
+  return { temp: ch.temp_rank ?? null, next: n ? { id: n.next.id, name: n.next.name, rank: n.next.current_rank, prereq_xp: n.next.prereq_xp } : null, requirements: n?.req ?? null, missing: n?.missing ?? null };
+}));
+def(characters, 'post', '/characters/{id}/rank-up', null, (c) => tx(async db => rankUp(db, await ownChar(db, c, P(c, 'id')))));
 def(characters, 'get', '/characters/{id}', null, (c) => tx(async db => {
   const ch = await ownChar(db, c, P(c, 'id')), a = await actor(db, ch), st = await gearStats(db, ch), mount = await activeMount(db, ch.id);
   const { rows: [s] } = await db.query('SELECT name rank_name,current_rank FROM specializations WHERE id=$1', [ch.specialization_id]);

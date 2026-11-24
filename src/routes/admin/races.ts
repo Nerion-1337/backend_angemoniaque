@@ -1,5 +1,5 @@
 import { def, router, z, P } from '../../lib/route.js'; import { pool, fail } from '../../lib/db.js';
-import { audit } from '../../lib/audit.js'; import { Kit, checkKit } from '../../game/startKit.js'; import { bumpContent } from '../../game/content.js';
+import { audit } from '../../lib/audit.js'; import { Kit, checkKit } from '../../game/startKit.js'; import { Requirements, checkReq } from '../../game/rankUp.js'; import { bumpContent } from '../../game/content.js';
 export const raceRoutes = router();
 const nInt = (max: number) => z.number().int().min(0).max(max).nullable().optional();
 const Race = z.object({ key: z.string().max(40), name: z.string().max(80), base_stats: z.record(z.number()).optional(), color: z.string().max(30).optional(), active: z.boolean().optional(),
@@ -104,5 +104,16 @@ def(raceRoutes, 'put', '/admin/content/races/{id}/start-kit', Kit, async (c, b) 
   await checkKit(pool, r.key, b);
   const { rows: [row] } = await pool.query('UPDATE races SET start_kit=$2 WHERE id=$1 RETURNING *', [id, JSON.stringify(b)]);
   await bumpContent(); await audit(c, 'race.start_kit', 'race', id, r.start_kit, b);
+  return row;
+});
+
+/** Conditions de passage À ce rang (lot 3) : objets, ressources, énergie, définitif / temporaire (durée), consommation. {} = aucune. */
+def(raceRoutes, 'put', '/admin/content/ranks/{id}/requirements', z.union([Requirements, z.object({}).strict()]), async (c, b) => {
+  const id = P(c, 'id');
+  const { rows: [before] } = await pool.query('SELECT requirements FROM specializations WHERE id=$1', [id]);
+  if (!before) fail(404, 'Rang inconnu');
+  if (Object.keys(b).length) await checkReq(pool, b as any);
+  const { rows: [row] } = await pool.query('UPDATE specializations SET requirements=$2 WHERE id=$1 RETURNING *', [id, JSON.stringify(b)]);
+  await bumpContent(); await audit(c, 'rank.requirements', 'rank', id, before.requirements, b);
   return row;
 });
