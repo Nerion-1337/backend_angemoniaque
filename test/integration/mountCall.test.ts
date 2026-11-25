@@ -54,7 +54,9 @@ describe.skipIf(!process.env.DATABASE_URL)('Monter ou invoquer sa monture', () =
     const sm = (await pool.query('SELECT * FROM summons WHERE id=$1', [r.j.summonId])).rows[0];
     expect(sm).toMatchObject({ char_mount_id: T.cm, monster_id: T.type, armor: 5 });
     expect((await call('/mounts/equip', { characterId: T.c, cmId: T.cm, itemId: T.helm, slot: 'tete' }, T.tk)).status).toBe(409);
-    expect((await call('/mounts/summon', { characterId: T.c, cmId: T.cm }, T.tk)).status).toBe(409);
+    await pool.query('UPDATE positions SET coord_x=coord_x+6 WHERE summon_id=$1', [sm.id]);   // trop loin pour monter dessus
+    const far = await call('/mounts/summon', { characterId: T.c, cmId: T.cm }, T.tk); expect(far.status).toBe(409); expect(far.j.error).toMatch(/approchez-vous/);
+    await pool.query('UPDATE positions SET coord_x=coord_x-6 WHERE summon_id=$1', [sm.id]);
     await call('/summons/control', { characterId: T.c, summonId: sm.id }, T.tk);
     const h0 = await hero();
     expect((await call('/spells/cast', { characterId: T.c, spellId: T.sp }, T.tk)).status).toBe(200);
@@ -72,5 +74,16 @@ describe.skipIf(!process.env.DATABASE_URL)('Monter ou invoquer sa monture', () =
     await call(`/summons/${r.j.summonId}/dismiss`, { characterId: T.c }, T.tk);
     expect((await call('/mounts/unequip', { characterId: T.c, cmId: T.cm, slot: 'tete' }, T.tk)).status).toBe(200);
     expect((await pool.query('SELECT 1 FROM character_items WHERE character_id=$1 AND item_id=$2', [T.c, T.helm])).rowCount).toBe(1);
+  });
+
+  test('invoquée à pied puis « Monter dessus » depuis la case voisine : créature renvoyée, PV / énergie conservés, montée', async () => {
+    await call(`/admin/content/monsters/${T.type}`, { mountable: true }, T.adm, 'PUT');
+    const r = await call('/mounts/call', { characterId: T.c, cmId: T.cm }, T.tk); expect(r.status, JSON.stringify(r.j)).toBe(200);
+    await pool.query('UPDATE summons SET energy_current=11 WHERE id=$1', [r.j.summonId]);
+    const up = await call('/mounts/summon', { characterId: T.c, cmId: T.cm }, T.tk); expect(up.status, JSON.stringify(up.j)).toBe(200);
+    expect((await pool.query('SELECT 1 FROM summons WHERE id=$1', [r.j.summonId])).rowCount).toBe(0);
+    expect(await cm()).toMatchObject({ active: true, energy_current: 11 });
+    expect((await mine()).summon_id).toBeNull();
+    await call('/mounts/dismount', { characterId: T.c }, T.tk);
   });
 });

@@ -18,7 +18,7 @@ Une monture possédée (issue d'un type de monstre) se MONTE ou s'INVOQUE à pie
 cas ses capacités sont utilisables et elle peut être équipée sur les parties du corps de son type.
 
 ## Business rules
-- Monter (`POST /mounts/summon`, `cmId` ou l'ancien `mountId`) : seulement si le type sert de monture (sinon 409), PV > 0, pas déjà invoquée à pied ; une seule monture montée.
+- Monter (`POST /mounts/summon`, `cmId` ou l'ancien `mountId`) : seulement si le type sert de monture (sinon 409), PV > 0 ; une seule monture montée (invoquée à pied : voir plus bas).
 - Montée : les déplacements consomment l'énergie de la monture, jamais celle du joueur ; les actions du joueur restent payées par lui ; les capacités actives du type (`monster_spells` mode actif) sont lançables et payées par la monture.
 - Invoquer à pied (`POST /mounts/call`) : pas montée, pas déjà invoquée, PV > 0, dans la limite d'invocations ; la créature (`summons.char_mount_id`, `monster_id`) reprend PV / énergie actuels et les caractéristiques monture + équipement (`mountStats`).
 - Créature contrôlée : elle paie ses déplacements et ses capacités ; « soi-même » d'un sort désigne la créature (`pickTargets` avec `selfSummonId`).
@@ -26,6 +26,7 @@ cas ses capacités sont utilisables et elle peut être équipée sur les parties
 - Équiper (`/mounts/equip`, `/mounts/unequip`) : objet pris dans le SAC, partie autorisée par le type (400 sinon), une pièce par partie (409) ; retrait vers le sac (sac plein → 409) ; impossible pendant une invocation à pied (409).
 - L'équipement compte pour la créature invoquée (PV, énergie, régénération, vue, force, agilité, armures) ; pendant la monte, la monture n'est pas une cible et son équipement ne protège pas le cavalier.
 - `GET /mounts/{characterId}` : par monture `cm_id`, `can_ride`, `summon_id`, `slots`, `equips`, `capacities`, `stats`.
+- Monter sur une monture invoquée à pied : seulement depuis une case VOISINE de la créature (même monde, Chebyshev ≤ 1), sinon 409 « approchez-vous » ; la créature est renvoyée (trigger : PV / énergie rendus) puis montée.
 
 ## Gotchas
 - Supprimer une monture possédée (expiration d'invocation, admin) supprime son équipement (cascade) : les objets sont perdus.

@@ -35,13 +35,20 @@ def(mounts, 'get', '/mounts/{characterId}', null, c => tx(async db => {
   for (const r of rows) r.stats = await mountStats(db, r.cm_id);
   return rows;
 }));
-/** Monter dessus (une seule monture montée) : type montable, PV > 0, pas déjà invoquée à pied. `cmId` (ou l'ancien `mountId`). */
+/** Monter dessus (une seule monture montée) : type montable, PV > 0. Invoquée à pied : seulement depuis une case voisine — la créature
+ *  est renvoyée (PV / énergie rendus à la monture par le trigger) puis montée. `cmId` (ou l'ancien `mountId`). */
 def(mounts, 'post', '/mounts/summon', z.object({ characterId: z.number(), cmId: z.number().optional(), mountId: z.number().optional() }), (c, b) => tx(async db => {
   const me = await ownChar(db, c, b.characterId);
   const cmId = b.cmId ?? (await db.query('SELECT id FROM character_mounts WHERE character_id=$1 AND mount_id=$2 ORDER BY id LIMIT 1', [me.id, b.mountId ?? -1])).rows[0]?.id;
   const m = await ownMount(db, me.id, cmId ?? -1);
   if (!m.can_ride) fail(409, `${m.name} ne peut pas servir de monture : invoquez-la à pied`);
-  if ((await db.query('SELECT 1 FROM summons WHERE char_mount_id=$1', [m.id])).rowCount) fail(409, `${m.name} est déjà invoquée à pied : renvoyez-la d'abord`);
+  const { rows: [sm] } = await db.query('SELECT s.id, p.map_id, p.coord_x x, p.coord_y y FROM summons s LEFT JOIN positions p ON p.summon_id=s.id WHERE s.char_mount_id=$1', [m.id]);
+  if (sm) {
+    const mp = await posOf(db, me.id);
+    if (sm.map_id !== mp.map_id || Math.max(Math.abs(sm.x - mp.coord_x), Math.abs(sm.y - mp.coord_y)) > 1) fail(409, `${m.name} est invoquée à pied : approchez-vous (case voisine) pour monter dessus`);
+    await db.query('DELETE FROM summons WHERE id=$1', [sm.id]);
+    m.hp_current = (await db.query('SELECT hp_current FROM character_mounts WHERE id=$1', [m.id])).rows[0].hp_current;
+  }
   if (m.hp_current <= 0) fail(409, `${m.name} est à terre (0 PV) : attendez sa régénération`);
   await db.query('UPDATE character_mounts SET active=false WHERE character_id=$1', [me.id]);
   await db.query('UPDATE character_mounts SET active=true WHERE id=$1', [m.id]);
