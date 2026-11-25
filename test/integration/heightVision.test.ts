@@ -71,4 +71,13 @@ describe.skipIf(!process.env.DATABASE_URL)('Hauteur, coffre, coûts d’amélior
     expect((await call('/admin/content/stat-costs/range', undefined, T.adm, 'DELETE')).status).toBe(200);
     expect((await call(`/characters/${T.c}/upgrade/range`, undefined, T.tk, 'POST')).status).toBe(400);
   });
+  test('améliorer la vie / l’énergie max remplit aussi la réserve actuelle du même montant', async () => {
+    await pool.query('UPDATE characters SET xp=100000, hp_current=hp_max-5, energy_current=energy_max-5 WHERE id=$1', [T.c]);
+    const b = await me();
+    for (const st of ['hp_max', 'energy_max']) expect((await call(`/characters/${T.c}/upgrade/${st}`, undefined, T.tk, 'POST')).status).toBe(200);
+    const a = await me();
+    expect([a.hp_max, a.hp_current, a.energy_max, a.energy_current]).toEqual([b.hp_max + 1, b.hp_current + 1, b.energy_max + 1, b.energy_current + 1]);
+    expect((await call(`/characters/${T.c}/upgrade/strength`, undefined, T.tk, 'POST')).status).toBe(200);
+    expect((await me()).hp_current).toBe(a.hp_current);
+  });
 });

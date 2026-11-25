@@ -15,6 +15,7 @@ symbols:
   - src/game/combatlib.ts:loadTarget
   - src/game/stats.ts:statBreakdown
 tests:
+  - test/integration/heightVision.test.ts
   - test/integration/itemStats.test.ts
   - test/integration/equipMap.test.ts
   - test/integration/bagResources.test.ts
@@ -36,6 +37,7 @@ pour toutes les cibles (personnages, monstres, invocations), y compris les dég�
 - `statBreakdown` (`/characters/{id}.breakdown`) : par caractéristique, valeur finale, base et apports (objets équipés, effets temporaires de sorts / pactes `temp_buffs`, monture et bâtiment occupé pour vision / portée) ; base = finale − apports.
 - `GET /inventory` : `bagMax` (= `bag_size`), `bagUsed`, `resStacks` (piles de ressources du sac, une par emplacement).
 - `POST /inventory/use` : parchemin d'agrandissement du sac (`data = { kind: 'bag', add, max }`) → `bag_size = min(max, bag_size + add)`, consommé ; 409 si le sac a déjà `max` emplacements ; autre objet → 400.
+- Amélioration de `hp_max` / `energy_max` / `divine_energy_max` : +1 aussi sur la réserve actuelle (`hp_current`, `energy_current`, `divine_energy_current`) ; les autres stats ne touchent aucune réserve.
 
 ## Gotchas
 - Ne jamais additionner `items.bonuses` dans `gearStats` : ces valeurs sont DÉJÀ sur la fiche (double comptage).

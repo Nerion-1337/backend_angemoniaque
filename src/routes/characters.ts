@@ -74,11 +74,13 @@ def(characters, 'get', '/characters/{id}/upgrades', null, (c) => tx(async db => 
   const ch = await ownChar(db, c, P(c, 'id')); const { rows } = await db.query('SELECT * FROM stat_cost_rules ORDER BY base_xp_cost,stat');
   return rows.map((r: any) => { const n = ch.upgrades[r.stat] ?? 0, tier = Math.floor(n / r.numb_up); return { stat: r.stat, value: ch[r.stat], count: n, tier: Math.min(tier, 2) + 1, untilNextTier: r.numb_up - (n % r.numb_up), nextCost: statUpgradeCost(r, n), needsDivine: r.stat === 'divine_energy_max' }; });
 }));
+const RESERVE: Record<string, string> = { hp_max: 'hp_current', energy_max: 'energy_current', divine_energy_max: 'divine_energy_current' };
 def(characters, 'post', '/characters/{id}/upgrade/{stat}', null, (c) => tx(async db => {
   const ch = await ownChar(db, c, P(c, 'id')); const stat = c.req.param('stat');
   const { rows: [r] } = await db.query('SELECT * FROM stat_cost_rules WHERE stat=$1', [stat]); if (!r) fail(400, 'Statistique inconnue');
   const bought = ch.upgrades[stat] ?? 0; const cost = statUpgradeCost(r, bought); if (ch.xp < cost) fail(409, `XP insuffisante (${cost})`);
-  await db.query(`UPDATE characters SET xp=xp-$2, ${stat}=${stat}+1, upgrades=jsonb_set(upgrades,$3,$4::jsonb) WHERE id=$1`, [ch.id, cost, `{${stat}}`, String(bought + 1)]);
+  const pool_ = RESERVE[stat] ? `, ${RESERVE[stat]}=${RESERVE[stat]}+1` : '';   // vie / énergie max +1 → réserve actuelle +1 aussi
+  await db.query(`UPDATE characters SET xp=xp-$2, ${stat}=${stat}+1${pool_}, upgrades=jsonb_set(upgrades,$3,$4::jsonb) WHERE id=$1`, [ch.id, cost, `{${stat}}`, String(bought + 1)]);
   return { ok: true, cost };
 }));
 def(characters, 'post', '/characters/{id}/portrait', z.object({ data: z.string().max(200_000) }), (c, b) => tx(async db => {
