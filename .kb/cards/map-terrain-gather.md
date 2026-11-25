@@ -33,6 +33,7 @@ tests:
   - test/rules.test.ts
   - test/world.test.ts
   - test/integration/map-gather.test.ts
+  - test/flyingSummon.test.ts
 ---
 ## Purpose
 Modèle du monde : Monde des Hommes (carte 1, grille 200×200 dessinée), autres mondes générés ; chaque case a un type (9),
@@ -41,7 +42,7 @@ et API des cartes (`/map/*`) et actions (`/actions/*`). Le front en garde un mir
 
 ## Business rules
 - Types de case : plain, forest, mountain, arid, snow, ether, volcano, shallow, deep. Coût d'un pas = coût du type DANS CE MONDE (admin « Cases », card `tile-types`), défaut `KIND_COST` (1, 2, 3, 2, 3, 3, 3, 4, 99).
-- Coût réel (`stepCost`) : monture aérienne = 1 partout ; aquatique = 1 sur l'eau ; terre ferme impossible si la monture n'est pas terrestre (combinaisons, card `monster-mounts`) ; à pied / monture terrestre = coût de la case, eau profonde impossible.
+- Coût réel (`stepCost`) : volant (monture montée, ou créature contrôlée dont le type a la locomotion `air`, `summonLoco`) = 1 partout ; aquatique = 1 sur l'eau ; terre ferme impossible si la monture n'est pas terrestre (combinaisons, card `monster-mounts`) ; à pied / monture terrestre = coût de la case, eau profonde impossible.
 - Déplacement en ligne droite (8 directions, Chebyshev), sans contournement : une case occupée sur le trajet bloque tout le déplacement (409 « Chemin bloqué ») ; hors carte → 409.
 - Paiement : l'invocation contrôlée paie tout ; sinon la monture paie le trajet et le héros les actions ; énergie insuffisante → 409.
 - Traverser une case de lave enflamme le HÉROS (pas les invocations) : `burn_until = now + 3 h`, 10 PV/h au tick, jamais mortel (PV min 1).
@@ -53,6 +54,7 @@ et API des cartes (`/map/*`) et actions (`/actions/*`). Le front en garde un mir
 - Un bâtiment occupable ne bloque pas le trajet (`BLOCKING`) ; son occupant reçoit ses bonus de vue / portée (card `buildings-occupy`).
 - Récolte sur une case couverte par un gisement : sa ressource, son stock et son rendement priment (card `deposits`) ; `/map/{id}/cell` expose `deposit`.
 - `/map/{id}/area` et `/cell` : `flying` = monture volante du cavalier, ou monstre / invocation dont la locomotion comprend `air` (affichage au niveau du ciel côté front).
+- Créature contrôlée : sa locomotion vient de son type de monstre (`actor().loco`, exposée dans `actor.loco` de `/characters/{id}`) ; aquatique = 1 sur l'eau, terre ferme interdite sans `land` ; récolte en eau profonde possible si volante ou aquatique.
 
 ## Gotchas
 - Terrain dupliqué back ⇄ front (fichiers générés : modifier les scripts `tools/gen_*`, jamais les fichiers générés).

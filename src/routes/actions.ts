@@ -11,7 +11,7 @@ def(actions, 'post', '/actions/move', XY, (c, b) => tx(async db => {
 def(actions, 'post', '/actions/gather', z.object({ characterId: z.number(), x: z.number().int().optional(), y: z.number().int().optional() }), (c, b) => tx(async db => {
   const ch = await ownChar(db, c, b.characterId), a = await actor(db, ch); const tx_ = b.x ?? a.mp.coord_x, ty = b.y ?? a.mp.coord_y, t = terrain(tx_, ty, a.mp.map_id);
   const dep = await depositAt(db, a.mp.map_id, tx_, ty, true);   // gisement placé en admin : sa ressource et son stock priment sur le terrain
-  if ((!t.resource && !dep) || (t.kind === 'deep' && !a.mount?.aquatic && !a.mount?.flying)) fail(409, 'Rien à récolter ici');
+  if ((!t.resource && !dep) || (t.kind === 'deep' && !(a.mount ?? a.loco)?.aquatic && !(a.mount ?? a.loco)?.flying)) fail(409, 'Rien à récolter ici');
   if (dep && !dep.stock) await takeFromDeposit(db, dep);   // épuisé : refus AVANT tout trajet
   await checkHarvest(db, ch, dep ? dep.resource : t.resourceId);   // objets / sort exigés (outil équipé compris), AVANT tout trajet
   if (tx_ !== a.mp.coord_x || ty !== a.mp.coord_y) { if ((await db.query('SELECT 1 FROM positions WHERE map_id=$1 AND coord_x=$2 AND coord_y=$3 AND item_id IS NULL', [a.mp.map_id, tx_, ty])).rowCount) fail(409, 'Case occupée'); await travel(db, ch, a, { x: tx_, y: ty }, 0, GATHER); } else await spend(db, ch, a, GATHER);

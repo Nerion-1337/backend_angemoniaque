@@ -8,11 +8,18 @@ export async function actor(db: any, ch: any) {
   await loadTiles();   // coûts de case (admin « Cases ») à jour pour stepCost/pathCost, qui restent synchrones
   if (ch.controlled_summon_id) {
     const { rows: [sm] } = await db.query('SELECT * FROM summons WHERE id=$1 AND owner_id=$2', [ch.controlled_summon_id, ch.id]);
-    if (sm) { const { rows: [mp] } = await db.query('SELECT * FROM positions WHERE summon_id=$1', [sm.id]); return { sm, mount: null, mp, see: sm.see, range: 1 }; }
+    if (sm) { const { rows: [mp] } = await db.query('SELECT * FROM positions WHERE summon_id=$1', [sm.id]); return { sm, mount: null, loco: await summonLoco(db, sm), mp, see: sm.see, range: 1 }; }
   }
   const mount = await activeMount(db, ch.id), mp = await posOf(db, ch.id);
   const b = mp ? await occupiableAt(db, mp.map_id, mp.coord_x, mp.coord_y) : null;   // bâtiment occupé : bonus de vue / portée
   return { sm: null, mount, mp, see: ch.see + (mount?.bonus_see ?? 0) + (b?.bonus_see ?? 0), range: ch.range + (mount?.bonus_range ?? 0) + (b?.bonus_range ?? 0) };
+}
+/** Locomotion d'une invocation d'après son type de monstre (null = à pied) : volante → 1 énergie par case, comme une monture volante. */
+export async function summonLoco(db: any, sm: any) {
+  if (!sm.monster_id) return null;
+  const { rows: [t] } = await db.query('SELECT locomotion FROM monsters WHERE id=$1', [sm.monster_id]);
+  const l: string[] = t?.locomotion?.length ? t.locomotion : ['land'];
+  return { flying: l.includes('air'), aquatic: l.includes('water'), terrestrial: l.includes('land') };
 }
 /** La monture marche-t-elle sur la terre ferme ? (`terrestrial`, migration 25 ; absent = historique : un aquatique ne quitte pas l'eau) */
 const onLand = (m: any) => (m ? m.terrestrial ?? !m.aquatic : true);
@@ -20,12 +27,12 @@ const onLand = (m: any) => (m ? m.terrestrial ?? !m.aquatic : true);
  *  aquatique = 1 sur l'eau ; terre ferme interdite si la monture n'est pas terrestre ; sinon (à pied, terrestre) coût du type
  *  de case de CE monde (admin « Cases », défaut KIND_COST), eau profonde = interdite. */
 export function stepCost(t: { kind: string; cost: number }, a: any): number {
-  const m = a.mount; if (m?.flying) return 1;
+  const m = a.mount ?? a.loco; if (m?.flying) return 1;   // volant (monture montée ou créature contrôlée) : 1 partout
   if (m?.aquatic && isWater(t.kind)) return 1;
   if (!isWater(t.kind) && !onLand(m)) return Infinity;
   return t.kind === 'deep' ? Infinity : tileCost(a.mp?.map_id, t.kind, t.cost);
 }
-const blockedMsg = (kind: string, a: any) => a.mount && !onLand(a.mount) && !isWater(kind) ? 'Une monture aquatique ne quitte pas l’eau' : kind === 'deep' ? 'Eau profonde : un navire, une monture volante ou aquatique est requis' : 'Terrain infranchissable';
+const blockedMsg = (kind: string, a: any) => (a.mount ?? a.loco) && !onLand(a.mount ?? a.loco) && !isWater(kind) ? 'Une monture aquatique ne quitte pas l’eau' : kind === 'deep' ? 'Eau profonde : un navire, une monture volante ou aquatique est requis' : 'Terrain infranchissable';
 /** Paiement d'énergie : 'move' = déplacement (monture si invoquée), 'mount' = capacité de la monture, 'action' = énergie du personnage. L'invocation contrôlée paie tout. */
 export async function spend(db: any, ch: any, a: any, amount: number, kind: 'move' | 'action' | 'mount' = 'action') {
   if (!amount) return;

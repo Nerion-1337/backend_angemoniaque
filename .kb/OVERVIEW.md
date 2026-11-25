@@ -56,4 +56,4 @@ _Généré par `kb overview` — ne pas éditer ici ; notes manuelles dans `.kb/
 - `src/game/clock.ts` — Horloge du monde persistante (table game_clock, migration 17). — MAX_CATCHUP_H, LOCK, hoursDue, catchUp, startClock
 - `src/game/combatlib.ts` — Applique des dégâts ; gère la mort (joueur → Monde des Morts + objets divins, boss → butin au vainqueur, invoc — (header), Target, loadTarget, targetAt, applyDamage, scheduleRespawn, monsterDeath
 - `src/game/content.ts` — Cache des paramètres globaux (game_config) et invalideur du cache de contenu : — (header), cfg, cfgAll, cfgNum, bumpContent, divineCap
-- … 107 autres fichiers (utiliser `kb search`)
+- … 108 autres fichiers (utiliser `kb search`)
