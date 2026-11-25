@@ -22,18 +22,19 @@ describe.skipIf(!process.env.DATABASE_URL)('Passage de rang par conditions', () 
     T.tk = await login(`rk${s}@x.fr`); T.c = (await call('/characters', { pseudo: `rk${s}`, race: key }, T.tk)).j.id;
   });
 
-  test('admin : conditions validées (objet inconnu 404), {} = aucune', async () => {
-    expect((await call(`/admin/content/ranks/${T.r[2]}/requirements`, { items: [{ itemId: 999999, qty: 1 }] }, T.adm, 'PUT')).status).toBe(404);
-    expect((await call(`/admin/content/ranks/${T.r[2]}/requirements`, { resources: { inexistante: 1 } }, T.adm, 'PUT')).status).toBe(404);
+  test('admin : conditions validées (objet inconnu 404, ancien format 400), deux voies à la fois', async () => {
+    expect((await call(`/admin/content/ranks/${T.r[2]}/requirements`, { permanent: { items: [{ itemId: 999999, qty: 1 }] } }, T.adm, 'PUT')).status).toBe(404);
+    expect((await call(`/admin/content/ranks/${T.r[2]}/requirements`, { temporary: { resources: { inexistante: 1 } } }, T.adm, 'PUT')).status).toBe(404);
+    expect((await call(`/admin/content/ranks/${T.r[2]}/requirements`, { items: [], mode: 'permanent' }, T.adm, 'PUT')).status).toBe(400);
     expect((await call(`/characters/${T.c}/rank-up`, undefined, T.tk, 'POST')).status).toBe(409);   // aucune condition définie
-    const ok = await call(`/admin/content/ranks/${T.r[2]}/requirements`, { items: [{ itemId: T.item, qty: 2 }], resources: { [T.res]: 3 }, energyCost: 5, mode: 'permanent', consume: true }, T.adm, 'PUT');
+    const ok = await call(`/admin/content/ranks/${T.r[2]}/requirements`, { permanent: { items: [{ itemId: T.item, qty: 2 }], resources: { [T.res]: 3 }, energyCost: 5, consume: true }, temporary: { items: [], resources: { [T.res]: 999 }, durationH: 1 } }, T.adm, 'PUT');
     expect(ok.status, JSON.stringify(ok.j)).toBe(200);
-    expect((await call(`/admin/content/ranks/${T.r[3]}/requirements`, { resources: { [T.res]: 1 }, mode: 'temporary', durationH: 2, consume: false }, T.adm, 'PUT')).status).toBe(200);
+    expect((await call(`/admin/content/ranks/${T.r[3]}/requirements`, { temporary: { resources: { [T.res]: 1 }, durationH: 2, consume: false } }, T.adm, 'PUT')).status).toBe(200);
   });
 
   test('passage définitif : conditions manquantes → 409, puis objets/ressources/énergie consommés', async () => {
     const pre = (await call(`/characters/${T.c}/rank-up`, undefined, T.tk)).j;
-    expect(pre.next).toMatchObject({ name: 'Vétéran', rank: 2 }); expect(pre.missing.length).toBeGreaterThan(0);
+    expect(pre.next).toMatchObject({ name: 'Vétéran', rank: 2 }); expect(pre.missing.permanent.length).toBeGreaterThan(0); expect(pre.missing.temporary.length).toBeGreaterThan(0);
     expect((await call(`/characters/${T.c}/rank-up`, undefined, T.tk, 'POST')).status).toBe(409);
     await call(`/admin/players/${T.c}/items`, { itemId: T.item, qty: 3, place: 'bag' }, T.adm);
     await pool.query('UPDATE characters SET resources=$2, energy_current=50 WHERE id=$1', [T.c, JSON.stringify({ [T.res]: 5 })]);
@@ -46,10 +47,11 @@ describe.skipIf(!process.env.DATABASE_URL)('Passage de rang par conditions', () 
   });
 
   test('passage temporaire sans consommation, puis retour au rang précédent à l’échéance', async () => {
-    const r = await call(`/characters/${T.c}/rank-up`, undefined, T.tk, 'POST'); expect(r.status, JSON.stringify(r.j)).toBe(200);
+    expect((await call(`/characters/${T.c}/rank-up`, { mode: 'permanent' }, T.tk)).status).toBe(409);   // pas de voie définitive vers Champion
+    const r = await call(`/characters/${T.c}/rank-up`, { mode: 'temporary' }, T.tk); expect(r.status, JSON.stringify(r.j)).toBe(200);
     expect(r.j).toMatchObject({ rank: 'Champion', temporary: true, hours: 2 });
     let c = await ch(); expect(c).toMatchObject({ rank_name: 'Champion', hp_max: 400 }); expect(c.resources[T.res]).toBe(2);
-    expect((await call(`/characters/${T.c}/rank-up`, undefined, T.tk, 'POST')).status).toBe(409);   // rang temporaire en cours
+    expect((await call(`/characters/${T.c}/rank-up`, { mode: 'temporary' }, T.tk)).status).toBe(409);   // rang temporaire en cours
     await pool.query("UPDATE characters SET temp_rank=jsonb_set(temp_rank, '{until}', to_jsonb(now() - interval '1 minute')) WHERE id=$1", [T.c]);
     await revertTempRanks(pool);
     c = await ch(); expect(c).toMatchObject({ rank_name: 'Vétéran', hp_max: 200, strength: 10, temp_rank: null }); expect(c.hp_current).toBeLessThanOrEqual(200);

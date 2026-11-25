@@ -154,9 +154,10 @@ def(monsterDetailRoutes, 'post', '/admin/content/monsters/{id}/slots', z.object(
   return { ok: true };
 });
 def(monsterDetailRoutes, 'delete', '/admin/content/monsters/{id}/slots/{slot}', null, async c => {
-  const r = await pool.query('DELETE FROM monster_slots WHERE monster_id=$1 AND slot=$2 RETURNING slot', [P(c, 'id'), P(c, 'slot')]);
+  const slot = c.req.param('slot');   // texte (« mains ») : surtout pas P(), qui le convertit en NaN → suppression impossible
+  const r = await pool.query('DELETE FROM monster_slots WHERE monster_id=$1 AND slot=$2 RETURNING slot', [P(c, 'id'), slot]);
   if (!r.rowCount) fail(404, 'Slot inconnu');
-  await audit(c, 'monster.slot.delete', 'monster', P(c, 'id'), null, { slot: P(c, 'slot') });
+  await audit(c, 'monster.slot.delete', 'monster', P(c, 'id'), null, { slot });
   return { ok: true };
 });
 

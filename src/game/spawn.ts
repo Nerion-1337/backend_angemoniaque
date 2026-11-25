@@ -1,4 +1,4 @@
-import { terrain } from './terrain.js'; import { fail } from '../lib/db.js';
+import { terrain } from './terrain.js'; import { fail } from '../lib/db.js'; import { protoOf, respawnBlockers } from './respawn.js';
 export async function freeCell(db: any, mapId: number, cx: number, cy: number, r: number) {
   const { rows: [m] } = await db.query('SELECT width w,height h FROM maps WHERE id=$1', [mapId]);
   // Le rayon s’élargit si l’aire est saturée (capitale encombrée en base de dev) : on préfère
@@ -61,15 +61,17 @@ export async function hourlySpawns(db: any) {
     await db.query('UPDATE spawn_rules SET last_spawned_at=now() WHERE id=$1', [r.id]);
   }
 }
-/** Réincarnation différée (Étape 2 phase 3) : les monstres ancrés tués avec délai
- *  (monster_respawns) régénèrent leur PV complet quand l'échéance est atteinte (tick horaire). */
+/** Réincarnation différée : à l'échéance (tick horaire), PV complets — sauf si une condition du type (respawn_limits) la
+ *  bloque encore : l'échéance reste en place et elle est revérifiée au tick suivant. */
 export async function reincarnateDue(db: any) {
-  const { rows: due } = await db.query('SELECT monster_id FROM monster_respawns WHERE due_at <= now()');
+  const { rows: due } = await db.query('SELECT r.monster_id, m.* FROM monster_respawns r JOIN monsters m ON m.id=r.monster_id WHERE r.due_at <= now()');
+  let n = 0;
   for (const r of due) {
+    if ((await respawnBlockers(db, await protoOf(db, r))).length) continue;
     await db.query('UPDATE monsters SET hp_current=hp_max WHERE id=$1', [r.monster_id]);
-    await db.query('DELETE FROM monster_respawns WHERE monster_id=$1', [r.monster_id]);
+    await db.query('DELETE FROM monster_respawns WHERE monster_id=$1', [r.monster_id]); n++;
   }
-  return due.length;
+  return n;
 }
 /** Case libre dans le rectangle de la règle : évite eau/volcan et toute case occupée (uq_cell). */
 async function freeCellRect(db: any, r: any) {

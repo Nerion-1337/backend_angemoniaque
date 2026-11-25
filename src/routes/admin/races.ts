@@ -107,13 +107,14 @@ def(raceRoutes, 'put', '/admin/content/races/{id}/start-kit', Kit, async (c, b) 
   return row;
 });
 
-/** Conditions de passage À ce rang (lot 3) : objets, ressources, énergie, définitif / temporaire (durée), consommation. {} = aucune. */
-def(raceRoutes, 'put', '/admin/content/ranks/{id}/requirements', z.union([Requirements, z.object({}).strict()]), async (c, b) => {
+/** Conditions de passage À ce rang : voie définitive et/ou temporaire (chacune : objets, ressources, énergie, consommation ; durée). {} = aucune. */
+def(raceRoutes, 'put', '/admin/content/ranks/{id}/requirements', Requirements, async (c, b) => {
   const id = P(c, 'id');
   const { rows: [before] } = await pool.query('SELECT requirements FROM specializations WHERE id=$1', [id]);
   if (!before) fail(404, 'Rang inconnu');
-  if (Object.keys(b).length) await checkReq(pool, b as any);
-  const { rows: [row] } = await pool.query('UPDATE specializations SET requirements=$2 WHERE id=$1 RETURNING *', [id, JSON.stringify(b)]);
+  await checkReq(pool, b);
+  const stored = b.permanent || b.temporary ? b : {};
+  const { rows: [row] } = await pool.query('UPDATE specializations SET requirements=$2 WHERE id=$1 RETURNING *', [id, JSON.stringify(stored)]);
   await bumpContent(); await audit(c, 'rank.requirements', 'rank', id, before.requirements, b);
   return row;
 });

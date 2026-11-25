@@ -2,7 +2,7 @@
 title: "Bestiaire (phase 2): loot roll, hourly spawns, combat death, admin routes & status"
 slug: bestiaire
 status: done
-updated: 2026-11-24
+updated: 2026-11-25
 files:
   - src/game/loot.ts
   - src/game/combatlib.ts
@@ -33,7 +33,7 @@ d'apparition et un état du bestiaire (instances sur les cartes, gardiens des di
 - Une instance sauvage tire le butin de son PROTOTYPE (`data.prototype`) ; à sa mort elle disparaît (ligne, position, ses propres butins).
 - Apparition horaire : règle active, fenêtre `interval_h` écoulée, tirage `< probability` %, puis plafonds `max_instances` (prototype + copies) et `entity_caps` (global / per_zone) ; case libre du rectangle, jamais eau ni lave.
 - Un monstre placé, invoqué ou gardien de divins ne peut pas être supprimé (409).
-- Monstre ancré tué : régénération immédiate, ou réincarnation différée si un délai est réglé (card `monster-details`).
+- Monstre ancré ou placé tué : selon les réglages de réapparition de son type (recréé ou non, délai, conditions sur les éléments limités — card `monster-details`).
 
 ## Gotchas
 - `m.data->>'prototype'` est du texte : comparer à `$1::text` (sinon « operator does not exist: text = integer »).

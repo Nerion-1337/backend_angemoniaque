@@ -1,24 +1,30 @@
 import { z } from '../lib/route.js'; import { fail, log } from '../lib/db.js';
 import { applySpec } from './divine.js'; import { resourceExists } from './startKit.js';
 /**
- * Passage de rang par conditions (specializations.requirements, migration 21) : objets (dans le SAC) et ressources,
- * coût en énergie, XP prérequis (`prereq_xp`), quota de population ; passage définitif ou temporaire (durée), avec
- * consommation des objets/ressources ou simple vérification. Rang temporaire : caractéristiques d'avant mémorisées
- * dans characters.temp_rank et rétablies par le tick à l'échéance.
+ * Passage de rang par conditions (specializations.requirements, migrations 21 et 24) : DEUX voies indépendantes, chacune
+ * facultative — définitive (`permanent`) et temporaire (`temporary`, avec durée). Chaque voie a ses objets (dans le SAC),
+ * ressources, coût en énergie et sa règle de consommation ; XP prérequis (`prereq_xp`) et quota de population communs.
+ * Le joueur choisit la voie. Rang temporaire : caractéristiques d'avant mémorisées dans characters.temp_rank et rétablies
+ * par le tick à l'échéance.
  */
-export const Requirements = z.object({
+const Cond = z.object({
   items: z.array(z.object({ itemId: z.number().int(), qty: z.number().int().min(1).max(9999).default(1) })).max(20).default([]),
   resources: z.record(z.number().int().min(1).max(1e6)).default({}),
   energyCost: z.number().int().min(0).max(1000).default(0),
-  mode: z.enum(['permanent', 'temporary']).default('permanent'),
-  durationH: z.number().int().min(1).max(8760).default(24),
   consume: z.boolean().default(true)
 });
+export const Requirements = z.object({
+  permanent: Cond.nullable().default(null),
+  temporary: Cond.extend({ durationH: z.number().int().min(1).max(8760).default(24) }).nullable().default(null)
+}).strict();   // strict : l'ancien format { mode, items… } est refusé (400) au lieu d'être vidé en silence
+export const MODES = ['permanent', 'temporary'] as const;
+export type Mode = typeof MODES[number];
 export type ReqT = z.infer<typeof Requirements>;
+type CondT = z.infer<typeof Cond>;
 export const SNAP = ['specialization_id', 'hp_max', 'recovery', 'see', 'strength', 'agility', 'energy_max', 'divine_energy_max'] as const;
-export const hasReq = (r: any) => !!r && Object.keys(r).length > 0;
+export const hasReq = (r: any) => !!r && (!!r.permanent || !!r.temporary);
 /** Ce qui manque (pure) : objets (sac), ressources, énergie, XP. */
-export function missingFor(req: ReqT, ch: any, bag: Record<number, number>, prereqXp: number | null) {
+export function missingFor(req: CondT, ch: any, bag: Record<number, number>, prereqXp: number | null) {
   const out: string[] = [];
   for (const it of req.items) if ((bag[it.itemId] ?? 0) < it.qty) out.push(`objet n°${it.itemId} ×${it.qty - (bag[it.itemId] ?? 0)}`);
   for (const [k, q] of Object.entries(req.resources)) if ((ch.resources?.[k] ?? 0) < q) out.push(`${k} ×${q - (ch.resources?.[k] ?? 0)}`);
@@ -26,7 +32,8 @@ export function missingFor(req: ReqT, ch: any, bag: Record<number, number>, prer
   if (prereqXp != null && (ch.xp ?? 0) < prereqXp) out.push(`${prereqXp} XP`);
   return out;
 }
-export async function checkReq(db: any, r: ReqT) {
+export async function checkReq(db: any, req: ReqT) {
+  const r = { items: [...(req.permanent?.items ?? []), ...(req.temporary?.items ?? [])], resources: { ...req.permanent?.resources, ...req.temporary?.resources } };
   const ids = [...new Set(r.items.map(i => i.itemId))];
   if (ids.length) { const { rows } = await db.query('SELECT id FROM items WHERE id=ANY($1)', [ids]); const bad = ids.filter(i => !rows.some((x: any) => x.id === i)); if (bad.length) fail(404, `Objet(s) inconnu(s) : ${bad.join(', ')}`); }
   const badRes = Object.keys(r.resources).filter(k => !resourceExists(k)); if (badRes.length) fail(404, `Ressource(s) inconnue(s) : ${badRes.join(', ')}`);
@@ -37,7 +44,10 @@ export async function nextRank(db: any, ch: any) {
   const { rows: [next] } = await db.query('SELECT s.* FROM specializations s WHERE s.race=$1 AND s.current_rank=(SELECT current_rank+1 FROM specializations WHERE id=$2)', [ch.race, ch.specialization_id]);
   if (!next) return null;
   const req = hasReq(next.requirements) ? Requirements.parse(next.requirements) : null;
-  return { next, req, missing: req ? missingFor(req, ch, await bagOf(db, ch.id), next.prereq_xp) : null };
+  if (!req) return { next, req, missing: null };
+  const bag = await bagOf(db, ch.id), missing: Partial<Record<Mode, string[]>> = {};
+  for (const m of MODES) if (req[m]) missing[m] = missingFor(req[m]!, ch, bag, next.prereq_xp);
+  return { next, req, missing };
 }
 /** Retire `qty` exemplaires d'un objet du sac (lignes empilées). */
 async function takeItems(db: any, cid: number, itemId: number, qty: number) {
@@ -46,12 +56,13 @@ async function takeItems(db: any, cid: number, itemId: number, qty: number) {
   for (const r of rows) { if (!left) break; const take = Math.min(left, r.qty); left -= take;
     if (take === r.qty) await db.query('DELETE FROM character_items WHERE ctid=$1::tid', [r.ctid]); else await db.query('UPDATE character_items SET qty=qty-$2 WHERE ctid=$1::tid', [r.ctid, take]); }
 }
-export async function rankUp(db: any, ch: any) {
+export async function rankUp(db: any, ch: any, mode: Mode = 'permanent') {
   if (ch.temp_rank) fail(409, 'Un rang temporaire est déjà en cours');
   const n = await nextRank(db, ch);
   if (!n) fail(409, 'Rang maximal');
   if (!n!.req) fail(409, 'Aucune condition de passage définie pour ce rang');
-  const { next, req, missing } = n!;
+  const { next } = n!, req = n!.req![mode] as any, missing = n!.missing![mode];
+  if (!req) fail(409, `Pas de passage ${mode === 'temporary' ? 'temporaire' : 'définitif'} pour ce rang`);
   if (missing!.length) fail(409, `Conditions manquantes : ${missing!.join(', ')}`);
   const { rows: [q] } = await db.query('SELECT (SELECT count(*)::int FROM characters) total, (SELECT count(*)::int FROM characters WHERE specialization_id=$1) cur', [next.id]);
   if (q.cur + 1 > Math.ceil(next.max_population_percent / 100 * q.total)) fail(409, 'Quota de population atteint');
@@ -61,13 +72,13 @@ export async function rankUp(db: any, ch: any) {
     for (const [k, v] of Object.entries(req!.resources))
       await db.query('UPDATE characters SET resources=jsonb_set(resources, ARRAY[$2::text], to_jsonb(COALESCE((resources->>$2)::int,0) - $3)) WHERE id=$1', [ch.id, k, v]);
   }
-  if (req!.mode === 'temporary') {
+  if (mode === 'temporary') {
     const { rows: [snap] } = await db.query(`SELECT ${SNAP.join(',')} FROM characters WHERE id=$1`, [ch.id]);
     await db.query("UPDATE characters SET temp_rank=jsonb_build_object('until', now()+make_interval(hours=>$2), 'stats', $3::jsonb) WHERE id=$1", [ch.id, req!.durationH, JSON.stringify(snap)]);
   }
   await applySpec(db, ch.id, next.id);
-  await log(db, ch.id, `Devient ${next.name}${req!.mode === 'temporary' ? ` pour ${req!.durationH} h` : ''}`);
-  return { ok: true, rank: next.name, temporary: req!.mode === 'temporary', hours: req!.mode === 'temporary' ? req!.durationH : null };
+  await log(db, ch.id, `Devient ${next.name}${mode === 'temporary' ? ` pour ${req!.durationH} h` : ''}`);
+  return { ok: true, rank: next.name, temporary: mode === 'temporary', hours: mode === 'temporary' ? req!.durationH : null };
 }
 /** Tick : rétablit le rang et les caractéristiques d'avant pour les rangs temporaires échus (réserves ramenées au max). */
 /** Valeur numérique sûre à injecter dans le SQL (sinon la colonne elle-même). */

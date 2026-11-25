@@ -1,6 +1,6 @@
 import { def, router, z, P } from '../../lib/route.js'; import { pool, fail } from '../../lib/db.js';
 import { audit } from '../../lib/audit.js'; import { bumpContent } from '../../game/content.js';
-import { safeInsert, safeUpdate, requireRow, extras } from './common.js';
+import { safeInsert, safeUpdate, requireRow, extras } from './common.js'; import { RespawnLimit } from '../../game/respawn.js';
 export const monsterRoutes = router();
 const Monster = z.object({
   name: z.string().max(80), hp_max: z.number().int().optional(), hp_current: z.number().int().optional(),
@@ -8,7 +8,10 @@ const Monster = z.object({
   strength: z.number().int().optional(), agility: z.number().int().optional(),
   energy_max: z.number().int().optional(), range: z.number().int().optional(), armor: z.number().int().optional(),
   gain_xp_hour: z.number().int().optional(), gold_current: z.number().optional(),
-  guards_item: z.enum(['relique', 'arcane', 'artefact']).optional(), data: z.record(z.any()).optional()
+  guards_item: z.enum(['relique', 'arcane', 'artefact']).optional(), data: z.record(z.any()).optional(),
+  /** Réapparition (migration 24) : recréé ou non, délai (h), conditions sur les éléments limités chez les joueurs. */
+  respawn: z.boolean().optional(), reincarnate_delay_h: z.number().int().min(0).max(8760).optional(),
+  respawn_limits: z.array(RespawnLimit).max(20).optional()
 });
 def(monsterRoutes, 'get', '/admin/content/monsters', null, async c => {
   const q = c.req.query('q');

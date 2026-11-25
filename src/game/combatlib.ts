@@ -1,5 +1,5 @@
 import { die, refreshSurcharge, grantDivine } from './divine.js'; import { gearStats } from './stats.js';
-import { rollLoot } from './loot.js'; import { occupiableAt } from './buildingCell.js'; import { log } from '../lib/db.js';
+import { rollLoot } from './loot.js'; import { protoOf } from './respawn.js'; import { occupiableAt } from './buildingCell.js'; import { log } from '../lib/db.js';
 export type Target = { kind: 'character' | 'monster' | 'summon'; id: number; row: any; pos: any; armor: number; magicArmor: number; agility: number; name: string };
 export async function loadTarget(db: any, p: any): Promise<Target | null> {
   if (p.character_id) { const { rows: [c] } = await db.query('SELECT * FROM characters WHERE id=$1', [p.character_id]); const g = await gearStats(db, c), bc = await occupiableAt(db, p.map_id, p.coord_x, p.coord_y); return { kind: 'character', id: c.id, row: c, pos: p, armor: g.armor + (bc?.bonus_armor ?? 0), magicArmor: g.magicArmor, agility: g.agility, name: c.pseudo }; }
@@ -38,13 +38,16 @@ async function monsterDeath(db: any, t: Target, killerCharId: number) {
   const drops: string[] = [];
   const delayH = Number(t.row.data?.reincarnate_h ?? t.row.reincarnate_delay_h ?? 0);
   if ((t.row.hp_current ?? 0) <= 0) { if (delayH > 0) await scheduleRespawn(db, t.id, delayH); return; }
-  if (t.row.data?.spawned) {
+  const proto = await protoOf(db, t.row);
+  if (t.row.data?.spawned || (proto.respawn === false && proto.id !== t.id)) {   // sauvage, ou instance placée d'un type non recréé : disparaît
     await db.query('DELETE FROM character_monster WHERE monster_id=$1', [t.id]);
     await db.query('DELETE FROM positions WHERE monsters_id=$1', [t.id]);
     await db.query('DELETE FROM monster_loot WHERE monster_id=$1', [t.id]);
     await db.query('DELETE FROM divine_items WHERE guardian_monster_id=$1', [t.id]);
     await db.query('DELETE FROM monsters WHERE id=$1', [t.id]);
-  } else if (delayH > 0) {
+  } else if (proto.respawn === false) {   // type ancré non recréé : retiré de la carte, le type reste au catalogue
+    await db.query('DELETE FROM positions WHERE monsters_id=$1', [t.id]);
+  } else if (delayH > 0 || (proto.respawn_limits ?? []).length) {   // délai et/ou conditions : vérifiés par le tick
     await scheduleRespawn(db, t.id, delayH);
   } else {
     await db.query('UPDATE monsters SET hp_current=hp_max WHERE id=$1', [t.id]);
