@@ -52,6 +52,7 @@ et API des cartes (`/map/*`) et actions (`/actions/*`). Le front en garde un mir
 - Inventaire : verrou de 12 h au déséquipement, compatibilité slot/objet, arme à deux mains interdit la main secondaire, 5 emplacements spéciaux pour un humain (4 sinon), sac de 20.
 - Un bâtiment occupable ne bloque pas le trajet (`BLOCKING`) ; son occupant reçoit ses bonus de vue / portée (card `buildings-occupy`).
 - Récolte sur une case couverte par un gisement : sa ressource, son stock et son rendement priment (card `deposits`) ; `/map/{id}/cell` expose `deposit`.
+- `/map/{id}/area` et `/cell` : `flying` = monture volante du cavalier, ou monstre / invocation dont la locomotion comprend `air` (affichage au niveau du ciel côté front).
 
 ## Gotchas
 - Terrain dupliqué back ⇄ front (fichiers générés : modifier les scripts `tools/gen_*`, jamais les fichiers générés).
