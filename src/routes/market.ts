@@ -2,6 +2,12 @@ import { OpenAPIHono } from '@hono/zod-openapi'; import { def, router, z, P } fr
 import { cfgNum } from '../game/content.js'; import { bagRoom, bagState, chestState, resStacks, extraSlots } from '../game/bag.js'; import { resName } from '../game/deposits.js';
 export const market = router();
 const TBL: Record<string, [string, string]> = { item: ['character_items', 'item_id'], spell: ['character_spells', 'spell_id'], mount: ['character_mounts', 'mount_id'] };
+/** Coffre réglé par capitale (admin Bâtiments, data.chestStart / chestMax) : taille de départ (10) et capacité max (aucune). */
+export async function chestLimits(db: any, race: string) {
+  const { rows: [b] } = await db.query("SELECT data FROM buildings WHERE kind='capital' AND data->>'race'=$1 LIMIT 1", [race]);
+  const n = (v: any) => (Number.isFinite(Number(v)) && Number(v) > 0 ? Math.trunc(Number(v)) : null);
+  return { start: n(b?.data?.chestStart) ?? 10, max: n(b?.data?.chestMax) };
+}
 export async function atCapital(db: any, ch: any) {
   const mp = await posOf(db, ch.id); const { rows } = await db.query(`SELECT p.coord_x,p.coord_y,p.map_id FROM buildings b JOIN positions p ON p.building_id=b.id WHERE b.kind='capital' AND b.data->>'race'=$1`, [ch.race]);
   if (!rows.some((r: any) => r.map_id === mp.map_id && dist(mp, r) <= 2)) fail(409, 'Rendez-vous à la capitale de votre faction');
@@ -50,7 +56,7 @@ def(market, 'post', '/market/{id}/buy', z.object({ characterId: z.number() }), (
 }));
 def(market, 'get', '/chest/{characterId}', null, c => tx(async db => { const me = await ownChar(db, c, P(c, 'characterId')); await atCapital(db, me);
   const ch = await chestState(db, me.id);
-  return { size: me.chest_size, used: ch.used, nextCost: 50 * me.chest_size, items: (await db.query('SELECT i.id,i.name FROM character_items ci JOIN items i ON i.id=ci.item_id WHERE ci.character_id=$1 AND ci.in_chest', [me.id])).rows,
+  return { size: me.chest_size, max: (await chestLimits(db, me.race)).max, used: ch.used, nextCost: 50 * me.chest_size, items: (await db.query('SELECT i.id,i.name FROM character_items ci JOIN items i ON i.id=ci.item_id WHERE ci.character_id=$1 AND ci.in_chest', [me.id])).rows,
     resources: resStacks(ch.resources, ch.st) }; }));
 /** Ressources entre sac et coffre (tout, ou `qty`) : place vérifiée en piles des deux côtés. */
 def(market, 'post', '/chest/resource', z.object({ characterId: z.number(), resource: z.string().max(60), qty: z.number().int().min(1).optional(), to: z.enum(['chest', 'bag']) }), (c, b) => tx(async db => {
@@ -66,6 +72,7 @@ def(market, 'post', '/chest/resource', z.object({ characterId: z.number(), resou
 }));
 def(market, 'post', '/chest/expand', z.object({ characterId: z.number() }), (c, b) => tx(async db => {
   const me = await ownChar(db, c, b.characterId); await atCapital(db, me); const cost = 50 * me.chest_size;   // coût progressif
+  const { max } = await chestLimits(db, me.race); if (max && me.chest_size >= max) fail(409, `Coffre à sa capacité maximale (${max} emplacements)`);
   if (me.gold < cost) fail(409, `Or insuffisant (${cost})`); await db.query('UPDATE characters SET gold=gold-$2, chest_size=chest_size+1 WHERE id=$1', [me.id, cost]); return { size: me.chest_size + 1, cost };
 }));
 def(market, 'post', '/chest/move', z.object({ characterId: z.number(), itemId: z.number(), to: z.enum(['chest', 'bag']) }), (c, b) => tx(async db => {

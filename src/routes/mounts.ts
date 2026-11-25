@@ -26,7 +26,7 @@ export async function mountStats(db: any, cmId: number) {
 }
 def(mounts, 'get', '/mounts/{characterId}', null, c => tx(async db => {
   const me = await ownChar(db, c, P(c, 'characterId'));
-  const { rows } = await db.query(`SELECT m.*, cm.id cm_id, cm.energy_current, cm.hp_current, cm.active, COALESCE(t.mountable, true) can_ride, t.locomotion,
+  const { rows } = await db.query(`SELECT m.*, cm.id cm_id, cm.energy_current, cm.hp_current, cm.active, COALESCE(t.mountable, true) can_ride, t.locomotion, COALESCE(t.size, 1) size,
       (SELECT id FROM summons WHERE char_mount_id=cm.id) summon_id,
       COALESCE((SELECT json_agg(slot ORDER BY slot) FROM monster_slots WHERE monster_id=m.monster_id), '[]') slots,
       COALESCE((SELECT json_agg(json_build_object('slot', me.slot, 'item_id', me.item_id, 'name', i.name) ORDER BY me.slot) FROM mount_equips me JOIN items i ON i.id=me.item_id WHERE me.char_mount_id=cm.id), '[]') equips,

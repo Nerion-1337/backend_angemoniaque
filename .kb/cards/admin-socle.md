@@ -18,6 +18,7 @@ files:
   - src/middleware/auth.ts
   - src/lib/audit.ts
   - src/routes/tick.ts
+  - src/routes/admin/statCosts.ts
 symbols:
   - src/routes/admin.ts:adminRoutes
   - src/game/content.ts:cfgAll
@@ -30,6 +31,7 @@ tests:
   - test/divine.test.ts
   - test/tickprod.test.ts
   - test/integration/admin.test.ts
+  - test/integration/heightVision.test.ts
 ---
 ## Purpose
 Socle du back-office (Étape 2) : rôles de compte, CRUD générique du contenu (races, rangs, monstres — dont les montures, card `monster-mounts` —, objets, bâtiments),
@@ -48,6 +50,7 @@ Les phases suivantes (bestiaire, cases, joueurs, divins, races) s'y branchent (c
 - Le tick rétablit toute capacité modifiée temporairement (liste `CAPS` du moteur de sorts) et ramène la réserve au max ; il applique ensuite dégâts sur la durée et sorts passifs (card `spell-engine`).
 - Le tick rétablit aussi les rangs temporaires échus (card `rank-up`).
 - Le tick régénère aussi les gisements de ressources (card `deposits`).
+- Section « Améliorations » (`routes/admin/statCosts.ts`) : `GET /admin/content/stat-costs`, `PUT|DELETE /admin/content/stat-costs/{stat}` (stat_cost_rules : coût de base, améliorations par palier, ×palier 1/2/3) ; liste FERMÉE `UPGRADABLE` (la colonne est écrite telle quelle par l'amélioration) → 400 sinon ; sans ligne, la caractéristique ne s'améliore pas.
 
 ## Gotchas
 - Jamais de `LATERAL` référençant la table cible d'un UPDATE (l'ancien tick échouait silencieusement) : sous-requête corrélée dans le SET.

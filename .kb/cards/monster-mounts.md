@@ -13,6 +13,7 @@ symbols:
 tests:
   - test/integration/monsterMount.test.ts
   - test/rules.test.ts
+  - test/integration/heightVision.test.ts
 ---
 ## Purpose
 Les montures ne sont plus une section à part : un TYPE de monstre peut servir de monture. Il porte une rareté, un déplacement
@@ -25,6 +26,7 @@ combinable (terrestre / aérien / aquatique) et des bonus de monture ; la table 
 - Supprimer un type possédé comme monture par un joueur → 409 ; sinon sa ligne `mounts` part avec lui (cascade).
 - Déplacement en monture : aérienne = 1 partout ; aquatique = 1 sur l'eau (peu profonde et profonde) ; non terrestre = terre ferme interdite ; sinon coût du type de case, eau profonde interdite. Amphibie (terre + eau) = les deux.
 - Plus de CRUD `/admin/content/mounts` : il contournerait la projection ; les montures se gèrent dans Monstres.
+- Taille du monstre `size` (1 à 3, migration 34) : montée, élève son cavalier de `size` niveaux (+1 vision / portée par niveau) ; volante : +6. Ses bonus de vue / portée ne s'appliquent plus (seule une capacité passive de ses sorts compte). `GET /mounts` expose `size`.
 
 ## Gotchas
 - `locomotion` est un `TEXT[]` : la route le convertit en littéral Postgres (`pgArr`), car `safeInsert`/`safeUpdate` transforment les tableaux en JSON.

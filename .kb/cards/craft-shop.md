@@ -14,10 +14,12 @@ symbols:
   - src/game/bag.ts:bagState
   - src/game/bag.ts:bagRoom
   - src/game/bag.ts:resStacks
+  - src/routes/market.ts:chestLimits
 tests:
   - test/integration/craftShop.test.ts
   - test/integration/equipMap.test.ts
   - test/integration/bagResources.test.ts
+  - test/integration/heightVision.test.ts
 ---
 ## Purpose
 Boutique de l'hôtel de ville filtrée par race (objets et sorts) et fabrication par parchemin : un parchemin dans le sac + les
@@ -35,6 +37,7 @@ ressources de sa recette donnent un objet, un sort appris ou un bâtiment (copie
 - Amélioration de carte (`POST /shop/map-upgrade`, à la capitale) : prix `game_config.map_upgrade_price` (défaut 500, réglé en admin Ressources), 409 si déjà acquise ou or insuffisant ; `characters.map_upgrade` ; `GET /shop` renvoie `mapUpgrade.price`.
 - Sac et coffre (`game/bag.ts`, migration 33) : les ressources (`characters.resources` = sac, `chest_resources` = coffre) occupent des emplacements par piles de `stack_max` (défaut 20) ; place libre du sac = `bag_size` − (objets non équipés hors coffre + piles) ; tout ajout d'objet au sac passe par `bagRoom` (achat, retrait du coffre, fabrication, déséquipement de monture, invocation d'objet).
 - `POST /chest/resource` (à la capitale) : déplace une ressource (tout ou `qty`) sac ⇄ coffre, place vérifiée en piles côté destination (409 « Coffre plein » / « Sac plein ») ; `GET /chest` renvoie `used` et les piles `resources`.
+- Coffre réglé par capitale (`chestLimits`, buildings.data.chestStart / chestMax ; défaut 10 / sans limite) : taille de départ donnée à la création du personnage ; `/chest/expand` refusé (409) à la capacité maximale ; `GET /chest` renvoie `max`.
 
 ## Gotchas
 - Les anciens parchemins de construction (`data.kind` wall/tower/factory/totem/ship) gardent leur propre route `/buildings/place`.

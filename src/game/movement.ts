@@ -1,6 +1,7 @@
-import { walk } from './rules.js'; import { ignite } from './burn.js'; import { terrain } from './terrain.js'; import { tileCost, loadTiles } from './tileTypes.js'; import { BLOCKING, occupiableAt } from './buildingCell.js'; import { fail, posOf } from '../lib/db.js';
-const MOUNT_SQL = `SELECT cm.*, m.name, m.hp_max, m.armor, m.strength, m.agility, m.energy_max, m.bonus_see, m.bonus_range, m.flying, m.aquatic, m.terrestrial, m.recovery, m.special_attack_name, m.special_attack_damage, m.special_attack_energy
-  FROM character_mounts cm JOIN mounts m ON m.id=cm.mount_id WHERE cm.character_id=$1 AND cm.active`;
+import { heightParts } from './levels.js'; import { walk } from './rules.js'; import { ignite } from './burn.js'; import { terrain } from './terrain.js'; import { tileCost, loadTiles } from './tileTypes.js'; import { BLOCKING, occupiableAt } from './buildingCell.js'; import { fail, posOf } from '../lib/db.js';
+const MOUNT_SQL = `SELECT cm.*, m.name, m.hp_max, m.armor, m.strength, m.agility, m.energy_max, m.flying, m.aquatic, m.terrestrial, m.recovery, m.special_attack_name, m.special_attack_damage, m.special_attack_energy,
+    m.monster_id, COALESCE(t.size, 1) size
+  FROM character_mounts cm JOIN mounts m ON m.id=cm.mount_id LEFT JOIN monsters t ON t.id=m.monster_id WHERE cm.character_id=$1 AND cm.active`;
 export const activeMount = async (db: any, id: number) => (await db.query(MOUNT_SQL, [id])).rows[0];
 export const isWater = (kind: string) => kind === 'shallow' || kind === 'deep';
 /** Acteur courant : l'invocation contrôlée, sinon le héros (monté ou non). */
@@ -12,7 +13,13 @@ export async function actor(db: any, ch: any) {
   }
   const mount = await activeMount(db, ch.id), mp = await posOf(db, ch.id);
   const b = mp ? await occupiableAt(db, mp.map_id, mp.coord_x, mp.coord_y) : null;   // bâtiment occupé : bonus de vue / portée
-  return { sm: null, mount, mp, see: ch.see + (mount?.bonus_see ?? 0) + (b?.bonus_see ?? 0), range: ch.range + (mount?.bonus_range ?? 0) + (b?.bonus_range ?? 0) };
+  // Hauteur (+1 vision / +1 portée par niveau : terrain, taille de la monture, monture volante = +6) et capacités PASSIVES des sorts
+  // de la monture ; ses anciens bonus de vue / portée ne comptent plus (migration 34).
+  const height = mp ? heightParts(mp.map_id, mp.coord_x, mp.coord_y, mount) : [], passive = mount ? await mountPassives(db, mount.monster_id) : [];
+  const add = (k: 'see' | 'range') => height.reduce((n, p) => n + p.value, 0) + passive.filter(p => p.stat === k).reduce((n, p) => n + p.value, 0) + (b?.[`bonus_${k}`] ?? 0);
+  const parts = (k: 'see' | 'range') => [...height, ...passive.filter(p => p.stat === k).map(p => ({ label: `Capacité passive : ${p.label}`, value: p.value, kind: 'buff' })),
+    ...(b?.[`bonus_${k}`] ? [{ label: 'Bâtiment occupé', value: b[`bonus_${k}`], kind: 'building' }] : [])];
+  return { sm: null, mount, mp, see: ch.see + add('see'), range: ch.range + add('range'), extra: { see: parts('see'), range: parts('range') } };
 }
 /** Locomotion d'une invocation d'après son type de monstre (null = à pied) : volante → 1 énergie par case, comme une monture volante. */
 export async function summonLoco(db: any, sm: any) {
@@ -20,6 +27,12 @@ export async function summonLoco(db: any, sm: any) {
   const { rows: [t] } = await db.query('SELECT locomotion FROM monsters WHERE id=$1', [sm.monster_id]);
   const l: string[] = t?.locomotion?.length ? t.locomotion : ['land'];
   return { flying: l.includes('air'), aquatic: l.includes('water'), terrestrial: l.includes('land') };
+}
+/** Effets de caractéristique des sorts PASSIFS du type de la monture (spells.effects.stats, vision / portée). */
+export async function mountPassives(db: any, monsterId: number | null) {
+  if (!monsterId) return [];
+  const { rows } = await db.query("SELECT s.name, s.effects FROM monster_spells ms JOIN spells s ON s.id=ms.spell_id WHERE ms.monster_id=$1 AND ms.mode='passive'", [monsterId]);
+  return rows.flatMap((r: any) => (r.effects?.stats ?? []).filter((x: any) => x.stat === 'see' || x.stat === 'range').map((x: any) => ({ stat: x.stat as string, value: Number(x.value) || 0, label: r.name as string })));
 }
 /** La monture marche-t-elle sur la terre ferme ? (`terrestrial`, migration 25 ; absent = historique : un aquatique ne quitte pas l'eau) */
 const onLand = (m: any) => (m ? m.terrestrial ?? !m.aquatic : true);

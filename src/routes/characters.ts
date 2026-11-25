@@ -1,5 +1,5 @@
 import { OpenAPIHono } from '@hono/zod-openapi'; import { def, router, z, P } from '../lib/route.js'; import { pool, tx, ownChar, posOf, fail } from '../lib/db.js';
-import { statUpgradeCost } from '../game/rules.js'; import { applySpec } from '../game/divine.js'; import { spawn } from '../game/spawn.js'; import { Kit, startRank, grantKit } from '../game/startKit.js'; import { nextRank, rankUp, MODES } from '../game/rankUp.js'; import { activeMount, actor } from '../game/movement.js'; import { gearStats, maxSummons, statBreakdown } from '../game/stats.js'; import { canUseDivineEnergy } from '../game/rules.js';
+import { statUpgradeCost } from '../game/rules.js'; import { applySpec } from '../game/divine.js'; import { spawn } from '../game/spawn.js'; import { Kit, startRank, grantKit } from '../game/startKit.js'; import { nextRank, rankUp, MODES } from '../game/rankUp.js'; import { activeMount, actor } from '../game/movement.js'; import { gearStats, maxSummons, statBreakdown } from '../game/stats.js'; import { chestLimits } from './market.js'; import { canUseDivineEnergy } from '../game/rules.js';
 export const characters = router();
 /**
  * Règles de création (vérifiées côté serveur) : race existante, active et dotée d'un premier rang ;
@@ -42,6 +42,7 @@ def(characters, 'post', '/characters', z.object({ pseudo: z.string().min(3, '3 c
   const s = await startRank(db, b.race, kit);
   const { rows: [ch] } = await db.query(`INSERT INTO characters(account_id,pseudo,race,specialization_id,hp_current,hp_max,recovery,energy_current,energy_max,divine_energy_current,divine_energy_max,strength,agility,see,gold,xp)
     VALUES ($1,$2,$3,$4,$5,$5,$6,$7,$7,$8,$8,$9,$10,$11,$12,$13) RETURNING id`, [c.get('acc').sub, b.pseudo, b.race, s.id, s.hp_max, s.recovery, s.energy_max, s.divine_energy_max, s.strength, s.agility, s.see, kit.gold ?? 0, kit.xp ?? 0]);
+  await db.query('UPDATE characters SET chest_size=$2 WHERE id=$1', [ch.id, (await chestLimits(db, b.race)).start]);   // coffre de départ réglé sur la capitale
   await spawn(db, ch.id, b.race);
   await grantKit(db, ch.id, kit);
   return ch;

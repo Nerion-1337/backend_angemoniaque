@@ -18,7 +18,7 @@ export async function maxSummons(db: any, ch: any) {
  * (sorts, pactes : temp_buffs) + monture / bâtiment occupé (vision, portée). Les colonnes du personnage contiennent déjà les bonus
  * d'objets reportés (PV, énergie, vue, portée, régénération) et les effets temporaires : la base est ce qui reste.
  */
-export async function statBreakdown(db: any, ch: any, st: any, a: any, mount: any) {
+export async function statBreakdown(db: any, ch: any, st: any, a: any, _mount?: any) {
   const { rows: items } = await db.query(`SELECT i.name,i.armor,i.magic_armor,i.strength_bonus,i.agility_bonus,i.bonuses FROM character_items ci JOIN items i ON i.id=ci.item_id
     WHERE ci.character_id=$1 AND ci.equipped_slot IS NOT NULL ORDER BY i.name`, [ch.id]);
   const { rows: buffs } = await db.query(`SELECT b.stat, sum(b.delta)::int delta, COALESCE(sp.name, CASE WHEN b.source LIKE 'pact:%' THEN 'Pacte' END, b.source) src
@@ -31,10 +31,7 @@ export async function statBreakdown(db: any, ch: any, st: any, a: any, mount: an
     const parts: { label: string; value: number; kind: string }[] = [];
     for (const i of items) { const v = Number(ITEM[k] ? ITEM[k](i) : i.bonuses?.[k]) || 0; if (v) parts.push({ label: i.name, value: v, kind: 'item' }); }
     for (const b of buffs) if (b.stat === k && b.delta) parts.push({ label: b.src, value: b.delta, kind: 'buff' });
-    if (k === 'see' || k === 'range') {
-      const m = Number(mount?.[`bonus_${k}`]) || 0; if (m) parts.push({ label: `Monture : ${mount.name}`, value: m, kind: 'mount' });
-      const bld = (k === 'see' ? a.see - ch.see : a.range - ch.range) - m; if (bld) parts.push({ label: 'Bâtiment occupé', value: bld, kind: 'building' });
-    }
+    if ((k === 'see' || k === 'range') && a.extra) parts.push(...a.extra[k]);   // hauteur, taille de la monture, capacités passives, bâtiment (actor)
     out[k] = { final: final[k], base: final[k] - parts.reduce((s, p) => s + p.value, 0), parts };
   }
   return out;

@@ -14,6 +14,7 @@ files:
   - src/routes/actions.ts
   - src/routes/inventory.ts
   - src/game/resources3.ts
+  - src/game/levels.ts
 symbols:
   - src/game/terrain.ts:terrain
   - src/game/terrain.ts:noiseAt
@@ -31,12 +32,16 @@ symbols:
   - src/routes/map.ts:mapRoutes
   - src/routes/actions.ts:actions
   - src/game/harvest.ts:harvestMissing
+  - src/game/levels.ts:heightParts
+  - src/game/movement.ts:mountPassives
 tests:
   - test/rules.test.ts
   - test/world.test.ts
   - test/integration/map-gather.test.ts
   - test/flyingSummon.test.ts
   - test/integration/bagResources.test.ts
+  - test/levels.test.ts
+  - test/integration/heightVision.test.ts
 ---
 ## Purpose
 Modèle du monde : Monde des Hommes (carte 1, grille 200×200 dessinée), autres mondes générés ; chaque case a un type (9),
@@ -61,6 +66,7 @@ et API des cartes (`/map/*`) et actions (`/actions/*`). Le front en garde un mir
 - Royaume des Morts (carte 3, et tout monde généré) : AUCUNE ressource des autres mondes ; 3 ressources uniques (`resources3` : asphodèle spectrale / plaine, saule des Lamentations / forêt, âme cristallisée / massif) sur ≈ 0,5 % des cases de leur type (`RARE3`, hash fixe) ; les autres cases n'ont rien à récolter.
 - Récolte : refus 409 « Sac plein » AVANT tout trajet / toute dépense si la quantité récoltée demande un emplacement de plus que la place libre.
 - `/map/{id}/cell?characterId=` (personnage du joueur) : `harvestMissing` = null (récolte libre), [] (rien ne manque) ou une ligne par option de ce qui manque (objets équipés comptés).
+- Vision et portée du héros (`actor`) : +1 par niveau de HAUTEUR (`game/levels.ts`, miroir de `front/lib/levels.js`) — sol de la case (jamais négatif, sommet = +5) + taille de la monture terrestre / aquatique (1 à 3) ; monture volante = +6 quel que soit le sol ; + capacités PASSIVES des sorts du type de la monture (stats see / range) ; + bâtiment occupé. Les anciens `bonus_see` / `bonus_range` des montures ne comptent plus. `actor().extra` détaille ces apports (fiche, survol).
 
 ## Gotchas
 - Terrain dupliqué back ⇄ front (fichiers générés : modifier les scripts `tools/gen_*`, jamais les fichiers générés).

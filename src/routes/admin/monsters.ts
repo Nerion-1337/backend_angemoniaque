@@ -15,7 +15,9 @@ const Monster = z.object({
   /** Fusion monstres / montures (migration 25) : rareté, déplacement (combinaison), monture et ses bonus. */
   rarity: z.enum(RARITIES).optional(), locomotion: z.array(z.enum(['land', 'air', 'water'])).min(1).max(3).optional(),
   mountable: z.boolean().optional(), bonus_see: z.number().int().min(-50).max(50).optional(), bonus_range: z.number().int().min(-50).max(50).optional(),
-  speed: z.number().min(0).max(100).optional(), carry: z.number().int().min(0).max(1e6).optional()
+  speed: z.number().min(0).max(100).optional(), carry: z.number().int().min(0).max(1e6).optional(),
+  /** Taille 1 à 3 (migration 34) : montée, élève le cavalier de `size` niveaux (+1 vision / portée par niveau). */
+  size: z.number().int().min(1).max(3).optional()
 });
 /** `locomotion` est un TEXT[] : littéral Postgres (valeurs bornées par l'enum), pas du JSON (safeInsert/safeUpdate). */
 const pgArr = (b: any) => (b.locomotion ? { ...b, locomotion: `{${b.locomotion.join(',')}}` } : b);
