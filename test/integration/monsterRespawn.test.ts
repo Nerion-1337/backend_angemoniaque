@@ -29,8 +29,8 @@ describe.skipIf(!process.env.DATABASE_URL)('Monstres : parties du corps et réap
 
   test('partie du corps : cochée puis décochée (le paramètre texte n\'est plus converti en nombre)', async () => {
     const m = (await call('/admin/content/monsters', { name: `Slot${s}`, hp_max: 10, hp_current: 10 }, T.adm)).j.id;
-    expect((await call(`/admin/content/monsters/${m}/slots`, { slot: 'mains' }, T.adm)).status).toBe(200);
-    expect((await call(`/admin/content/monsters/${m}/slots/mains`, undefined, T.adm, 'DELETE')).status).toBe(200);
+    expect((await call(`/admin/content/monsters/${m}/slots`, { slot: 'weapon_main' }, T.adm)).status).toBe(200);
+    expect((await call(`/admin/content/monsters/${m}/slots/weapon_main`, undefined, T.adm, 'DELETE')).status).toBe(200);
     expect((await call(`/admin/content/monsters/${m}/slots`, undefined, T.adm)).j).toEqual([]);
   });
 

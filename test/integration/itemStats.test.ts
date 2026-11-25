@@ -46,7 +46,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Caractéristiques des objets et armu
     const { rows: [p] } = await pool.query('SELECT * FROM positions WHERE character_id=$1', [T.c]);
     const t = await lib.loadTarget(pool, p); expect([t.armor, t.magicArmor]).toEqual([2, 5]);
     const m = (await call('/admin/content/monsters', { name: `Golem${s}`, hp_max: 50, hp_current: 50, armor: 1, magic_armor: 2 }, T.adm)).j.id;
-    await pool.query('INSERT INTO monster_equips(monster_id,item_id,slot) VALUES ($1,$2,$3)', [m, T.item, 'tete']);
+    await pool.query('INSERT INTO monster_equips(monster_id,item_id,slot) VALUES ($1,$2,$3)', [m, T.item, 'head']);
     const mt = await lib.loadTarget(pool, { monsters_id: m }); expect([mt.armor, mt.magicArmor]).toEqual([4, 6]);
     await pool.query('DELETE FROM monster_equips WHERE monster_id=$1', [m]);
   });

@@ -4,6 +4,8 @@ slug: monster-details
 status: done
 updated: 2026-11-25
 files:
+  - src/routes/mounts.ts
+  - src/game/xp.ts
   - src/routes/admin/monsterDetails.ts
   - src/routes/admin/bestiary.ts
   - src/game/combatlib.ts
@@ -20,6 +22,8 @@ symbols:
   - src/game/spawn.ts:reincarnateDue
   - src/game/respawn.ts:respawnBlockers
 tests:
+  - test/xpRank.test.ts
+  - test/integration/xpRespawn.test.ts
   - test/monsterDetails.test.ts
   - test/integration/monsterDetails.test.ts
   - test/integration/monsterRespawn.test.ts
@@ -31,21 +35,23 @@ catalogue global des sorts (rareté, qui peut l'apprendre).
 
 ## Business rules
 - Capacité = (monstre, sort, mode) unique ; `active` = lancée à la demande (cible/rayon NULL) ; `passive` = en continu sans énergie, `target` alliés/ennemis (NULL = tous), `radius` 1–50 (défaut 3). Un même sort peut exister en actif ET en passif.
-- Équipement : un objet par monstre, sur l'un des 7 slots (mains, tête, torse, pieds, collier, bracelet, bague) ; l'objet ne se duplique pas, son slot se change.
 - Parties équipables (`monster_slots`) définies par TYPE, cochées ET décochées (`DELETE …/slots/{slot}` lit le paramètre en TEXTE) ; une instance suit la grille de son prototype. Grille vide → tout ajout refusé (400) ; slot hors grille → 400 ; une pièce déjà portée reste supprimable.
 - Placement : instance clonée du prototype (« Proto #n », `data.placed`), or et délai de réincarnation choisis, butin copié du prototype filtré (objets / ressources / divins) ; refusé hors bornes (400), sur eau/lave (400), case occupée (409). Le déplacement applique les mêmes contrôles.
 - Retirer une case supprime l'instance placée/sauvage (cascade butin, réapparition).
-- Réapparition réglée par TYPE (`respawn`, `reincarnate_delay_h`, `respawn_limits`, migration 24 ; une instance placée suit son prototype) :
-  - `respawn` faux : l'instance placée tuée est supprimée ; le type ancré tué est retiré de la carte (il reste au catalogue) ;
-  - délai = `data.reincarnate_h` de l'instance, sinon celui du prototype ; 0 sans condition = régénération immédiate ; sinon reste mort (PV 0) jusqu'à l'échéance `monster_respawns` ;
-  - `respawn_limits` `[{ kind: item|spell|resource, ref, max }]` : à l'échéance, si au moins `max` exemplaires sont chez les joueurs (objets : toutes les lignes `character_items` ; sorts : personnages qui l'ont appris ; ressources : somme des stocks), pas de réapparition ; l'échéance reste et est revérifiée à chaque tick ;
-  - les sauvages (règles d'apparition) disparaissent toujours à leur mort.
 - Réattaquer un corps mort rafraîchit l'échéance sans nouveau butin.
 - Un monstre en attente de réincarnation ne régénère pas au tick.
 - Statut : chaque instance indique `linked` (lié à un personnage via `character_monster`, sinon « natif »).
 - Sorts : rareté ∈ {commun, rare, epique, legendaire, divin} (CHECK) ; `usable_by` ⊂ {humain, ange, demon, monstre, structure, monture}, vide = tout le monde ; `learners` = nombre de personnages qui le possèdent.
 - Sorts : `shop` (défaut vrai) et `shopRaces` (races autorisées, [] = toutes) règlent la boutique de l'hôtel de ville (card `craft-shop`).
 - Sorts : `effects` (moteur de sorts) et liens `/admin/content/spells/{id}/links` (monstre, objet, monture, bâtiment) — card `spell-engine`.
+- Équipement : mêmes emplacements qu'un personnage (`MONSTER_SLOTS` : weapon_main/off, head, chest, foot, amulet, ring_l/r, bracelet_l/r ; migration 35) ; une pièce par emplacement (deux armes identiques possibles), objet du bon type (`GROUP` de l'inventaire), arme à deux mains en main principale seulement ; suppression par emplacement (`DELETE …/equips/{slot}`). Les créatures possédées (`mount_equips`) suivent les mêmes règles.
+- Réapparition réglée sur CHAQUE monstre posé (colonnes de sa ligne : `respawn`, `reincarnate_delay_h`, `respawn_limits`, `divine_family` ; migration 35), initialisée depuis le type au placement :
+-   - `respawn` faux : le monstre posé tué est supprimé ; un type ancré tué est retiré de la carte (il reste au catalogue) ;
+-   - délai 0 sans condition ni objet divin = régénération immédiate ; sinon reste mort (PV 0) jusqu'à l'échéance `monster_respawns`, revérifiée à chaque tick ;
+-   - `respawn_limits` `[{ kind: item|spell|resource, ref, max }]` : pas de réapparition tant qu'au moins `max` exemplaires sont chez les joueurs ;
+-   - objet divin porté (`divine_family`) : un seul exemplaire gardé à la fois (`attachDivine` : exemplaire libre, sinon nouvel exemplaire sous le plafond de la famille) ; tué, il passe au tueur ; ne réapparaît plus tant que la famille est complète chez les joueurs ;
+-   - les sauvages (règles d'apparition) disparaissent toujours à leur mort ; un exemplaire divin non transmis redevient libre.
+- XP (migration 35, `game/xp.ts`) : monstre tué → `xp_reward` au tueur (ponctuel ; remplace l'XP/h) ; coup porté par le héros → somme des `xp_use` de ses armes équipées ; sort lancé → `spells.xp_use` ; parchemin utilisé → `items.xp_use`. Face à une cible, pondéré par l'écart de rang (rang cible − rang personnage ; monstre : `monsters.rank`) selon `game_config.xp_rank_diff` (ligne la plus proche, égalité : la plus basse ; sans cible 100 %).
 
 ## Gotchas
 - La garde `hp_current <= 0` en tête de `monsterDeath` est obligatoire (sinon double butin et or dupliqué).

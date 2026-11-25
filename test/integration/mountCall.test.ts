@@ -16,7 +16,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Monter ou invoquer sa monture', () =
     T.tk = await login(`mc${s}@x.fr`); T.c = (await call('/characters', { pseudo: `mc${s}`, race: 'human' }, T.tk)).j.id;
     await call(`/admin/players/${T.c}/teleport`, { map: 3, x: 50 + (s % 90), y: 60 + (s % 70) }, T.adm);
     T.type = (await call('/admin/content/monsters', { name: `Wyverne${s}`, hp_max: 80, energy_max: 60, armor: 2, strength: 9, agility: 4, mountable: true, locomotion: ['land', 'air'] }, T.adm)).j.id;
-    await call(`/admin/content/monsters/${T.type}/slots`, { slot: 'tete' }, T.adm);
+    await call(`/admin/content/monsters/${T.type}/slots`, { slot: 'head' }, T.adm);
     T.sp = (await call('/admin/content/spells', { name: `Rugissement${s}`, energyCost: 5, shop: false, effects: { target: 'self', heal: 1 } }, T.adm)).j.id;
     await call(`/admin/content/monsters/${T.type}/spells`, { spellId: T.sp, mode: 'active' }, T.adm);
     const mountId = (await pool.query('SELECT id FROM mounts WHERE monster_id=$1', [T.type])).rows[0].id;
@@ -27,10 +27,10 @@ describe.skipIf(!process.env.DATABASE_URL)('Monter ou invoquer sa monture', () =
   });
 
   test('fiche : montable, partie équipable, capacité ; équiper (sac → monture), partie interdite 400', async () => {
-    expect(await mine()).toMatchObject({ can_ride: true, slots: ['tete'], capacities: [{ id: T.sp }], summon_id: null });
+    expect(await mine()).toMatchObject({ can_ride: true, slots: ['head'], capacities: [{ id: T.sp }], summon_id: null });
     await call(`/admin/players/${T.c}/grant`, { kind: 'item', refId: T.helm }, T.adm);
-    expect((await call('/mounts/equip', { characterId: T.c, cmId: T.cm, itemId: T.helm, slot: 'pieds' }, T.tk)).status).toBe(400);
-    expect((await call('/mounts/equip', { characterId: T.c, cmId: T.cm, itemId: T.helm, slot: 'tete' }, T.tk)).status).toBe(200);
+    expect((await call('/mounts/equip', { characterId: T.c, cmId: T.cm, itemId: T.helm, slot: 'foot' }, T.tk)).status).toBe(400);
+    expect((await call('/mounts/equip', { characterId: T.c, cmId: T.cm, itemId: T.helm, slot: 'head' }, T.tk)).status).toBe(200);
     expect((await pool.query('SELECT 1 FROM character_items WHERE character_id=$1 AND item_id=$2', [T.c, T.helm])).rowCount).toBe(0);
     expect((await mine()).stats.armor).toBe(5);
   });
@@ -53,7 +53,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Monter ou invoquer sa monture', () =
     const r = await call('/mounts/call', { characterId: T.c, cmId: T.cm }, T.tk); expect(r.status, JSON.stringify(r.j)).toBe(200);
     const sm = (await pool.query('SELECT * FROM summons WHERE id=$1', [r.j.summonId])).rows[0];
     expect(sm).toMatchObject({ char_mount_id: T.cm, monster_id: T.type, armor: 5 });
-    expect((await call('/mounts/equip', { characterId: T.c, cmId: T.cm, itemId: T.helm, slot: 'tete' }, T.tk)).status).toBe(409);
+    expect((await call('/mounts/equip', { characterId: T.c, cmId: T.cm, itemId: T.helm, slot: 'head' }, T.tk)).status).toBe(409);
     await pool.query('UPDATE positions SET coord_x=coord_x+6 WHERE summon_id=$1', [sm.id]);   // trop loin pour monter dessus
     const far = await call('/mounts/summon', { characterId: T.c, cmId: T.cm }, T.tk); expect(far.status).toBe(409); expect(far.j.error).toMatch(/approchez-vous/);
     await pool.query('UPDATE positions SET coord_x=coord_x-6 WHERE summon_id=$1', [sm.id]);
@@ -72,7 +72,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Monter ou invoquer sa monture', () =
     expect((await call('/mounts/summon', { characterId: T.c, cmId: T.cm }, T.tk)).status).toBe(409);
     const r = await call('/mounts/call', { characterId: T.c, cmId: T.cm }, T.tk); expect(r.status).toBe(200);
     await call(`/summons/${r.j.summonId}/dismiss`, { characterId: T.c }, T.tk);
-    expect((await call('/mounts/unequip', { characterId: T.c, cmId: T.cm, slot: 'tete' }, T.tk)).status).toBe(200);
+    expect((await call('/mounts/unequip', { characterId: T.c, cmId: T.cm, slot: 'head' }, T.tk)).status).toBe(200);
     expect((await pool.query('SELECT 1 FROM character_items WHERE character_id=$1 AND item_id=$2', [T.c, T.helm])).rowCount).toBe(1);
   });
 

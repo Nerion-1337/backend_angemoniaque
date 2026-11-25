@@ -1,5 +1,5 @@
 import { def, router, z, P } from '../../lib/route.js'; import { pool, fail } from '../../lib/db.js';
-import { audit } from '../../lib/audit.js'; import { Kit, checkKit } from '../../game/startKit.js'; import { Requirements, checkReq } from '../../game/rankUp.js'; import { bumpContent } from '../../game/content.js';
+import { audit } from '../../lib/audit.js'; import { Kit, checkKit } from '../../game/startKit.js'; import { Requirements, checkReq } from '../../game/rankUp.js'; import { bumpContent } from '../../game/content.js'; import { rankTable } from '../../game/xp.js';
 export const raceRoutes = router();
 const nInt = (max: number) => z.number().int().min(0).max(max).nullable().optional();
 const Race = z.object({ key: z.string().max(40), name: z.string().max(80), base_stats: z.record(z.number()).optional(), color: z.string().max(30).optional(), active: z.boolean().optional(),
@@ -117,4 +117,15 @@ def(raceRoutes, 'put', '/admin/content/ranks/{id}/requirements', Requirements, a
   const { rows: [row] } = await pool.query('UPDATE specializations SET requirements=$2 WHERE id=$1 RETURNING *', [id, JSON.stringify(stored)]);
   await bumpContent(); await audit(c, 'rank.requirements', 'rank', id, before.requirements, b);
   return row;
+});
+
+/** Gain d'XP selon l'écart de rang (migration 35) : { "écart (rang de la cible − rang du personnage)": pourcentage }. */
+const RankDiff = z.record(z.string().regex(/^[+-]?\d{1,2}$/, 'écart entier de -99 à 99'), z.number().int().min(0).max(1000))
+  .refine(t => Object.keys(t).length >= 1 && Object.keys(t).length <= 41, 'De 1 à 41 lignes');
+def(raceRoutes, 'get', '/admin/content/xp-rank', null, async () => ({ table: await rankTable() }));
+def(raceRoutes, 'put', '/admin/content/xp-rank', z.object({ table: RankDiff }), async (c, b) => {
+  const table = Object.fromEntries(Object.entries(b.table).map(([k, v]) => [String(Number(k)), v]));   // « +1 », « 01 » → « 1 »
+  await pool.query("INSERT INTO game_config(key,value) VALUES ('xp_rank_diff',$1) ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value, updated_at=now()", [JSON.stringify(table)]);
+  await bumpContent(); await audit(c, 'config.xp_rank_diff', 'config', undefined, null, { table });
+  return { table };
 });

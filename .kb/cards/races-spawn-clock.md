@@ -2,7 +2,7 @@
 title: Races (apparition, limites, équipement de départ, races libres, admin sans limite) et horloge du monde persistante
 slug: races-spawn-clock
 status: done
-updated: 2026-11-24
+updated: 2026-11-25
 files:
   - src/game/clock.ts
   - src/routes/characters.ts
@@ -19,6 +19,7 @@ symbols:
   - src/game/startKit.ts:grantKit
   - src/game/startKit.ts:checkKit
 tests:
+  - test/integration/xpRespawn.test.ts
   - test/clock.test.ts
   - test/integration/racesClock.test.ts
   - test/integration/startKit.test.ts
@@ -39,6 +40,7 @@ Horloge du monde persistante : le temps de jeu avance même serveur arrêté.
 - Équipement de départ (`races.start_kit`) : palier (sinon le premier), or, XP, ressources (id du catalogue), objets au sac ou au coffre, sorts, montures (une seule active) ; chaque référence est vérifiée à l'enregistrement (400/404).
 - Kit vide = premier palier, 0 or, rien d'autre ; la migration 18 a repris le kit historique (150 or, 6 objets au sac, Destrier) pour les races existantes.
 - Passage de rang par conditions (`/characters/{id}/rank-up`, conditions par rang) : card `rank-up` ; le tick rétablit les rangs temporaires échus.
+- Races & rangs : table « gain d'XP selon l'écart de rang » (`GET/PUT /admin/content/xp-rank`, `{ table: { "écart": % } }`, écarts entiers -99..99, % 0..1000, « +1 » normalisé en « 1 »).
 
 ## Gotchas
 - Ne jamais réintroduire un `setInterval` d'une heure : tout passe par `catchUp`.

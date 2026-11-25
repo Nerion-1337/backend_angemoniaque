@@ -1,4 +1,4 @@
-import { terrain } from './terrain.js'; import { fail } from '../lib/db.js'; import { protoOf, respawnBlockers } from './respawn.js';
+import { terrain } from './terrain.js'; import { fail } from '../lib/db.js'; import { respawnBlockers, attachDivine } from './respawn.js';
 export async function freeCell(db: any, mapId: number, cx: number, cy: number, r: number) {
   const { rows: [m] } = await db.query('SELECT width w,height h FROM maps WHERE id=$1', [mapId]);
   // Le rayon s’élargit si l’aire est saturée (capitale encombrée en base de dev) : on préfère
@@ -52,11 +52,11 @@ export async function hourlySpawns(db: any) {
     let n = instances.length + 1, name = `${proto.name} #${n}`;
     while ((await db.query('SELECT 1 FROM monsters WHERE name=$1', [name])).rowCount) name = `${proto.name} #${++n}`;
     const { rows: [ins] } = await db.query(
-      `INSERT INTO monsters(name,hp_max,hp_current,recovery,see,strength,agility,energy_max,energy_current,range,armor,magic_armor,gold_current,guards_item,data)
-       VALUES ($1,$2,$2,$3,$4,$5,$6,$7,$7,$8,$9,$10,$11,$12,$13) RETURNING id`,
+      `INSERT INTO monsters(name,hp_max,hp_current,recovery,see,strength,agility,energy_max,energy_current,range,armor,magic_armor,gold_current,guards_item,data,xp_reward,rank)
+       VALUES ($1,$2,$2,$3,$4,$5,$6,$7,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING id`,
       [name, proto.hp_max, proto.recovery, proto.see, proto.strength, proto.agility, proto.energy_max,
        proto.range, proto.armor, proto.magic_armor ?? 0, proto.gold_current ?? 0, proto.guards_item,
-       JSON.stringify({ spawned: true, prototype: proto.id, behavior: proto.data?.behavior ?? 'passif' })]);
+       JSON.stringify({ spawned: true, prototype: proto.id, behavior: proto.data?.behavior ?? 'passif' }), proto.xp_reward ?? 0, proto.rank ?? 1]);
     await db.query('INSERT INTO positions(map_id,coord_x,coord_y,monsters_id) VALUES ($1,$2,$3,$4)', [r.map_id, cell.x, cell.y, ins.id]);
     await db.query('UPDATE spawn_rules SET last_spawned_at=now() WHERE id=$1', [r.id]);
   }
@@ -67,7 +67,8 @@ export async function reincarnateDue(db: any) {
   const { rows: due } = await db.query('SELECT r.monster_id, m.* FROM monster_respawns r JOIN monsters m ON m.id=r.monster_id WHERE r.due_at <= now()');
   let n = 0;
   for (const r of due) {
-    if ((await respawnBlockers(db, await protoOf(db, r))).length) continue;
+    if ((await respawnBlockers(db, r)).length) continue;   // réglages de CE monstre (migration 35)
+    if (r.divine_family && !(await attachDivine(db, { id: r.monster_id, divine_family: r.divine_family }))) continue;   // aucun exemplaire disponible : attend
     await db.query('UPDATE monsters SET hp_current=hp_max WHERE id=$1', [r.monster_id]);
     await db.query('DELETE FROM monster_respawns WHERE monster_id=$1', [r.monster_id]); n++;
   }

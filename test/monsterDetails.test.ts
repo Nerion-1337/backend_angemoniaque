@@ -31,9 +31,9 @@ describe('mort d’un monstre (phase 3 : réincarnation différée)', () => {
     expect(has(db, 'UPDATE characters SET gold')).toBe(true);           // or crédité au vainqueur
   });
 
-  test('ancré avec délai : mort + échéance programmée (le butin reste tiré à la mort ; le corps repart vide)', async () => {
+  test('posé avec délai (réglage de CE monstre, migration 35) : mort + échéance programmée (le butin reste tiré à la mort ; le corps repart vide)', async () => {
     const db = mockDb();
-    const r = await applyDamage(db, monster({ data: { placed: true, prototype: 1, reincarnate_h: 2 }, gold_current: 15 }), 100, 9);
+    const r = await applyDamage(db, monster({ data: { placed: true, prototype: 1 }, reincarnate_delay_h: 2, gold_current: 15 }), 100, 9);
     expect(r.killed).toBe(true);
     expect(has(db, 'INSERT INTO monster_respawns')).toBe(true);
     const q = db.calls.find((c: any) => c.sql.startsWith('INSERT INTO monster_respawns'));
@@ -44,7 +44,7 @@ describe('mort d’un monstre (phase 3 : réincarnation différée)', () => {
 
   test('déjà mort (en attente de réincarnation) : le butin ne se retoue JAMAIS, l’échéance est rafraîchie', async () => {
     const db = mockDb();
-    await applyDamage(db, monster({ hp_current: 0, data: { placed: true, reincarnate_h: 2 } }), 50, 9);
+    await applyDamage(db, monster({ hp_current: 0, data: { placed: true }, reincarnate_delay_h: 2 }), 50, 9);
     expect(has(db, 'INSERT INTO monster_respawns')).toBe(true);          // ON CONFLICT → due_at rafraîchi
     expect(has(db, 'SELECT * FROM monster_loot')).toBe(false);
     expect(has(db, 'INSERT INTO history_action')).toBe(false);

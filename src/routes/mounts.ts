@@ -1,4 +1,5 @@
 import { def, router, z, P } from '../lib/route.js'; import { tx, ownChar, fail, log, posOf } from '../lib/db.js'; import { broadcast } from '../realtime/ws.js';
+import { GROUP, MONSTER_SLOTS } from './inventory.js';
 import { activeMount } from '../game/movement.js'; import { terrain } from '../game/terrain.js'; import { freeCell } from '../game/spawn.js'; import { maxSummons } from '../game/stats.js';
 import { bagRoom } from '../game/bag.js';
 /**
@@ -74,13 +75,16 @@ def(mounts, 'post', '/mounts/call', z.object({ characterId: z.number(), cmId: z.
   await log(db, me.id, `Invoque ${m.name} à pied`); broadcast(mp.map_id, { type: 'spawn', summonId: s.id, x: cell.x, y: cell.y });
   return { ok: true, summonId: s.id };
 }));
-const Slot = z.enum(['mains', 'tete', 'torse', 'pieds', 'collier', 'bracelet', 'bague']);
+const Slot = z.enum(MONSTER_SLOTS);   // mêmes emplacements que les personnages (migration 35)
 /** Équiper : objet du SAC, partie autorisée par le type (monster_slots), une pièce par partie. Pas pendant une invocation à pied. */
 def(mounts, 'post', '/mounts/equip', z.object({ characterId: z.number(), cmId: z.number(), itemId: z.number(), slot: Slot }), (c, b) => tx(async db => {
   const me = await ownChar(db, c, b.characterId), m = await ownMount(db, me.id, b.cmId);
   if ((await db.query('SELECT 1 FROM summons WHERE char_mount_id=$1', [m.id])).rowCount) fail(409, 'Renvoyez d\'abord la créature invoquée');
   if (!(await db.query('SELECT 1 FROM monster_slots WHERE monster_id=$1 AND slot=$2', [m.monster_id ?? -1, b.slot])).rowCount) fail(400, `${m.name} ne peut rien porter sur cette partie du corps`);
   if ((await db.query('SELECT 1 FROM mount_equips WHERE char_mount_id=$1 AND slot=$2', [m.id, b.slot])).rowCount) fail(409, 'Partie déjà équipée');
+  const { rows: [it] } = await db.query('SELECT slot, two_handed FROM items WHERE id=$1', [b.itemId]);
+  if (!it || !GROUP[it.slot]?.includes(b.slot)) fail(400, 'Cet objet ne se porte pas sur cet emplacement');
+  if (it.two_handed && b.slot !== 'weapon_main') fail(400, 'Arme à deux mains : main principale seulement');
   const { rows: [line] } = await db.query('SELECT ctid::text, qty FROM character_items WHERE character_id=$1 AND item_id=$2 AND NOT in_chest AND equipped_slot IS NULL LIMIT 1', [me.id, b.itemId]);
   if (!line) fail(404, 'Objet absent du sac');
   if ((line.qty ?? 1) > 1) await db.query('UPDATE character_items SET qty=qty-1 WHERE ctid=$1::tid', [line.ctid]); else await db.query('DELETE FROM character_items WHERE ctid=$1::tid', [line.ctid]);

@@ -7,7 +7,7 @@ import { loadTarget, targetAt, applyDamage } from '../game/combatlib.js';
 import { computeHitChance } from '../game/rules.js'; import { inSafeZone } from '../game/terrain.js';
 import { applyArmor } from '../game/rules.js';
 import { broadcast } from '../realtime/ws.js';
-import { combatEvent } from '../lib/events.js'; import { triggerItemSpells } from '../game/spellSummon.js';
+import { combatEvent } from '../lib/events.js'; import { triggerItemSpells } from '../game/spellSummon.js'; import { gainXp, weaponXp } from '../game/xp.js';
 
 export const combat = router();
 const ATTACK_COST = 5;
@@ -36,11 +36,13 @@ def(combat, 'post', '/combat/attack', z.object({ characterId: z.number(), target
   if (!ok) { await log(db, me.id, `Attaque ratée sur ${t.name}`); broadcast(a.mp.map_id, combatEvent(t.id, false, true)); return { dmg: 0, missed: true, hitChance: hit, killed: false }; }
   const raw = breath ? a.mount.special_attack_damage : at.damage, dmg = applyArmor(raw, t.armor);                  // armure physique : réduction directe
   const r = await applyDamage(db, t, dmg, me.id);
+  // XP des armes portées (items.xp_use) à chaque coup porté par le héros (pas l'invocation contrôlée ni le souffle de monture), selon l'écart de rang.
+  const xp = !a.sm && !breath ? await gainXp(db, me.id, await weaponXp(db, me.id), t) : 0;
   // Sorts des objets portés (lot D) : arme → au coup porté (le héros, pas une invocation contrôlée) ; armure / bouclier → à l'attaque reçue.
   const procs: string[] = [];
   if (!a.sm && !r.killed) procs.push(...await triggerItemSpells(db, me, { ...t, row: { ...t.row, hp_current: r.hp } }, 'on_hit'));
   if (t.kind === 'character' && !r.killed) { const { rows: [mp] } = await db.query('SELECT * FROM positions WHERE character_id=$1', [me.id]); const self = a.sm ? null : await loadTarget(db, mp); if (self) procs.push(...await triggerItemSpells(db, t.row, self, 'on_struck')); }
   if (procs.length) await log(db, me.id, procs.join(' ; ').slice(0, 300));
   await log(db, me.id, `${breath ? a.mount.special_attack_name : 'Attaque'} sur ${t.name} : -${dmg} PV`); if (t.kind === 'character') await log(db, t.id, `Attaqué par ${at.name} : -${dmg} PV`); await trimLog(db, me.id);
-  broadcast(a.mp.map_id, combatEvent(t.id, r.killed)); return { dmg, killed: r.killed, hitChance: hit, missed: false };
+  broadcast(a.mp.map_id, combatEvent(t.id, r.killed)); return { dmg, killed: r.killed, hitChance: hit, missed: false, xp };
 }));

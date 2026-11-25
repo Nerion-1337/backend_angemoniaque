@@ -29,11 +29,11 @@ d'apparition et un état du bestiaire (instances sur les cartes, gardiens des di
 ## Business rules
 - Butin tiré À LA MORT, jamais différé : `gold_current` du monstre + chaque entrée à `drop_rate × game_config.drop_rate` %.
 - Ressource spéciale `or` = crédit sur `characters.gold` (pas dans `resources`). Objet : quantité ajoutée à la ligne existante, sinon insertion. Ressource : `+qté` dans `characters.resources` (clé = id du catalogue).
-- Divin du butin : transfert du détenteur seulement (`grantDivine`, jamais d'insertion) ; plafond atteint ou pièce déjà détenue = journalisé, non bloquant.
-- Une instance sauvage tire le butin de son PROTOTYPE (`data.prototype`) ; à sa mort elle disparaît (ligne, position, ses propres butins).
 - Apparition horaire : règle active, fenêtre `interval_h` écoulée, tirage `< probability` %, puis plafonds `max_instances` (prototype + copies) et `entity_caps` (global / per_zone) ; case libre du rectangle, jamais eau ni lave.
 - Un monstre placé, invoqué ou gardien de divins ne peut pas être supprimé (409).
 - Monstre ancré ou placé tué : selon les réglages de réapparition de son type (recréé ou non, délai, conditions sur les éléments limités — card `monster-details`).
+- Divin du butin et objet divin porté : transfert du détenteur seulement (`grantDivine`, jamais de duplication) ; plafond atteint = journalisé, non bloquant ; l'exemplaire non transmis redevient libre (jamais supprimé).
+- Butin tiré : un sauvage tire celui de son PROTOTYPE ; un monstre posé tire SON butin (copié au placement puis réglé en admin).
 
 ## Gotchas
 - `m.data->>'prototype'` est du texte : comparer à `$1::text` (sinon « operator does not exist: text = integer »).

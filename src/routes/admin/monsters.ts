@@ -1,6 +1,6 @@
 import { def, router, z, P } from '../../lib/route.js'; import { pool, fail } from '../../lib/db.js';
 import { audit } from '../../lib/audit.js'; import { bumpContent } from '../../game/content.js';
-import { safeInsert, safeUpdate, requireRow, extras, RARITIES } from './common.js'; import { RespawnLimit } from '../../game/respawn.js';
+import { safeInsert, safeUpdate, requireRow, extras, RARITIES } from './common.js'; import { RespawnLimit, attachDivine } from '../../game/respawn.js';
 export const monsterRoutes = router();
 const Monster = z.object({
   name: z.string().max(80), hp_max: z.number().int().optional(), hp_current: z.number().int().optional(),
@@ -17,8 +17,16 @@ const Monster = z.object({
   mountable: z.boolean().optional(), bonus_see: z.number().int().min(-50).max(50).optional(), bonus_range: z.number().int().min(-50).max(50).optional(),
   speed: z.number().min(0).max(100).optional(), carry: z.number().int().min(0).max(1e6).optional(),
   /** Taille 1 à 3 (migration 34) : montée, élève le cavalier de `size` niveaux (+1 vision / portée par niveau). */
-  size: z.number().int().min(1).max(3).optional()
+  size: z.number().int().min(1).max(3).optional(),
+  /** Migration 35 : XP donnée au tueur (ponctuelle), rang (écart de rang → bonus / malus d'XP), objet divin porté (famille). */
+  xp_reward: z.number().int().min(0).max(1e9).optional(), rank: z.number().int().min(1).max(50).optional(),
+  divine_family: z.string().max(30).nullable().optional()
 });
+/** Famille divine portée : doit exister ; le monstre vivant reçoit aussitôt son exemplaire (ou libère l'ancien). */
+async function syncDivine(_id: number, b: any) {
+  if (b.divine_family === undefined) return;
+  if (b.divine_family && !(await pool.query('SELECT 1 FROM divine_families WHERE key=$1', [b.divine_family])).rowCount) fail(404, 'Famille divine inconnue');
+}
 /** `locomotion` est un TEXT[] : littéral Postgres (valeurs bornées par l'enum), pas du JSON (safeInsert/safeUpdate). */
 const pgArr = (b: any) => (b.locomotion ? { ...b, locomotion: `{${b.locomotion.join(',')}}` } : b);
 def(monsterRoutes, 'get', '/admin/content/monsters', null, async c => {
@@ -28,6 +36,7 @@ def(monsterRoutes, 'get', '/admin/content/monsters', null, async c => {
   return rows;
 });
 def(monsterRoutes, 'post', '/admin/content/monsters', Monster, async (c, b) => {
+  await syncDivine(0, b);
   const row = await safeInsert('monsters', pgArr(b));
   await bumpContent(); await audit(c, 'monster.create', 'monster', row.id, null, b);
   return row;
@@ -38,7 +47,9 @@ def(monsterRoutes, 'get', '/admin/content/monsters/{id}', null, async c => {
   return { ...(await requireRow('monsters', id)), ...(await extras('monster', id)), mount_id: mount?.id ?? null };
 });
 def(monsterRoutes, 'put', '/admin/content/monsters/{id}', Monster.partial(), async (c, b) => {
+  await syncDivine(P(c, 'id'), b);
   const row = await safeUpdate('monsters', P(c, 'id'), pgArr(b));
+  if (b.divine_family !== undefined && row.hp_current > 0 && (await pool.query('SELECT 1 FROM positions WHERE monsters_id=$1', [row.id])).rowCount) await attachDivine(pool, row);
   await bumpContent(); await audit(c, 'monster.update', 'monster', P(c, 'id'), null, b);
   return row;
 });

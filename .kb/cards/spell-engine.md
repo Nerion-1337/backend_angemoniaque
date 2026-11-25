@@ -34,6 +34,7 @@ modifications de caractéristiques ; et liens d'un sort avec des objets, monture
 - Cible « soi-même » : le lanceur, ou la créature qu'il contrôle quand il agit par elle ; capacités de monstre d'une monture montée ou d'une créature contrôlée : card `mount-call`.
 - Liens admin : monstre (table `monster_spells`), objet, monture, bâtiment (`entity_spells`) ; doublon → 409 ; élément ou sort inconnu → 404 ; modes « au coup porté » / « à l'attaque reçue » et invocation (`effects.summon`) : card `spell-summon`.
 - Sorts liés aux bâtiments : actifs pour le propriétaire sur la case ou à côté, passifs chaque heure depuis la case (card `buildings-occupy`).
+- Lancer réussi : XP `spells.xp_use` une fois par lancer, pondérée par l'écart de rang avec la première cible autre que soi (sans cible : 100 %) ; la réponse renvoie `xp`.
 
 ## Gotchas
 - Les monstres et invocations ne reçoivent que dégâts, soin, dégâts sur la durée et PV.

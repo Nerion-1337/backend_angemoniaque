@@ -1,7 +1,7 @@
 import { def, router, z, P } from '../../lib/route.js'; import { pool, fail } from '../../lib/db.js';
 import { Effects } from '../../game/spellEffects.js';
 import { audit } from '../../lib/audit.js'; import { bumpContent } from '../../game/content.js';
-import { RARITIES, USABLE_KINDS } from './common.js';
+import { RARITIES, USABLE_KINDS } from './common.js'; import { GROUP, MONSTER_SLOTS } from '../inventory.js';
 /**
  * Étape 2 — Phase 3b : catalogue global de sorts (base de sorts du jeu), capacités des
  * monstres (actives : sorts qu'ils peuvent LANCER ; passives : sorts appliqués EN CONTINU
@@ -20,7 +20,9 @@ const Spell = z.object({
   /** Boutique de l'hôtel de ville : en vente ou non, et pour quelles races ([] = toutes). */
   shop: z.boolean().optional(), shopRaces: z.array(z.string().max(40)).max(20).optional(),
   /** Moteur de sorts (lot 2) : cible, portée, zone, camp, dégâts, soin, durée, caractéristiques. {} = sort historique. */
-  effects: z.union([Effects, z.object({}).strict()]).optional()
+  effects: z.union([Effects, z.object({}).strict()]).optional(),
+  /** XP gagnée par le lanceur à chaque lancer réussi (migration 35), pondérée par l'écart de rang avec la cible. */
+  xpUse: z.number().int().min(0).max(1e6).optional()
 });
 /** Invocation : l'élément doit exister (monture = type de monstre montable). */
 const SUMMON_SQL: Record<string, string> = { monster: 'SELECT 1 FROM monsters WHERE id=$1', mount: 'SELECT 1 FROM monsters WHERE id=$1 AND mountable', item: 'SELECT 1 FROM items WHERE id=$1', building: 'SELECT 1 FROM buildings WHERE id=$1' };
@@ -43,10 +45,10 @@ def(spellRoutes, 'get', '/admin/content/spells', null, async c => {
 def(spellRoutes, 'post', '/admin/content/spells', Spell, async (c, b) => {
   await checkSummon(b.effects);
   const { rows: [row] } = await pool.query(
-    `INSERT INTO spells(name,kind,energy_cost,damage,description,price,duration_h,rarity,usable_by,shop,shop_races,effects)
-     VALUES ($1,$2,COALESCE($3,10),$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
+    `INSERT INTO spells(name,kind,energy_cost,damage,description,price,duration_h,rarity,usable_by,shop,shop_races,effects,xp_use)
+     VALUES ($1,$2,COALESCE($3,10),$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
     [b.name, b.kind ?? null, b.energyCost ?? null, b.damage ?? null, b.description ?? null, b.price ?? null,
-     b.durationH ?? null, b.rarity ?? 'commun', JSON.stringify(b.usableBy ?? []), b.shop ?? true, JSON.stringify(b.shopRaces ?? []), JSON.stringify(b.effects ?? {})]);
+     b.durationH ?? null, b.rarity ?? 'commun', JSON.stringify(b.usableBy ?? []), b.shop ?? true, JSON.stringify(b.shopRaces ?? []), JSON.stringify(b.effects ?? {}), b.xpUse ?? 0]);
   await audit(c, 'spell.create', 'spell', row.id, null, b);
   return row;
 });
@@ -59,10 +61,10 @@ def(spellRoutes, 'put', '/admin/content/spells/{id}', Spell.partial(), async (c,
       duration_h=COALESCE($8,duration_h), rarity=COALESCE($9,rarity),
       usable_by=CASE WHEN $10::jsonb IS NULL THEN usable_by ELSE $10::jsonb END,
       shop=COALESCE($11,shop), shop_races=CASE WHEN $12::jsonb IS NULL THEN shop_races ELSE $12::jsonb END,
-      effects=CASE WHEN $13::jsonb IS NULL THEN effects ELSE $13::jsonb END
+      effects=CASE WHEN $13::jsonb IS NULL THEN effects ELSE $13::jsonb END, xp_use=COALESCE($14,xp_use)
      WHERE id=$1 RETURNING *`,
     [P(c, 'id'), b.name, b.kind ?? null, b.energyCost ?? null, b.damage ?? null, b.description ?? null, b.price ?? null, b.durationH ?? null, b.rarity ?? null, u.usable_by ?? null,
-     b.shop ?? null, b.shopRaces !== undefined ? JSON.stringify(b.shopRaces) : null, b.effects !== undefined ? JSON.stringify(b.effects) : null]);
+     b.shop ?? null, b.shopRaces !== undefined ? JSON.stringify(b.shopRaces) : null, b.effects !== undefined ? JSON.stringify(b.effects) : null, b.xpUse ?? null]);
   if (!row) fail(404, 'Sort inconnu');
   await audit(c, 'spell.update', 'spell', P(c, 'id'), null, b);
   return row;
@@ -79,7 +81,7 @@ export const monsterDetailRoutes = router();
 async function requireMonster(id: number) {
   if ((await pool.query('SELECT 1 FROM monsters WHERE id=$1', [id])).rowCount === 0) fail(404, 'Monstre inconnu');
 }
-const SLOTS = z.enum(['mains', 'tete', 'torse', 'pieds', 'collier', 'bracelet', 'bague']);
+const SLOTS = z.enum(MONSTER_SLOTS);
 
 // ── Capacités : actives (sorts lancés) et passives (en continu, sans énergie) ─────────
 def(monsterDetailRoutes, 'get', '/admin/content/monsters/{id}/spells', null, async c => {
@@ -118,13 +120,16 @@ def(monsterDetailRoutes, 'get', '/admin/content/monsters/{id}/equips', null, asy
   await requireMonster(id);
   const { rows } = await pool.query(
     `SELECT me.*, i.name item_name, i.slot item_slot FROM monster_equips me
-     JOIN items i ON i.id=me.item_id WHERE me.monster_id=$1 ORDER BY me.id`, [id]);
+     JOIN items i ON i.id=me.item_id WHERE me.monster_id=$1 ORDER BY array_position(ARRAY['weapon_main','weapon_off','head','chest','foot','amulet','ring_l','ring_r','bracelet_l','bracelet_r'], me.slot)`, [id]);
   return rows;
 });
 def(monsterDetailRoutes, 'post', '/admin/content/monsters/{id}/equips', z.object({ itemId: z.number().int(), slot: SLOTS }), async (c, b) => {
   const id = P(c, 'id');
   await requireMonster(id);
-  if ((await pool.query('SELECT 1 FROM items WHERE id=$1', [b.itemId])).rowCount === 0) fail(404, 'Objet inconnu');
+  const { rows: [it] } = await pool.query('SELECT slot, two_handed FROM items WHERE id=$1', [b.itemId]);
+  if (!it) fail(404, 'Objet inconnu');
+  if (!GROUP[it.slot]?.includes(b.slot)) fail(400, `Cet objet (${it.slot ?? 'sans type'}) ne se porte pas sur cet emplacement`);   // mêmes règles que l'inventaire
+  if (it.two_handed && b.slot !== 'weapon_main') fail(400, 'Arme à deux mains : main principale seulement');
   // La restriction aux parties équipables est définie par type (monster_slots) et bornée
   // côté serveur : une instance est soumise à la grille de son prototype (le type lui-même
   // à la sienne). Aucune partie sélectionnée pour le type → aucun équipement possible.
@@ -132,17 +137,21 @@ def(monsterDetailRoutes, 'post', '/admin/content/monsters/{id}/equips', z.object
   const { rows: grid } = await pool.query('SELECT slot FROM monster_slots WHERE monster_id=$1', [m.grid_ref]);
   if (grid.length === 0) fail(400, 'Aucune partie du corps sélectionnée pour ce type (onglet Spécificités) : aucun équipement possible');
   if (!grid.some(g => g.slot === b.slot)) fail(400, `La partie « ${b.slot} » n'est pas équipables pour ce type (cochées : ${grid.map(g => g.slot).join(', ')})`);
-  // Même objet → on met à jour le slot (une pièce par objet par monstre).
+  const hands = (await pool.query("SELECT me.slot, i.two_handed FROM monster_equips me JOIN items i ON i.id=me.item_id WHERE me.monster_id=$1 AND me.slot IN ('weapon_main','weapon_off')", [id])).rows;
+  if (b.slot === 'weapon_off' && hands.some((h: any) => h.slot === 'weapon_main' && h.two_handed)) fail(409, 'Arme à deux mains équipée : l\'autre main est occupée');
+  if (it.two_handed && hands.some((h: any) => h.slot === 'weapon_off')) fail(409, 'Arme à deux mains : libérez d\'abord l\'autre main');
+  // Une pièce par emplacement : poser sur un emplacement occupé remplace la pièce.
   const { rows: [row] } = await pool.query(
     `INSERT INTO monster_equips(monster_id,item_id,slot) VALUES ($1,$2,$3)
-     ON CONFLICT (monster_id,item_id) DO UPDATE SET slot=EXCLUDED.slot RETURNING *`, [id, b.itemId, b.slot]);
+     ON CONFLICT (monster_id,slot) DO UPDATE SET item_id=EXCLUDED.item_id RETURNING *`, [id, b.itemId, b.slot]);
   await audit(c, 'monster.equip', 'monster', id, null, b);
   return row;
 });
-def(monsterDetailRoutes, 'delete', '/admin/content/monsters/{id}/equips/{itemId}', null, async c => {
-  const r = await pool.query('DELETE FROM monster_equips WHERE monster_id=$1 AND item_id=$2 RETURNING id', [P(c, 'id'), P(c, 'itemId')]);
+def(monsterDetailRoutes, 'delete', '/admin/content/monsters/{id}/equips/{slot}', null, async c => {
+  const slot = c.req.param('slot');   // emplacement (texte) : deux pièces identiques peuvent être portées
+  const r = await pool.query('DELETE FROM monster_equips WHERE monster_id=$1 AND slot=$2 RETURNING id', [P(c, 'id'), slot]);
   if (!r.rowCount) fail(404, 'Équipement inconnu');
-  await audit(c, 'monster.equip.delete', 'monster', P(c, 'id'), null, { itemId: P(c, 'itemId') });
+  await audit(c, 'monster.equip.delete', 'monster', P(c, 'id'), null, { slot });
   return { ok: true };
 });
 

@@ -1,5 +1,5 @@
 import { def, router, z, P } from '../lib/route.js'; import { tx, ownChar, fail, log, dist } from '../lib/db.js'; import { castSummon } from '../game/spellSummon.js';
-import { actor, spend } from '../game/movement.js'; import { maxSummons } from '../game/stats.js'; import { terrain, inSafeZone } from '../game/terrain.js'; import { targetAt, applyDamage } from '../game/combatlib.js'; import { applyArmor } from '../game/rules.js'; import { broadcast } from '../realtime/ws.js'; import { combatEvent } from '../lib/events.js'; import { Effects, hasEffects, pickTargets, checkSafe, applyEffects } from '../game/spellEffects.js'; import { loadTarget } from '../game/combatlib.js'; import { checkOccupantAttack, occupiableAt, attackAllowed } from '../game/buildingCell.js'; import { isHarmful } from '../game/spellEffects.js';
+import { actor, spend } from '../game/movement.js'; import { maxSummons } from '../game/stats.js'; import { terrain, inSafeZone } from '../game/terrain.js'; import { targetAt, applyDamage } from '../game/combatlib.js'; import { applyArmor } from '../game/rules.js'; import { broadcast } from '../realtime/ws.js'; import { combatEvent } from '../lib/events.js'; import { Effects, hasEffects, pickTargets, checkSafe, applyEffects } from '../game/spellEffects.js'; import { loadTarget } from '../game/combatlib.js'; import { checkOccupantAttack, occupiableAt, attackAllowed } from '../game/buildingCell.js'; import { isHarmful } from '../game/spellEffects.js'; import { gainXp } from '../game/xp.js';
 /** Sorts lançables : appris, liés (mode actif) à un objet ÉQUIPÉ, à la monture ACTIVE ou à un bâtiment à soi (entity_spells), et
  *  capacités actives du type de monstre de la monture montée ou de la créature contrôlée (monster_spells, payées par elle). */
 const CASTABLE = `SELECT s.*, src.source FROM spells s JOIN (
@@ -28,9 +28,9 @@ def(spells, 'post', '/spells/cast', z.object({ characterId: z.number(), spellId:
     const e = Effects.parse(sp.effects), from = { x: a.mp.coord_x, y: a.mp.coord_y };
     if (e.summon && !e.damage && !e.heal && !e.dot && !e.stats.length) {   // invocation seule : aucune cible à choisir
       await spend(db, me, a, sp.energy_cost, payer);
-      const what = await castSummon(db, me, a.mp, e.summon);
+      const what = await castSummon(db, me, a.mp, e.summon), xp = await gainXp(db, me.id, sp.xp_use ?? 0);
       await log(db, me.id, `${sp.name} : ${what}`); broadcast(a.mp.map_id, { type: 'spell' });
-      return { ok: true, results: [{ target: me.pseudo, effect: what }] };
+      return { ok: true, results: [{ target: me.pseudo, effect: what }], xp };
     }
     const center = e.target === 'self' ? from : { x: b.x ?? from.x, y: b.y ?? from.y };
     if (e.target !== 'self' && Math.max(Math.abs(center.x - from.x), Math.abs(center.y - from.y)) > e.range) fail(409, `Cible hors de portée (${e.range} case(s) max)`);
@@ -50,9 +50,11 @@ def(spells, 'post', '/spells/cast', z.object({ characterId: z.number(), spellId:
     const results = [];
     for (const t of targets) results.push({ target: t.name, effect: await applyEffects(db, me, sp.id, e, t) });
     if (e.summon) results.push({ target: me.pseudo, effect: await castSummon(db, me, a.mp, e.summon) });
+    // XP du sort (spells.xp_use) : une fois par lancer, pondérée par l'écart de rang avec la première cible autre que soi.
+    const xp = await gainXp(db, me.id, sp.xp_use ?? 0, targets.find(t => !(t.kind === 'character' && t.id === me.id)));
     await log(db, me.id, `${sp.name} : ${results.map(x => `${x.target} ${x.effect}`).join(' ; ')}`.slice(0, 300));
     for (const t of targets) broadcast(a.mp.map_id, combatEvent(t.id, false));
-    return { ok: true, results };
+    return { ok: true, results, xp };
   }
   const tx_ = b.x ?? a.mp.coord_x, ty = b.y ?? a.mp.coord_y, d = Math.max(Math.abs(tx_ - a.mp.coord_x), Math.abs(ty - a.mp.coord_y));
   if (sp.kind === 'summon') {
@@ -68,9 +70,10 @@ def(spells, 'post', '/spells/cast', z.object({ characterId: z.number(), spellId:
   else if (sp.kind === 'attack') {
     if (d > 4) fail(409, 'Cible hors de portée (4 cases max)'); const t = await targetAt(db, a.mp.map_id, tx_, ty); if (!t) fail(409, 'Aucune cible sur cette case'); if (t.kind === 'character' && t.id === me.id) fail(400, 'Cible invalide'); await checkOccupantAttack(db, t, 'spell');
     if (t.kind !== 'monster' && (inSafeZone(a.mp.map_id, a.mp.coord_x, a.mp.coord_y) || inSafeZone(a.mp.map_id, tx_, ty))) fail(403, 'Zone sacrée : aucun combat entre joueurs');
-    await spend(db, me, a, sp.energy_cost, payer); const dmg = applyArmor(sp.damage, t.magicArmor), r = await applyDamage(db, t, dmg, me.id); await log(db, me.id, `${sp.name} sur ${t.name} : -${dmg} PV`); broadcast(a.mp.map_id, combatEvent(t.id, r.killed)); return { ok: true, dmg, killed: r.killed };
+    await spend(db, me, a, sp.energy_cost, payer); const dmg = applyArmor(sp.damage, t.magicArmor), r = await applyDamage(db, t, dmg, me.id); const xp = await gainXp(db, me.id, sp.xp_use ?? 0, t); await log(db, me.id, `${sp.name} sur ${t.name} : -${dmg} PV`); broadcast(a.mp.map_id, combatEvent(t.id, r.killed)); return { ok: true, dmg, killed: r.killed, xp };
   }
-  await log(db, me.id, `Sort lancé : ${sp.name}`); broadcast(a.mp.map_id, { type: 'spell' }); return { ok: true };
+  const xp = await gainXp(db, me.id, sp.xp_use ?? 0);
+  await log(db, me.id, `Sort lancé : ${sp.name}`); broadcast(a.mp.map_id, { type: 'spell' }); return { ok: true, xp };
 }));
 def(spells, 'get', '/summons/{characterId}', null, c => tx(async db => { const me = await ownChar(db, c, P(c, 'characterId'));
   return (await db.query('SELECT s.*, p.coord_x x, p.coord_y y, (s.id=$2) controlled FROM summons s LEFT JOIN positions p ON p.summon_id=s.id WHERE s.owner_id=$1 ORDER BY s.id', [me.id, me.controlled_summon_id ?? -1])).rows; }));

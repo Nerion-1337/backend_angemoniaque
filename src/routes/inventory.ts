@@ -1,6 +1,9 @@
 import { OpenAPIHono } from '@hono/zod-openapi'; import { def, router, z, P } from '../lib/route.js'; import { tx, ownChar, fail, log } from '../lib/db.js'; import { bagState, resStacks } from '../game/bag.js';
+import { gainXp } from '../game/xp.js';
 export const inventory = router();
 /** Emplacements acceptés par type d'objet. Plus d'emplacement « arc » : un arc est une arme à deux mains (`two_handed`, migration 32). */
+/** Emplacements portés par un monstre ou une créature possédée (migration 35) : ceux d'un personnage, sans objets spéciaux. */
+export const MONSTER_SLOTS = ['weapon_main', 'weapon_off', 'head', 'chest', 'foot', 'amulet', 'ring_l', 'ring_r', 'bracelet_l', 'bracelet_r'] as const;
 export const GROUP: Record<string, string[]> = { weapon: ['weapon_main', 'weapon_off'], shield: ['weapon_off'], head: ['head'], chest: ['chest'], foot: ['foot'], amulet: ['amulet'],
   ring: ['ring_l', 'ring_r'], bracelet: ['bracelet_l', 'bracelet_r'], special: ['special_1', 'special_2', 'special_3', 'special_4', 'special_5'] };
 def(inventory, 'get', '/inventory/{characterId}', null, c => tx(async db => {
@@ -26,7 +29,7 @@ def(inventory, 'post', '/inventory/equip', z.object({ characterId: z.number(), i
 /** Utiliser un objet du sac. Parchemin d'agrandissement du sac (data = { kind: 'bag', add, max }) : +add emplacements jusqu'à max ; consommé. */
 def(inventory, 'post', '/inventory/use', z.object({ characterId: z.number(), itemId: z.number() }), (c, b) => tx(async db => {
   const me = await ownChar(db, c, b.characterId);
-  const { rows: [line] } = await db.query('SELECT ci.ctid::text, ci.qty, i.name, i.data FROM character_items ci JOIN items i ON i.id=ci.item_id WHERE ci.character_id=$1 AND ci.item_id=$2 AND NOT ci.in_chest AND ci.equipped_slot IS NULL LIMIT 1', [me.id, b.itemId]);
+  const { rows: [line] } = await db.query('SELECT ci.ctid::text, ci.qty, i.name, i.data, i.xp_use FROM character_items ci JOIN items i ON i.id=ci.item_id WHERE ci.character_id=$1 AND ci.item_id=$2 AND NOT ci.in_chest AND ci.equipped_slot IS NULL LIMIT 1', [me.id, b.itemId]);
   if (!line) fail(404, 'Objet absent du sac');
   const d = line.data ?? {};
   if (d.kind !== 'bag') fail(400, 'Cet objet ne s\'utilise pas ainsi');
@@ -35,6 +38,7 @@ def(inventory, 'post', '/inventory/use', z.object({ characterId: z.number(), ite
   const size = Math.min(max, me.bag_size + add);
   await db.query('UPDATE characters SET bag_size=$2 WHERE id=$1', [me.id, size]);
   if ((line.qty ?? 1) > 1) await db.query('UPDATE character_items SET qty=qty-1 WHERE ctid=$1::tid', [line.ctid]); else await db.query('DELETE FROM character_items WHERE ctid=$1::tid', [line.ctid]);
-  await log(db, me.id, `Utilise ${line.name} : sac à ${size} emplacements`);
-  return { ok: true, bagSize: size };
+  const xp = await gainXp(db, me.id, line.xp_use ?? 0);   // XP d'utilisation de l'objet (migration 35)
+  await log(db, me.id, `Utilise ${line.name} : sac à ${size} emplacements${xp ? ` (+${xp} XP)` : ''}`);
+  return { ok: true, bagSize: size, xp };
 }));

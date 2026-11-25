@@ -27,6 +27,7 @@ cas ses capacités sont utilisables et elle peut être équipée sur les parties
 - L'équipement compte pour la créature invoquée (PV, énergie, régénération, vue, force, agilité, armures) ; pendant la monte, la monture n'est pas une cible et son équipement ne protège pas le cavalier.
 - `GET /mounts/{characterId}` : par monture `cm_id`, `can_ride`, `summon_id`, `slots`, `equips`, `capacities`, `stats`.
 - Monter sur une monture invoquée à pied : seulement depuis une case VOISINE de la créature (même monde, Chebyshev ≤ 1), sinon 409 « approchez-vous » ; la créature est renvoyée (trigger : PV / énergie rendus) puis montée.
+- Équipement des créatures possédées : emplacements d'un personnage (`MONSTER_SLOTS`, migration 35), objet du bon type (`GROUP`), arme à deux mains en main principale seulement.
 
 ## Gotchas
 - Supprimer une monture possédée (expiration d'invocation, admin) supprime son équipement (cascade) : les objets sont perdus.

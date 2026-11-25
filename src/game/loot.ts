@@ -18,7 +18,7 @@ export async function rollLoot(db: any, monster: any, killerId: number, out: str
     await db.query('UPDATE characters SET gold=gold+$2 WHERE id=$1', [killerId, Number(monster.gold_current)]);
     out.push(`or ${monster.gold_current}`);
   }
-  const sourceId = monster.data?.prototype ?? monster.id;
+  const sourceId = monster.data?.spawned ? monster.data?.prototype ?? monster.id : monster.id;   // monstre posé : SON butin (copié et réglé en admin)
   const { rows } = await db.query('SELECT * FROM monster_loot WHERE monster_id=$1 ORDER BY id', [sourceId]);
   const rate = await cfgNum('drop_rate', 1);
   for (const l of rows) {

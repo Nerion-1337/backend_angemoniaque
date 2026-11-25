@@ -15,6 +15,8 @@ const Item = z.object({
   req_strength: z.number().int().optional(), weapon_damage: z.number().int().optional(), magic_armor: z.number().int().optional(),
   /** Arme à deux mains (un arc l'est toujours) : occupe les deux mains (migration 32). */
   two_handed: z.boolean().optional(),
+  /** XP gagnée à chaque utilisation (migration 35) : coup porté avec cette arme, parchemin utilisé. */
+  xp_use: z.number().int().min(0).max(1e6).optional(),
   data: z.record(z.any()).optional(),
   /** Caractéristiques reportées sur la fiche à l'équipement (migration 26) ; valeur négative = malus. */
   bonuses: z.record(z.enum(['hp_max', 'recovery', 'energy_max', 'divine_energy_max', 'see', 'range']), z.number().int().min(-1000).max(1000)).optional(),

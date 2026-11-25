@@ -1,6 +1,6 @@
 import { def, router, z, P } from '../../lib/route.js'; import { pool, fail } from '../../lib/db.js';
 import { audit } from '../../lib/audit.js'; import { bumpContent } from '../../game/content.js';
-import { terrain } from '../../game/terrain.js';
+import { terrain } from '../../game/terrain.js'; import { attachDivine } from '../../game/respawn.js';
 export const bestiaryRoutes = router();
 /**
  * Statut bestiaire pour le dashboard (Étape 2 phase 2) :
@@ -12,7 +12,8 @@ def(bestiaryRoutes, 'get', '/admin/bestiary/status', null, async c => {
     `SELECT m.id, m.name, m.hp_current, m.hp_max, p.id pos_id, p.map_id, p.coord_x x, p.coord_y y,
        (m.data->>'spawned')::boolean spawned, (m.data->>'placed')::boolean placed,
        (m.data->>'prototype')::int prototype, m.guards_item, m.gold_current gold,
-       COALESCE((m.data->>'reincarnate_h')::int, m.reincarnate_delay_h) reincarnate_h,
+       m.reincarnate_delay_h reincarnate_h, m.respawn, m.respawn_limits, m.divine_family, m.xp_reward, m.rank,
+       (SELECT count(*)::int FROM divine_items di WHERE di.guardian_monster_id=m.id AND di.holder_character_id IS NULL) divine_carried,
        mr.due_at respawn_due_at,
        EXISTS (SELECT 1 FROM character_monster cm WHERE cm.monster_id=m.id) linked,
        (SELECT ch.pseudo FROM character_monster cm JOIN characters ch ON ch.id=cm.character_id
@@ -50,12 +51,16 @@ def(bestiaryRoutes, 'post', '/admin/bestiary/place', Place, async (c, b) => {
   let n = 1, name = `${proto.name} #${n}`;
   while ((await pool.query('SELECT 1 FROM monsters WHERE name=$1', [name])).rowCount) name = `${proto.name} #${++n}`;
   const recH = b.reincarnateH ?? proto.reincarnate_delay_h ?? 0;
+  // Réapparition et objet divin porté : propres à CE monstre posé (migration 35), initialisés depuis le type puis réglés sur la carte.
   const { rows: [ins] } = await pool.query(
-    `INSERT INTO monsters(name,hp_max,hp_current,recovery,see,strength,agility,energy_max,energy_current,range,armor,magic_armor,gold_current,guards_item,reincarnate_delay_h,data)
-     VALUES ($1,$2,$2,$3,$4,$5,$6,$7,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id`,
+    `INSERT INTO monsters(name,hp_max,hp_current,recovery,see,strength,agility,energy_max,energy_current,range,armor,magic_armor,gold_current,guards_item,reincarnate_delay_h,data,
+       respawn,respawn_limits,divine_family,xp_reward,rank,size,rarity)
+     VALUES ($1,$2,$2,$3,$4,$5,$6,$7,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21) RETURNING id`,
     [name, proto.hp_max, proto.recovery, proto.see, proto.strength, proto.agility, proto.energy_max,
      proto.range, proto.armor, proto.magic_armor ?? 0, b.gold ?? proto.gold_current ?? 0, proto.guards_item, recH,
-     JSON.stringify({ placed: true, prototype: proto.id, reincarnate_h: recH, behavior: proto.data?.behavior ?? 'passif' })]);
+     JSON.stringify({ placed: true, prototype: proto.id, behavior: proto.data?.behavior ?? 'passif' }),
+     proto.respawn ?? true, JSON.stringify(proto.respawn_limits ?? []), proto.divine_family ?? null, proto.xp_reward ?? 0, proto.rank ?? 1, proto.size ?? 1, proto.rarity ?? 'commun']);
+  if (proto.divine_family) await attachDivine(pool, { id: ins.id, divine_family: proto.divine_family });
   // Drops de mort : entrées du butin du prototype, filtrées par les choix (objets/ressources/divins).
   const { rows: loots } = await pool.query('SELECT * FROM monster_loot WHERE monster_id=$1', [proto.id]);
   let copies = 0;

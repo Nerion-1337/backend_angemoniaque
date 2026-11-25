@@ -2,7 +2,7 @@
 title: Realtime combat events: broadcast combat outcomes to map spectators
 slug: combat-realtime
 status: done
-updated: 2026-11-24
+updated: 2026-11-25
 files:
   - src/lib/events.ts
   - src/routes/combat.ts
@@ -28,6 +28,7 @@ publie un événement `combat` public sur le canal Redis de la carte, et les cli
 - Rien n'est persisté : Redis pub/sub seulement.
 - Un sort du moteur publie un événement `combat` par cible touchée (card `spell-engine`).
 - Un personnage sur un bâtiment occupable peut être protégé contre le corps à corps, la distance ou les sorts (403, card `buildings-occupy`).
+- Coup porté par le héros (ni invocation contrôlée ni souffle de monture) : XP = somme des `xp_use` de ses armes équipées, pondérée par l'écart de rang avec la cible (`game/xp.ts`, card `monster-details`) ; la réponse renvoie `xp`.
 
 ## Gotchas
 - Supprimer la diffusion du raté réintroduit 8 s de retard chez les spectateurs (rafraîchissement par sondage).

@@ -47,15 +47,20 @@ describe.skipIf(!process.env.DATABASE_URL)('Admin phase 3 (détails de monstre)'
     // Doublon dans le même mode → 409 ; même sort dans l'autre mode → autorisé.
     expect((await call(`/admin/content/monsters/${mId}/spells`, { spellId, mode: 'active' }, tk)).status).toBe(409);
     // Parties équipables (grille style personnage) + équipement restreint côté UI
-    expect((await call(`/admin/content/monsters/${mId}/slots`, { slot: 'tete' }, tk)).status).toBe(200);
-    expect((await call(`/admin/content/monsters/${mId}/slots`, { slot: 'mains' }, tk)).status).toBe(200);
+    for (const slot of ['head', 'weapon_main', 'weapon_off']) expect((await call(`/admin/content/monsters/${mId}/slots`, { slot }, tk)).status).toBe(200);
     let slots: any[] = await call(`/admin/content/monsters/${mId}/slots`, undefined, tk).then(x => x.j);
-    expect(slots.map((x: any) => x.slot)).toEqual(['mains', 'tete']);
-    const items: any[] = await call('/admin/content/items', undefined, tk).then(r => r.j);
-    let r = await call(`/admin/content/monsters/${mId}/equips`, { itemId: items[0].id, slot: 'mains' }, tk);
-    expect(r.status).toBe(200);
-    r = await call(`/admin/content/monsters/${mId}/equips`, { itemId: items[0].id, slot: 'tete' }, tk);
-    expect(r.j.slot).toBe('tete');                                          // même objet → le slot est mis à jour
+    expect(slots.map((x: any) => x.slot).sort()).toEqual(['head', 'weapon_main', 'weapon_off']);
+    expect((await call(`/admin/content/monsters/${mId}/slots`, { slot: 'mains' }, tk)).status).toBe(400);   // anciens noms refusés (migration 35)
+    const sword = (await call('/admin/content/items', { name: `Épée md${s}`, slot: 'weapon' }, tk)).j.id;
+    const helm = (await call('/admin/content/items', { name: `Casque md${s}`, slot: 'head' }, tk)).j.id;
+    // Deux armes (même objet dans les deux mains), comme un personnage ; un casque ne va pas en main.
+    expect((await call(`/admin/content/monsters/${mId}/equips`, { itemId: sword, slot: 'weapon_main' }, tk)).status).toBe(200);
+    expect((await call(`/admin/content/monsters/${mId}/equips`, { itemId: sword, slot: 'weapon_off' }, tk)).status).toBe(200);
+    expect((await call(`/admin/content/monsters/${mId}/equips`, { itemId: helm, slot: 'weapon_main' }, tk)).status).toBe(400);
+    let r = await call(`/admin/content/monsters/${mId}/equips`, { itemId: helm, slot: 'head' }, tk);
+    expect(r.j.slot).toBe('head');
+    expect((await call(`/admin/content/monsters/${mId}/equips`, undefined, tk)).j.map((e: any) => e.slot)).toEqual(['weapon_main', 'weapon_off', 'head']);
+    expect((await call(`/admin/content/monsters/${mId}/equips/weapon_off`, undefined, tk, 'DELETE')).status).toBe(200);
     // Nettoyage : suppression du monstre (les sous-collections suivent en cascade)
     expect((await call(`/admin/content/monsters/${mId}`, undefined, tk, 'DELETE')).status).toBe(200);
   });
@@ -95,12 +100,12 @@ describe.skipIf(!process.env.DATABASE_URL)('Admin phase 3 (détails de monstre)'
     expect(`${inst.x},${inst.y}`).toBe(`${moved.x},${moved.y}`);
     expect((await call('/admin/content/monsters/' + placed.id + '/loot', undefined, tk)).j.length).toBe(1);
     // Équiper l'instance : le slot est borné PAR LA GRILLE DU TYPE (bornage serveur, phase 3d).
-    const items: any[] = await call('/admin/content/items', undefined, tk).then(r => r.j);
-    expect((await call(`/admin/content/monsters/${placed.id}/equips`, { itemId: items[0].id, slot: 'collier' }, tk)).status).toBe(400);   // grille vide → impossible
-    expect((await call(`/admin/content/monsters/${mId}/slots`, { slot: 'mains' }, tk)).status).toBe(200);
-    expect((await call(`/admin/content/monsters/${placed.id}/equips`, { itemId: items[0].id, slot: 'mains' }, tk)).status).toBe(200);   // dans la grille → OK
-    expect((await call(`/admin/content/monsters/${placed.id}/equips`, { itemId: items[0].id, slot: 'collier' }, tk)).status).toBe(400);   // hors grille → refusé
-    expect((await call(`/admin/content/monsters/${placed.id}/equips/${items[0].id}`, undefined, tk, 'DELETE')).status).toBe(200);
+    const ring = (await call('/admin/content/items', { name: `Anneau md${s}`, slot: 'ring' }, tk)).j.id;
+    expect((await call(`/admin/content/monsters/${placed.id}/equips`, { itemId: ring, slot: 'ring_l' }, tk)).status).toBe(400);   // grille vide → impossible
+    expect((await call(`/admin/content/monsters/${mId}/slots`, { slot: 'ring_l' }, tk)).status).toBe(200);
+    expect((await call(`/admin/content/monsters/${placed.id}/equips`, { itemId: ring, slot: 'ring_l' }, tk)).status).toBe(200);   // dans la grille → OK
+    expect((await call(`/admin/content/monsters/${placed.id}/equips`, { itemId: ring, slot: 'ring_r' }, tk)).status).toBe(400);   // hors grille → refusé
+    expect((await call(`/admin/content/monsters/${placed.id}/equips/ring_l`, undefined, tk, 'DELETE')).status).toBe(200);
     // Retrait : case libérée, instance supprimée (butin + équipement en cascade).
     expect((await call(`/admin/bestiary/place/${inst.pos_id}`, undefined, tk, 'DELETE')).status).toBe(200);
     const st2: any = await call('/admin/bestiary/status', undefined, tk).then(x => x.j);
