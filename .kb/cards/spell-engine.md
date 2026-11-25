@@ -31,7 +31,7 @@ modifications de caractéristiques ; et liens d'un sort avec des objets, monture
 - Capacités (`*_max`, force, agilité, armure, armure magique, vue, portée, récupération) : modifiées pour `durationH` heures (0 = permanent), puis rétablies au tick ; une capacité qui baisse ramène la réserve au nouveau max. Seuls les personnages ont des capacités modifiables.
 - Sorts lançables = appris ∪ liés en ACTIF à un objet ÉQUIPÉ ∪ liés en ACTIF à la monture ACTIVE ; la liste indique la provenance.
 - Sort lié en PASSIF à un objet équipé ou à la monture active : ses effets instantanés sur soi (soin, réserves ±) s'appliquent une fois par heure ; capacités et dégâts ignorés.
-- Liens admin : monstre (table `monster_spells`), objet, monture, bâtiment (`entity_spells`) ; doublon → 409 ; élément ou sort inconnu → 404.
+- Liens admin : monstre (table `monster_spells`), objet, monture, bâtiment (`entity_spells`) ; doublon → 409 ; élément ou sort inconnu → 404 ; modes « au coup porté » / « à l'attaque reçue » et invocation (`effects.summon`) : card `spell-summon`.
 - Sorts liés aux bâtiments : actifs pour le propriétaire sur la case ou à côté, passifs chaque heure depuis la case (card `buildings-occupy`).
 
 ## Gotchas

@@ -32,7 +32,8 @@ def(monsterRoutes, 'post', '/admin/content/monsters', Monster, async (c, b) => {
 });
 def(monsterRoutes, 'get', '/admin/content/monsters/{id}', null, async c => {
   const id = P(c, 'id');
-  return { ...(await requireRow('monsters', id)), ...(await extras('monster', id)) };
+  const mount = (await pool.query('SELECT id FROM mounts WHERE monster_id=$1', [id])).rows[0];   // monture projetée (sorts de monture)
+  return { ...(await requireRow('monsters', id)), ...(await extras('monster', id)), mount_id: mount?.id ?? null };
 });
 def(monsterRoutes, 'put', '/admin/content/monsters/{id}', Monster.partial(), async (c, b) => {
   const row = await safeUpdate('monsters', P(c, 'id'), pgArr(b));

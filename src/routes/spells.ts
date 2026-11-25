@@ -1,4 +1,4 @@
-import { def, router, z, P } from '../lib/route.js'; import { tx, ownChar, fail, log, dist } from '../lib/db.js';
+import { def, router, z, P } from '../lib/route.js'; import { tx, ownChar, fail, log, dist } from '../lib/db.js'; import { castSummon } from '../game/spellSummon.js';
 import { actor, spend } from '../game/movement.js'; import { maxSummons } from '../game/stats.js'; import { terrain, inSafeZone } from '../game/terrain.js'; import { targetAt, applyDamage } from '../game/combatlib.js'; import { applyArmor } from '../game/rules.js'; import { broadcast } from '../realtime/ws.js'; import { combatEvent } from '../lib/events.js'; import { Effects, hasEffects, pickTargets, checkSafe, applyEffects } from '../game/spellEffects.js'; import { loadTarget } from '../game/combatlib.js'; import { checkOccupantAttack, occupiableAt, attackAllowed } from '../game/buildingCell.js'; import { isHarmful } from '../game/spellEffects.js';
 /** Sorts lançables : appris, ou liés (mode actif) à un objet ÉQUIPÉ ou à la monture ACTIVE (table entity_spells). */
 const CASTABLE = `SELECT s.*, src.source FROM spells s JOIN (
@@ -19,6 +19,12 @@ def(spells, 'post', '/spells/cast', z.object({ characterId: z.number(), spellId:
   const { rows: [sp] } = await db.query(`${CASTABLE} WHERE s.id=$2 LIMIT 1`, [me.id, b.spellId]); if (!sp) fail(404, 'Sort inconnu');
   if (hasEffects(sp.effects)) {   // moteur paramétrable (spells.effects) : cible, portée, zone, camp, dégâts, soin, durée, caractéristiques
     const e = Effects.parse(sp.effects), from = { x: a.mp.coord_x, y: a.mp.coord_y };
+    if (e.summon && !e.damage && !e.heal && !e.dot && !e.stats.length) {   // invocation seule : aucune cible à choisir
+      await spend(db, me, a, sp.energy_cost);
+      const what = await castSummon(db, me, a.mp, e.summon);
+      await log(db, me.id, `${sp.name} : ${what}`); broadcast(a.mp.map_id, { type: 'spell' });
+      return { ok: true, results: [{ target: me.pseudo, effect: what }] };
+    }
     const center = e.target === 'self' ? from : { x: b.x ?? from.x, y: b.y ?? from.y };
     if (e.target !== 'self' && Math.max(Math.abs(center.x - from.x), Math.abs(center.y - from.y)) > e.range) fail(409, `Cible hors de portée (${e.range} case(s) max)`);
     const r = e.target === 'area' ? e.radius : 0;
@@ -36,6 +42,7 @@ def(spells, 'post', '/spells/cast', z.object({ characterId: z.number(), spellId:
     await spend(db, me, a, sp.energy_cost);
     const results = [];
     for (const t of targets) results.push({ target: t.name, effect: await applyEffects(db, me, sp.id, e, t) });
+    if (e.summon) results.push({ target: me.pseudo, effect: await castSummon(db, me, a.mp, e.summon) });
     await log(db, me.id, `${sp.name} : ${results.map(x => `${x.target} ${x.effect}`).join(' ; ')}`.slice(0, 300));
     for (const t of targets) broadcast(a.mp.map_id, combatEvent(t.id, false));
     return { ok: true, results };

@@ -1,4 +1,4 @@
-import { def, router, z, P } from '../lib/route.js'; import { pool, tx, ownChar, fail, log } from '../lib/db.js';
+import { def, router, z, P } from '../lib/route.js'; import { pool, tx, ownChar, fail, log } from '../lib/db.js'; import { copyBuilding } from '../game/spellSummon.js';
 import { actor, spend } from '../game/movement.js'; import { terrain } from '../game/terrain.js'; import { broadcast } from '../realtime/ws.js';
 import { atCapital, bagCount, BAG_MAX } from './market.js';
 /**
@@ -51,10 +51,7 @@ def(craft, 'post', '/craft', z.object({ characterId: z.number(), recipeId: z.num
   } else if (r.target_kind === 'spell') {
     await db.query('INSERT INTO character_spells(character_id,spell_id) VALUES ($1,$2)', [me.id, r.target_id]);
   } else {
-    const { rows: [bd] } = await db.query(
-      `INSERT INTO buildings(name,kind,owner_id,invulnerable,data,structure,size,prerequisites)
-       SELECT name,kind,$2,false,data,structure,size,prerequisites FROM buildings WHERE id=$1 RETURNING id`, [r.target_id, me.id]);
-    await db.query('INSERT INTO positions(map_id,coord_x,coord_y,building_id) VALUES ($1,$2,$3,$4)', [a.mp.map_id, place!.x, place!.y, bd.id]);
+    await copyBuilding(db, r.target_id, me.id, a.mp.map_id, place!.x, place!.y);   // copie complète (caractéristiques + sorts liés)
     broadcast(a.mp.map_id, { type: 'built' });
   }
   await log(db, me.id, `Fabrique : ${r.target_name}`);

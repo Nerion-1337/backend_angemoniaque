@@ -6,6 +6,7 @@ import { applyDamage, type Target } from './combatlib.js'; import { applyArmor }
  * - affects : enemies | allies | all (alliés = même race que le lanceur et ses invocations).
  * - damage : dégâts instantanés (réduits par l'armure magique, peuvent tuer) ; heal : PV rendus (sans dépasser le max).
  * - dot : { damage, hours } dégâts par heure au tick (jamais mortels, PV min 1).
+ * - summon : { kind, refId, qty, durationH } invoque un élément (game/spellSummon.ts).
  * - stats : [{ stat, value }] ± ; capacités (*_max, force…) modifiées pour `durationH` heures (0 = permanent) ;
  *   réserves (hp, energy, divine_energy) : la valeur actuelle est rendue / retirée, bornée à [0 (1 pour hp), max].
  */
@@ -21,7 +22,10 @@ export const Effects = z.object({
   heal: z.number().int().min(0).max(1e6).default(0),
   dot: z.object({ damage: z.number().int().min(1).max(1e6), hours: z.number().int().min(1).max(720) }).nullable().optional(),
   stats: z.array(z.object({ stat: z.enum(STAT_KEYS), value: z.number().int().min(-1e6).max(1e6) })).max(12).default([]),
-  durationH: z.number().int().min(0).max(8760).default(0)
+  durationH: z.number().int().min(0).max(8760).default(0),
+  /** Invocation (lot D) : monstre (instance de combat), monture (type montable), objet (`qty` exemplaires), bâtiment (copie) ; durationH 0 = permanent. */
+  summon: z.object({ kind: z.enum(['monster', 'mount', 'item', 'building']), refId: z.number().int(), qty: z.number().int().min(1).max(99).default(1),
+    durationH: z.number().int().min(0).max(8760).default(0) }).nullable().optional()
 });
 export type EffectsT = z.infer<typeof Effects>;
 /** Le sort utilise-t-il le moteur (effets réglés) ? */

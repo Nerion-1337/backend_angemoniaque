@@ -22,6 +22,11 @@ const Spell = z.object({
   /** Moteur de sorts (lot 2) : cible, portée, zone, camp, dégâts, soin, durée, caractéristiques. {} = sort historique. */
   effects: z.union([Effects, z.object({}).strict()]).optional()
 });
+/** Invocation : l'élément doit exister (monture = type de monstre montable). */
+const SUMMON_SQL: Record<string, string> = { monster: 'SELECT 1 FROM monsters WHERE id=$1', mount: 'SELECT 1 FROM monsters WHERE id=$1 AND mountable', item: 'SELECT 1 FROM items WHERE id=$1', building: 'SELECT 1 FROM buildings WHERE id=$1' };
+async function checkSummon(e: any) {
+  if (e?.summon && !(await pool.query(SUMMON_SQL[e.summon.kind], [e.summon.refId])).rowCount) fail(404, e.summon.kind === 'mount' ? 'Monture à invoquer : type de monstre montable inconnu' : 'Élément à invoquer inconnu');
+}
 const usable = (b: any) => b.usableBy !== undefined ? { ...b, usable_by: JSON.stringify(b.usableBy) } : b;
 def(spellRoutes, 'get', '/admin/content/spells', null, async c => {
   const q = c.req.query('q'), rarity = c.req.query('rarity');
@@ -36,6 +41,7 @@ def(spellRoutes, 'get', '/admin/content/spells', null, async c => {
   return rows;
 });
 def(spellRoutes, 'post', '/admin/content/spells', Spell, async (c, b) => {
+  await checkSummon(b.effects);
   const { rows: [row] } = await pool.query(
     `INSERT INTO spells(name,kind,energy_cost,damage,description,price,duration_h,rarity,usable_by,shop,shop_races,effects)
      VALUES ($1,$2,COALESCE($3,10),$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
@@ -45,6 +51,7 @@ def(spellRoutes, 'post', '/admin/content/spells', Spell, async (c, b) => {
   return row;
 });
 def(spellRoutes, 'put', '/admin/content/spells/{id}', Spell.partial(), async (c, b) => {
+  await checkSummon(b.effects);
   const u = usable(b);
   const { rows: [row] } = await pool.query(
     `UPDATE spells SET name=COALESCE($2,name), kind=COALESCE($3,kind), energy_cost=COALESCE($4,energy_cost),
@@ -171,8 +178,16 @@ def(spellRoutes, 'get', '/admin/content/spells/{id}/links', null, async c => {
     WHERE es.spell_id=$1 ORDER BY es.kind, name`, [id])).rows;
   return [...mon, ...ent];
 });
-def(spellRoutes, 'post', '/admin/content/spells/{id}/links', z.object({ kind: z.enum(['monster', 'item', 'mount', 'building']), refId: z.number().int(), mode: z.enum(['active', 'passive']).default('active') }), async (c, b) => {
+/** Sorts liés à UN élément (fiche de l'objet, du bâtiment, du monstre-monture) : liens entity_spells avec le nom du sort. */
+def(spellRoutes, 'get', '/admin/content/element-spells', null, async c => {
+  const kind = c.req.query('kind'), refId = Number(c.req.query('refId'));
+  if (!['item', 'mount', 'building'].includes(kind ?? '') || !refId) fail(400, 'kind (item|mount|building) et refId requis');
+  return (await pool.query('SELECT es.id, es.kind, es.ref_id, es.mode, es.spell_id, s.name spell_name, s.energy_cost FROM entity_spells es JOIN spells s ON s.id=es.spell_id WHERE es.kind=$1 AND es.ref_id=$2 ORDER BY s.name, es.mode', [kind, refId])).rows;
+});
+/** Modes : active (à activer), passive (en continu) ; objets seulement : on_hit (au coup porté), on_struck (à l'attaque reçue). */
+def(spellRoutes, 'post', '/admin/content/spells/{id}/links', z.object({ kind: z.enum(['monster', 'item', 'mount', 'building']), refId: z.number().int(), mode: z.enum(['active', 'passive', 'on_hit', 'on_struck']).default('active') }), async (c, b) => {
   const id = P(c, 'id');
+  if ((b.mode === 'on_hit' || b.mode === 'on_struck') && b.kind !== 'item') fail(400, 'Au coup porté / à l\'attaque reçue : objets seulement');
   if (!(await pool.query('SELECT 1 FROM spells WHERE id=$1', [id])).rowCount) fail(404, 'Sort inconnu');
   if (!(await pool.query(`SELECT 1 FROM ${LINK_TBL[b.kind]} WHERE id=$1`, [b.refId])).rowCount) fail(404, 'Élément inconnu');
   const r = b.kind === 'monster'

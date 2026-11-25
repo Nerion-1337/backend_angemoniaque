@@ -1,5 +1,5 @@
 import { pool } from '../db/pool.js'; import { BURN_DAMAGE } from '../game/terrain.js'; import { cfgNum } from '../game/content.js'; import { hourlySpawns, reincarnateDue } from '../game/spawn.js'; import { applyTileSpells } from '../game/tileTypes.js';
-import { CAPS, POOLS } from '../game/spellEffects.js'; import { hourlySpellEffects } from '../game/spellTick.js'; import { revertTempRanks } from '../game/rankUp.js'; import { regenDeposits } from '../game/deposits.js';
+import { CAPS, POOLS } from '../game/spellEffects.js'; import { expireSummons } from '../game/spellSummon.js'; import { hourlySpellEffects } from '../game/spellTick.js'; import { revertTempRanks } from '../game/rankUp.js'; import { regenDeposits } from '../game/deposits.js';
 const REVERT: readonly string[] = CAPS;   // toute capacité modifiée temporairement (buff de sort, pacte) est rétablie à l'expiration
 /** Tick horaire : XP/or (× multiplicateur global), régénération PV/énergie, production des bâtiments, expiration des buffs. */
 export async function hourlyTick() {
@@ -30,6 +30,7 @@ export async function hourlyTick() {
     await pool.query(`UPDATE characters SET ${r.stat}=GREATEST(0, ${r.stat}-$2) WHERE id=$1`, [r.character_id, r.delta]);
     for (const [cur, max] of Object.values(POOLS)) if (max === r.stat) await pool.query(`UPDATE characters SET ${cur}=LEAST(${cur}, ${max}) WHERE id=$1`, [r.character_id]);
   }
+  await expireSummons(pool);      // invocations temporaires échues (lot D)
   await regenDeposits();          // gisements : stock régénéré jusqu'au maximum (lot 5)
   await revertTempRanks(pool);   // fin des rangs temporaires (lot 3)
   await hourlySpellEffects();   // dégâts sur la durée + sorts passifs des objets équipés / montures actives
