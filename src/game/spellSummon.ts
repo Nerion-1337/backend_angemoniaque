@@ -26,9 +26,9 @@ export async function castSummon(db: any, me: any, mp: any, s: any) {   // s : e
     if (n >= cap) fail(409, `Limite d'invocations atteinte (${cap} max)`);
     const cell = await freeCell(db, mp.map_id, mp.coord_x, mp.coord_y, 1);
     const { rows: [sm] } = await db.query(
-      `INSERT INTO summons(owner_id,name,hp_current,hp_max,recovery,see,strength,agility,energy_current,energy_max,armor,magic_armor,damage)
-       VALUES ($1,$2,$3,$3,$4,$5,$6,$7,$8,$8,$9,$10,$6) RETURNING id`,
-      [me.id, m.name, m.hp_max ?? 1, m.recovery ?? 0, m.see ?? 3, m.strength ?? 0, m.agility ?? 0, m.energy_max ?? 0, m.armor ?? 0, m.magic_armor ?? 0]);
+      `INSERT INTO summons(owner_id,name,hp_current,hp_max,recovery,see,strength,agility,energy_current,energy_max,armor,magic_armor,damage,monster_id)
+       VALUES ($1,$2,$3,$3,$4,$5,$6,$7,$8,$8,$9,$10,$6,$11) RETURNING id`,
+      [me.id, m.name, m.hp_max ?? 1, m.recovery ?? 0, m.see ?? 3, m.strength ?? 0, m.agility ?? 0, m.energy_max ?? 0, m.armor ?? 0, m.magic_armor ?? 0, m.id]);
     await db.query('INSERT INTO positions(map_id,coord_x,coord_y,summon_id) VALUES ($1,$2,$3,$4)', [mp.map_id, cell.x, cell.y, sm.id]);
     refId = sm.id; label = `invoque ${m.name}`;
   } else if (s.kind === 'mount') {

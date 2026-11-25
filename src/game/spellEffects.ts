@@ -64,8 +64,9 @@ export async function applyEffects(db: any, caster: any, spellId: number, e: Eff
 }
 
 /** Cibles d'un sort à partir de la case visée (déjà validée à portée). `entities` = cibles chargées sur la zone. */
-export function pickTargets(e: EffectsT, caster: any, center: { x: number; y: number }, entities: Target[]) {
-  if (e.target === 'self') return entities.filter(t => t.kind === 'character' && t.id === caster.id);
+/** `selfSummonId` : créature contrôlée qui lance le sort — « soi-même » la désigne alors, pas le héros. */
+export function pickTargets(e: EffectsT, caster: any, center: { x: number; y: number }, entities: Target[], selfSummonId?: number) {
+  if (e.target === 'self') return entities.filter(t => (selfSummonId ? t.kind === 'summon' && t.id === selfSummonId : t.kind === 'character' && t.id === caster.id));
   const inRange = (t: Target) => Math.max(Math.abs(t.pos.coord_x - center.x), Math.abs(t.pos.coord_y - center.y)) <= (e.target === 'area' ? e.radius : 0);
   return entities.filter(t => inRange(t) && keepTarget(e.affects, isAlly(caster.race, caster.id, t) || (t.kind === 'character' && t.id === caster.id)));
 }
