@@ -1,5 +1,5 @@
 import { def, router, z } from '../lib/route.js'; import { tx, ownChar, fail, log, trimLog } from '../lib/db.js';
-import { depositAt, takeFromDeposit } from '../game/deposits.js';
+import { depositAt, takeFromDeposit } from '../game/deposits.js'; import { checkHarvest } from '../game/harvest.js';
 import { actor, travel, spend } from '../game/movement.js'; import { terrain } from '../game/terrain.js'; import { broadcast } from '../realtime/ws.js';
 export const actions = router();
 const XY = z.object({ characterId: z.number(), x: z.number().int(), y: z.number().int() }), GATHER = 4;
@@ -13,6 +13,7 @@ def(actions, 'post', '/actions/gather', z.object({ characterId: z.number(), x: z
   const dep = await depositAt(db, a.mp.map_id, tx_, ty, true);   // gisement placé en admin : sa ressource et son stock priment sur le terrain
   if ((!t.resource && !dep) || (t.kind === 'deep' && !a.mount?.aquatic && !a.mount?.flying)) fail(409, 'Rien à récolter ici');
   if (dep && !dep.stock) await takeFromDeposit(db, dep);   // épuisé : refus AVANT tout trajet
+  await checkHarvest(db, ch, dep ? dep.resource : t.resourceId);   // objets / sort exigés (outil équipé compris), AVANT tout trajet
   if (tx_ !== a.mp.coord_x || ty !== a.mp.coord_y) { if ((await db.query('SELECT 1 FROM positions WHERE map_id=$1 AND coord_x=$2 AND coord_y=$3 AND item_id IS NULL', [a.mp.map_id, tx_, ty])).rowCount) fail(409, 'Case occupée'); await travel(db, ch, a, { x: tx_, y: ty }, 0, GATHER); } else await spend(db, ch, a, GATHER);
   const got = dep ? await takeFromDeposit(db, dep) : { resourceId: t.resourceId, name: t.resource, qty: 1, left: null };
   await db.query(`UPDATE characters SET resources=jsonb_set(resources,$2,to_jsonb(COALESCE((resources->>$3)::int,0)+$4)) WHERE id=$1`, [ch.id, `{${got.resourceId}}`, got.resourceId, got.qty]);

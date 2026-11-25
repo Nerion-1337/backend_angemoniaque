@@ -55,4 +55,32 @@ describe.skipIf(!process.env.DATABASE_URL)('Gisements de ressources', () => {
     expect(n[T.res] + n[T.res2]).toBe(400); expect(n[T.res] / 400).toBeGreaterThan(0.5); expect(n[T.res] / 400).toBeLessThan(0.7);
     const d = await depositAt(pool, 3, 0, 0); expect(d.stock_max).toBe(d.resource === T.res ? 9 : 7);
   });
+
+  test('conditions de récolte : objet (sac ou équipé) OU sort ; refus 403 détaillé AVANT récolte ; consommation ; retrait = libre', async () => {
+    await call('/admin/content/deposits', { mapId: 3, name: `Filon${s}`, xMin: T.p.x, yMin: T.p.y, xMax: T.p.x, yMax: T.p.y, resources: [{ resource: T.res2, percent: 100, stockMax: 100 }] }, T.adm);
+    const axe = (await call('/admin/content/items', { name: `Hache${s}`, slot: 'special' }, T.adm)).j.id;
+    const sp = (await call('/admin/content/spells', { name: `Sève${s}`, shop: false }, T.adm)).j.id;
+    expect((await call('/admin/content/resource-rules/inexistante', { groups: [] }, T.adm, 'PUT')).status).toBe(404);
+    expect((await call(`/admin/content/resource-rules/${T.res2}`, { groups: [{ items: [{ itemId: 999999 }] }] }, T.adm, 'PUT')).status).toBe(404);
+    const rule = { groups: [{ items: [{ itemId: axe, qty: 1 }] }, { spellId: sp }] };
+    expect((await call(`/admin/content/resource-rules/${T.res2}`, rule, T.adm, 'PUT')).status).toBe(200);
+    expect((await call('/admin/content/resource-rules', undefined, T.adm)).j.find((r: any) => r.resource === T.res2).needs).toMatch(/Hache\d+ ×1 — ou — sort/);
+    expect((await call(`/map/3/cell?x=${T.p.x}&y=${T.p.y}`, undefined, T.tk)).j.harvestNeeds).toMatch(new RegExp(`Hache${s} ×1 — ou — sort « Sève${s} »`));
+    const e0 = (await pool.query('SELECT energy_current FROM characters WHERE id=$1', [T.c])).rows[0].energy_current;
+    const ko = await call('/actions/gather', { characterId: T.c }, T.tk); expect(ko.status).toBe(403);
+    expect(ko.j.error).toMatch(/Récolte de .+ impossible — option 1 : Hache\d+ ×1 ; option 2 : sort/);
+    expect((await pool.query('SELECT energy_current FROM characters WHERE id=$1', [T.c])).rows[0].energy_current).toBe(e0);
+    await call(`/admin/players/${T.c}/items`, { itemId: axe, qty: 1, place: 'bag' }, T.adm);
+    expect((await call('/actions/gather', { characterId: T.c }, T.tk)).status).toBe(200);
+    await pool.query("UPDATE character_items SET equipped_slot='special_1' WHERE character_id=$1 AND item_id=$2", [T.c, axe]);   // outil en main : compte aussi
+    expect((await call('/actions/gather', { characterId: T.c }, T.tk)).status).toBe(200);
+    await call(`/admin/content/resource-rules/${T.res2}`, { groups: [{ items: [{ itemId: axe, qty: 1 }], consume: true }] }, T.adm, 'PUT');
+    expect((await call('/actions/gather', { characterId: T.c }, T.tk)).status).toBe(200);
+    expect((await pool.query('SELECT 1 FROM character_items WHERE character_id=$1 AND item_id=$2', [T.c, axe])).rowCount).toBe(0);
+    expect((await call('/actions/gather', { characterId: T.c }, T.tk)).status).toBe(403);
+    await call(`/admin/content/resource-rules/${T.res2}`, { groups: [] }, T.adm, 'PUT');
+    expect((await call('/actions/gather', { characterId: T.c }, T.tk)).status).toBe(200);
+    expect((await call(`/map/3/cell?x=${T.p.x}&y=${T.p.y}`, undefined, T.tk)).j.harvestNeeds).toBeNull();
+    await call(`/admin/content/spells/${sp}`, undefined, T.adm, 'DELETE');   // features.test compte les sorts
+  });
 });

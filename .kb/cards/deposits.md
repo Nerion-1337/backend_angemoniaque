@@ -1,5 +1,5 @@
 ---
-title: Secteurs de ressources (zone, ressources à parts %, type de case, stock, régénération)
+title: Secteurs de ressources (parts %, type de case, stock) et conditions de récolte (objets / sort)
 slug: deposits
 status: done
 updated: 2026-11-25
@@ -7,6 +7,8 @@ files:
   - src/game/deposits.ts
   - src/routes/admin/deposits.ts
   - src/routes/actions.ts
+  - src/game/harvest.ts
+  - src/routes/map.ts
 symbols:
   - src/game/deposits.ts:depositAt
   - src/game/deposits.ts:pickShare
@@ -14,6 +16,8 @@ symbols:
   - src/game/deposits.ts:shareTotals
   - src/game/deposits.ts:takeFromDeposit
   - src/game/deposits.ts:regenDeposits
+  - src/game/harvest.ts:checkHarvest
+  - src/game/harvest.ts:harvestNeeds
 tests:
   - test/deposits.test.ts
   - test/integration/deposits.test.ts
@@ -34,6 +38,9 @@ part de cases, un type de case éventuel et son propre stock (vidé à la récol
 - Tick horaire : `stock = min(stock_max, stock + regen_per_h)` pour les ressources des secteurs actifs.
 - `/map/{id}/cell` expose `deposit` (secteur, ressource, stock, maximum, régénération, quantité par récolte).
 - PUT remplace toutes les ressources du secteur (stock envoyé, sinon plein).
+- Conditions de récolte par ressource du catalogue (`game/harvest.ts`, table `resource_rules`) : groupes alternatifs au format de l'activation des bâtiments (objets, sort, ressources, or, rang, `consume`) ; valent sur le terrain naturel ET dans les secteurs ; sans groupe = libre.
+- Récolte : `checkHarvest` AVANT tout trajet ; les objets ÉQUIPÉS comptent (outil en main) et peuvent être consommés ; refus 403 « Récolte de X impossible — option 1 : … ; option 2 : … ».
+- `/map/{id}/cell` expose `harvestNeeds` (texte des conditions de la ressource effective de la case, null si libre) ; admin GET/PUT `/admin/content/resource-rules[/{resource}]` (ressource / objet / sort inconnus → 404 ; `groups: []` supprime la règle ; `needs` = texte).
 
 ## Gotchas
 - `cellRoll` / `pickShare` / `shareTotals` ont un miroir front (`admin/deposits.js`) : valeurs figées dans les deux tests ; modifier les deux côtés.

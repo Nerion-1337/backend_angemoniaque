@@ -1,4 +1,4 @@
-import { z } from '../lib/route.js'; import { fail, log } from '../lib/db.js'; import { resourceExists } from './startKit.js';
+import { z } from '../lib/route.js'; import { fail, log } from '../lib/db.js'; import { resourceExists } from './startKit.js'; import { resName } from './deposits.js';
 /**
  * Conditions d'activation d'un bâtiment (buildings.activation, migration 28) : des GROUPES alternatifs ; un groupe est rempli
  * quand toutes ses conditions renseignées le sont : objets dans le sac, objets divins détenus (d'une famille ou de toutes),
@@ -29,10 +29,10 @@ export async function checkActivation(db: any, a: z.infer<typeof Activation>) {
   }
 }
 /** Ce qui manque au personnage pour un groupe (vide = rempli). */
-export async function groupMissing(db: any, ch: any, g: GroupT) {
+export async function groupMissing(db: any, ch: any, g: GroupT, equipped = false) {
   const out: string[] = [];
   for (const it of g.items) {
-    const { rows: [r] } = await db.query('SELECT (SELECT COALESCE(sum(qty),0)::int FROM character_items WHERE character_id=$1 AND item_id=$2 AND NOT in_chest AND equipped_slot IS NULL) n, (SELECT name FROM items WHERE id=$2) name', [ch.id, it.itemId]);
+    const { rows: [r] } = await db.query('SELECT (SELECT COALESCE(sum(qty),0)::int FROM character_items WHERE character_id=$1 AND item_id=$2 AND NOT in_chest AND ($3 OR equipped_slot IS NULL)) n, (SELECT name FROM items WHERE id=$2) name', [ch.id, it.itemId, equipped]);
     if (r.n < it.qty) out.push(`${r.name ?? `objet n°${it.itemId}`} ×${it.qty - r.n}`);
   }
   if (g.divine) {
@@ -42,7 +42,7 @@ export async function groupMissing(db: any, ch: any, g: GroupT) {
   if (g.spellId != null && !(await db.query('SELECT 1 FROM character_spells WHERE character_id=$1 AND spell_id=$2', [ch.id, g.spellId])).rowCount) {
     const { rows: [s] } = await db.query('SELECT name FROM spells WHERE id=$1', [g.spellId]); out.push(`sort « ${s?.name ?? g.spellId} »`);
   }
-  for (const [k, q] of Object.entries(g.resources)) if ((ch.resources?.[k] ?? 0) < q) out.push(`${k} ×${q - (ch.resources?.[k] ?? 0)}`);
+  for (const [k, q] of Object.entries(g.resources)) if ((ch.resources?.[k] ?? 0) < q) out.push(`${resName(k)} ×${q - (ch.resources?.[k] ?? 0)}`);
   if (g.gold && (ch.gold ?? 0) < g.gold) out.push(`${g.gold} or`);
   if (g.minRank || g.ranks.length) {
     const { rows: [s] } = await db.query('SELECT current_rank FROM specializations WHERE id=$1', [ch.specialization_id]);
@@ -53,17 +53,27 @@ export async function groupMissing(db: any, ch: any, g: GroupT) {
   }
   return out;
 }
-/** Active : premier groupe rempli (consommé s'il le prévoit) ; sinon 403 avec ce qui manque pour chaque groupe. */
-export async function activate(db: any, ch: any, bd: any) {
+/** Conditions en clair (« Hache ×1, sort « Sève » ou 10 or ») : ce qui manquerait à un personnage démuni. */
+export async function describeActivation(db: any, a: any) {
+  const none = { id: -1, resources: {}, gold: 0, specialization_id: null }, out: string[] = [];
+  for (const g of a?.groups ?? []) out.push((await groupMissing(db, none, Group.parse(g))).join(', ') || 'sans condition');
+  return out.join(' — ou — ');
+}
+/**
+ * Active : premier groupe rempli (consommé s'il le prévoit) ; sinon 403 avec ce qui manque pour chaque groupe.
+ * `o.equipped` : les objets équipés comptent (et peuvent être consommés) — récolte avec un outil en main.
+ */
+export async function activate(db: any, ch: any, bd: any, o: { equipped?: boolean; verb?: string; err?: string } = {}) {
+  const eq = !!o.equipped;
   const groups = (bd.activation?.groups ?? []).map((g: any) => Group.parse(g)) as GroupT[];
   const why: string[] = [];
   for (const [i, g] of groups.entries()) {
-    const miss = await groupMissing(db, ch, g);
+    const miss = await groupMissing(db, ch, g, eq);
     if (miss.length) { why.push(`${groups.length > 1 ? `option ${i + 1} : ` : ''}${miss.join(', ')}`); continue; }
     if (g.consume) {
       for (const it of g.items) {
         let left = it.qty;
-        const { rows } = await db.query('SELECT ctid::text, qty FROM character_items WHERE character_id=$1 AND item_id=$2 AND NOT in_chest AND equipped_slot IS NULL', [ch.id, it.itemId]);
+        const { rows } = await db.query('SELECT ctid::text, qty FROM character_items WHERE character_id=$1 AND item_id=$2 AND NOT in_chest AND ($3 OR equipped_slot IS NULL) ORDER BY equipped_slot NULLS FIRST', [ch.id, it.itemId, eq]);
         for (const r of rows) { if (!left) break; const take = Math.min(left, r.qty); left -= take;
           if (take === r.qty) await db.query('DELETE FROM character_items WHERE ctid=$1::tid', [r.ctid]); else await db.query('UPDATE character_items SET qty=qty-$2 WHERE ctid=$1::tid', [r.ctid, take]); }
       }
@@ -72,8 +82,8 @@ export async function activate(db: any, ch: any, bd: any) {
         await db.query('UPDATE characters SET resources=jsonb_set(resources, ARRAY[$2::text], to_jsonb(COALESCE((resources->>$2)::int,0) - $3)) WHERE id=$1', [ch.id, k, q]);
       if (g.gold) await db.query('UPDATE characters SET gold=gold-$2 WHERE id=$1', [ch.id, g.gold]);
     }
-    await log(db, ch.id, `Active ${bd.name}${groups.length > 1 ? ` (option ${i + 1})` : ''}`);
+    await log(db, ch.id, `${o.verb ?? 'Active'} ${bd.name}${groups.length > 1 ? ` (option ${i + 1})` : ''}`);
     return i;
   }
-  return fail(403, `Conditions d'activation non remplies — ${why.join(' ; ')}`);
+  return fail(403, `${o.err ?? "Conditions d'activation non remplies"} — ${why.join(' ; ')}`);
 }

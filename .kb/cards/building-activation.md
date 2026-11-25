@@ -12,6 +12,7 @@ files:
 symbols:
   - src/game/activation.ts:activate
   - src/game/activation.ts:groupMissing
+  - src/game/activation.ts:describeActivation
 tests:
   - test/integration/buildingActivation.test.ts
 ---
@@ -27,6 +28,7 @@ dans l'admin, combinables : plusieurs options alternatives, chacune avec ses exi
 - Autre bâtiment : `POST /buildings/{id}/activate` (case adjacente, 409 sinon ; sans option → 409 ; porte → 400) ; les sorts liés « à activer » du bâtiment s'appliquent au profit de l'activateur : sort de zone autour du bâtiment (camp relatif à l'activateur), sinon l'activateur lui-même ; invocations près de lui.
 - `POST /buildings/{id}/interact` renvoie `activation` (null sans option) ; le jeu active alors au lieu d'afficher le nom.
 - Admin : objets, sorts, rangs, familles divines et ressources vérifiés (404) ; schéma strict (400) ; le catalogue admin fournit `ranks` et `divineFamilies`.
+- `activate(db, ch, bd, { equipped, verb, err })` : `equipped` fait compter (et consommer) les objets équipés — utilisé par les conditions de récolte (card `deposits`) ; `describeActivation` = conditions en clair (ce qui manquerait à un personnage démuni).
 
 ## Gotchas
 - Les sorts « à activer » d'un bâtiment restent aussi lançables par son propriétaire à côté (liste des sorts lançables) — sans conditions.
