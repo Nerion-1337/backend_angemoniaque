@@ -15,10 +15,11 @@ _Généré par `kb overview` — ne pas éditer ici ; notes manuelles dans `.kb/
 - Docker test target : `npm run typecheck && npm test` (utilisé par le hook pre-commit et CI)
 - kb : backend d'embedding `hash` (offline) dans `.kb/config.json`
 
-## Features (25)
+## Features (26)
 - **admin-players-divine** [done] (.kb/cards/admin-players-divine.md) Admin « Joueurs » (liste paginée + fiche éditable) et objets divins à familles libres — Section admin « Joueurs » (liste paginée par race, fiche éditable : caractéristiques, XP, or, rang, objets équipés / sac / coffre, sorts, montures, bâtiments, divins) et objets divins gérés comme les  — files: src/routes/admin/players.ts, src/routes/admin/items.ts, src/game/content.ts
 - **admin-socle** [done] (.kb/cards/admin-socle.md) Socle admin (Étape 2 phase 1) : rôles, CRUD contenu, règles transverses, production, audit — Socle du back-office (Étape 2) : rôles de compte, CRUD générique du contenu (races, rangs, monstres — dont les montures, card `monster-mounts` —, objets, bâtiments), règles transverses (coûts, plafond — files: src/routes/admin.ts, src/routes/admin/core.ts, src/routes/admin/races.ts, src/routes/admin/monsters.ts (+10)
 - **bestiaire** [done] (.kb/cards/bestiaire.md) Bestiaire (phase 2): loot roll, hourly spawns, combat death, admin routes & status — Boucle du bestiaire (phase 2) : un monstre tué donne son butin (or + entrées pondérées de `monster_loot` : objets, ressources, exemplaires divins), des instances sauvages apparaissent au tick horaire  — files: src/game/loot.ts, src/game/combatlib.ts, src/routes/admin/bestiary.ts, src/routes/admin/monsters.ts (+2)
+- **building-activation** [done] (.kb/cards/building-activation.md) Activation des bâtiments : options de conditions (objets, divins, sort, ressources, or, rang) — La capacité d'un bâtiment (franchir un portail, ou déclencher ses sorts « à activer ») peut exiger des conditions réglées dans l'admin, combinables : plusieurs options alternatives, chacune avec ses e — files: src/game/activation.ts, src/routes/buildings.ts, src/routes/divine.ts, src/routes/admin/buildings.ts (+1)
 - **buildings-occupy** [done] (.kb/cards/buildings-occupy.md) Bâtiments : case occupable, bonus et protections de l’occupant, armure, sorts de la structure — Bâtiments paramétrables : armure de la structure, case occupable par un personnage (bonus d'armure, de vue, de portée ; règles d'attaque contre l'occupant), production horaire, sorts de la structure ( — files: src/game/buildingCell.ts, src/routes/admin/buildings.ts, src/game/spellTick.ts
 - **combat-realtime** [done] (.kb/cards/combat-realtime.md) Realtime combat events: broadcast combat outcomes to map spectators — Rend chaque combat visible en temps réel aux autres joueurs de la carte : toute attaque résolue (directe ou sort d'attaque) publie un événement `combat` public sur le canal Redis de la carte, et les c — files: src/lib/events.ts, src/routes/combat.ts, src/routes/spells.ts
 - **craft-shop** [done] (.kb/cards/craft-shop.md) Boutique par race et parchemins de fabrication (objet, sort, bâtiment) — Boutique de l'hôtel de ville filtrée par race (objets et sorts) et fabrication par parchemin : un parchemin dans le sac + les ressources de sa recette donnent un objet, un sort appris ou un bâtiment ( — files: src/routes/craft.ts, src/routes/admin/recipes.ts, src/routes/market.ts
@@ -47,6 +48,7 @@ _Généré par `kb overview` — ne pas éditer ici ; notes manuelles dans `.kb/
 - `src/app.ts` — app
 - `src/config/env.ts` — env
 - `src/db/pool.ts` — (header), pool
+- `src/game/activation.ts` — Conditions d'activation d'un bâtiment (buildings.activation, migration 28) : des GROUPES alternatifs ; un grou — Group, Activation, GroupT, hasActivation, checkActivation, groupMissing, activate
 - `src/game/angelDemonMap.ts` — ⚠ GÉNÉRÉ par tools/gen_angel_demon_map.py — monde Anges & Démons : ne pas éditer à la main. — W2, ROWS2, FEATURES2
 - `src/game/buildingCell.ts` — Bâtiments occupables (migration 22) : un personnage peut se tenir sur la case d'un bâtiment `occupiable`. — (header), AttackKind, occupiableAt, BLOCKING, attackAllowed, ATTACK_LABEL, checkOccupantAttack
 - `src/game/burn.ts` — Durée d'une brûlure après passage sur une case de volcan (renouvelée à chaque passage). Dégâts : BURN_DAMAGE p — (header), BURN_HOURS, ignite
@@ -56,8 +58,4 @@ _Généré par `kb overview` — ne pas éditer ici ; notes manuelles dans `.kb/
 - `src/game/deposits.ts` — Gisements de ressources (resource_deposits, migration 23) : une ressource du catalogue sur une zone d'un monde — (header), resName, depositAt, harvestQty, takeFromDeposit, depositPublic, regenDeposits
 - `src/game/divine.ts` — Surcharge divine : plus d'objets que requis => rang supérieur gratuit, quota ignoré. — (header), KIND, required, held, applySpec, refreshSurcharge, die, grantDivine
 - `src/game/entity.ts` — Règles transverses (tables entity_costs / entity_caps, Étape 2) : — checkEntityCost, monsterOnMap, assertCap
-- `src/game/humanMap.ts` — ⚠ GÉNÉRÉ par tools/gen_human_map.py à partir de la carte de référence — ne pas éditer à la main. — W, ROWS, CODES, FEATURES
-- `src/game/loot.ts` — Butin au death d'un monstre : or du monstre + entrées monster_loot tirées à la probabilité — rollLoot
-- `src/game/movement.ts` — Acteur courant : l'invocation contrôlée, sinon le héros (monté ou non). — (header), MOUNT_SQL, activeMount, isWater, actor, onLand, stepCost, blockedMsg, spend, pathCost, travel
-- `src/game/rankUp.ts` — Passage de rang par conditions (specializations.requirements, migrations 21 et 24) : DEUX voies indépendantes, — Cond, Requirements, MODES, Mode, ReqT, CondT, SNAP, hasReq, missingFor, checkReq, bagOf, nextRank, takeItems, rankUp, num
-- … 96 autres fichiers (utiliser `kb search`)
+- … 101 autres fichiers (utiliser `kb search`)

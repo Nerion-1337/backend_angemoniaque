@@ -1,4 +1,4 @@
-import { def, router, z, P } from '../../lib/route.js'; import { pool, fail } from '../../lib/db.js';
+import { def, router, z, P } from '../../lib/route.js'; import { pool, fail } from '../../lib/db.js'; import { Activation, checkActivation } from '../../game/activation.js';
 import { audit } from '../../lib/audit.js'; import { bumpContent } from '../../game/content.js';
 import { safeInsert, safeUpdate, requireRow, extras } from './common.js';
 export const buildingRoutes = router();
@@ -9,7 +9,9 @@ const Building = z.object({
   /** Lot 4 : armure de la structure ; case occupable ; bonus de l'occupant ; attaques possibles contre l'occupant. */
   armor: z.number().int().min(0).optional(), occupiable: z.boolean().optional(),
   bonus_armor: z.number().int().optional(), bonus_magic_armor: z.number().int().optional(), bonus_see: z.number().int().optional(), bonus_range: z.number().int().optional(),
-  occupant_attack: z.object({ melee: z.boolean(), ranged: z.boolean(), spell: z.boolean() }).optional()
+  occupant_attack: z.object({ melee: z.boolean(), ranged: z.boolean(), spell: z.boolean() }).optional(),
+  /** Conditions d'activation de la capacité (lot E, migration 28) : groupes alternatifs. */
+  activation: Activation.optional()
 });
 def(buildingRoutes, 'get', '/admin/content/buildings', null, async c => {
   const q = c.req.query('q');
@@ -18,6 +20,7 @@ def(buildingRoutes, 'get', '/admin/content/buildings', null, async c => {
   return rows;
 });
 def(buildingRoutes, 'post', '/admin/content/buildings', Building, async (c, b) => {
+  if (b.activation) await checkActivation(pool, b.activation);
   const row = await safeInsert('buildings', b as any);
   await bumpContent(); await audit(c, 'building.create', 'building', row.id, null, b);
   return row;
@@ -28,6 +31,7 @@ def(buildingRoutes, 'get', '/admin/content/buildings/{id}', null, async c => {
     position: (await pool.query('SELECT map_id,coord_x,coord_y FROM positions WHERE building_id=$1', [id])).rows[0] ?? null };
 });
 def(buildingRoutes, 'put', '/admin/content/buildings/{id}', Building.partial(), async (c, b) => {
+  if (b.activation) await checkActivation(pool, b.activation);
   const row = await safeUpdate('buildings', P(c, 'id'), b as any);
   await bumpContent(); await audit(c, 'building.update', 'building', P(c, 'id'), null, b);
   return row;

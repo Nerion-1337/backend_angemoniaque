@@ -18,6 +18,9 @@ def(coreRoutes, 'get', '/admin/catalog', null, async () => ({
   // Montures proposées (kits, fiches joueurs) : types de monstres montables (ou montures historiques sans type).
   mounts: (await pool.query('SELECT mo.id, mo.name, mo.monster_id FROM mounts mo LEFT JOIN monsters m ON m.id=mo.monster_id WHERE m.id IS NULL OR m.mountable ORDER BY mo.id')).rows,
   maps: (await pool.query('SELECT id,name_file, width,height FROM maps ORDER BY id')).rows,
+  // Rangs (toutes races) et familles divines : conditions d'activation des bâtiments (lot E).
+  ranks: (await pool.query('SELECT id, name, race, current_rank FROM specializations ORDER BY race, current_rank')).rows,
+  divineFamilies: (await pool.query('SELECT key, name FROM divine_families ORDER BY key')).rows,
   // Catalogue des ressources du jeu (deux mondes) — dédoublonné par id, pour les menus
   // déroulants « ressource » du butin de monstre (phase 3c).
   resources: RESCATALOG }));
