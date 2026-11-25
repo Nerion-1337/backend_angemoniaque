@@ -17,6 +17,8 @@ const Item = z.object({
   two_handed: z.boolean().optional(),
   /** XP gagnée à chaque utilisation (migration 35) : coup porté avec cette arme, parchemin utilisé. */
   xp_use: z.number().int().min(0).max(1e6).optional(),
+  /** Portée de l'arme (1 = corps à corps) et, pour une arme à distance, pleine puissance jusqu'à N cases (< portée ; null = partout). Migration 36. */
+  reach: z.number().int().min(1).max(20).optional(), full_power_at: z.number().int().min(1).max(19).nullable().optional(),
   data: z.record(z.any()).optional(),
   /** Caractéristiques reportées sur la fiche à l'équipement (migration 26) ; valeur négative = malus. */
   bonuses: z.record(z.enum(['hp_max', 'recovery', 'energy_max', 'divine_energy_max', 'see', 'range']), z.number().int().min(-1000).max(1000)).optional(),
@@ -64,8 +66,13 @@ const checkFamily = async (b: any) => {
   if (b.rarity !== undefined && b.rarity !== 'divin') fail(400, 'Une famille divine exige la rareté « divin »');
   if (!(await pool.query('SELECT 1 FROM divine_families WHERE key=$1', [b.divine_family])).rowCount) fail(404, `Famille divine inconnue : ${b.divine_family}`);
 };
+/** Pleine puissance (arme à distance) : strictement en deçà de la portée de l'arme. */
+const checkReach = (b: any, cur: any = {}) => {
+  const reach = b.reach ?? cur.reach ?? 1, full = b.full_power_at !== undefined ? b.full_power_at : cur.full_power_at;
+  if (full != null && full >= reach) fail(400, `Pleine puissance (${full} case(s)) : doit être inférieure à la portée de l'arme (${reach})`);
+};
 def(itemRoutes, 'post', '/admin/content/items', Item, async (c, b) => {
-  await checkFamily(b);
+  await checkFamily(b); checkReach(b);
   const row = await safeInsert('items', usable(b) as any);
   await bumpContent(); await audit(c, 'item.create', 'item', row.id, null, b);
   return row;
@@ -75,7 +82,7 @@ def(itemRoutes, 'get', '/admin/content/items/{id}', null, async c => {
   return { ...(await requireRow('items', id)), ...(await extras('item', id)) };
 });
 def(itemRoutes, 'put', '/admin/content/items/{id}', Item.partial(), async (c, b) => {
-  await checkFamily(b);
+  await checkFamily(b); checkReach(b, (await pool.query('SELECT reach, full_power_at FROM items WHERE id=$1', [P(c, 'id')])).rows[0]);
   const row = await safeUpdate('items', P(c, 'id'), usable(b) as any);
   await bumpContent(); await audit(c, 'item.update', 'item', P(c, 'id'), null, b);
   return row;
