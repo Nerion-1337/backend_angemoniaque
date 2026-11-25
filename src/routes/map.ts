@@ -1,5 +1,5 @@
 import { def, router, P } from '../lib/route.js'; import { pool } from '../lib/db.js'; import { terrain, inSafeZone } from '../game/terrain.js'; import { getPublicHealthState } from '../game/rules.js';
-import { loadTiles, tilePublic, TILE_KINDS } from '../game/tileTypes.js'; import { depositAt, depositPublic } from '../game/deposits.js'; import { harvestNeeds } from '../game/harvest.js';
+import { loadTiles, tilePublic, TILE_KINDS } from '../game/tileTypes.js'; import { depositAt, depositPublic } from '../game/deposits.js'; import { harvestNeeds, harvestMissing } from '../game/harvest.js'; import { ownChar } from '../lib/db.js';
 export const mapRoutes = router();
 const SEL = `SELECT p.coord_x x,p.coord_y y, CASE WHEN p.character_id IS NOT NULL THEN 'character' WHEN p.monsters_id IS NOT NULL THEN 'monster' WHEN p.summon_id IS NOT NULL THEN 'summon' WHEN p.building_id IS NOT NULL THEN 'building' WHEN p.mount_id IS NOT NULL THEN 'mount' ELSE 'item' END kind,
   COALESCE(ch.pseudo,mo.name,sm.name,b.name) name, ch.race, ch.id char_id, mo.id monster_id, sm.id summon_id, b.id building_id, b.kind building_kind, b.invulnerable, s.name rank_name, g.name guild,
@@ -19,7 +19,8 @@ def(mapRoutes, 'get', '/map/{mapId}/cell', null, async c => {
   if (out?.kind === 'character' && q.details) out.visibleGear = (await pool.query('SELECT i.name FROM character_items ci JOIN items i ON i.id=ci.item_id WHERE ci.character_id=$1 AND ci.equipped_slot IS NOT NULL', [out.char_id])).rows.map((r: any) => r.name);
   await loadTiles(); const t = terrain(x, y, P(c, 'mapId'));
   const dep = await depositAt(pool, P(c, 'mapId'), x, y);
-  return { x, y, terrain: t, tile: tilePublic(P(c, 'mapId'), t.kind), deposit: depositPublic(dep), harvestNeeds: await harvestNeeds(pool, dep?.resource ?? t.resourceId), safe: inSafeZone(P(c, 'mapId'), x, y), entity: out };
+  return { x, y, terrain: t, tile: tilePublic(P(c, 'mapId'), t.kind), deposit: depositPublic(dep), harvestNeeds: await harvestNeeds(pool, dep?.resource ?? t.resourceId),
+    harvestMissing: q.characterId ? await harvestMissing(pool, await ownChar(pool, c, Number(q.characterId)), dep?.resource ?? t.resourceId) : undefined, safe: inSafeZone(P(c, 'mapId'), x, y), entity: out };
 });
 /** Types de case du monde (nom, description, coût, sort passif) : carte de case + estimation d'énergie du front. */
 def(mapRoutes, 'get', '/map/{mapId}/tile-types', null, async c => { await loadTiles(); const id = P(c, 'mapId'); return TILE_KINDS.map(k => tilePublic(id, k)); });

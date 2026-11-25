@@ -7,12 +7,17 @@ files:
   - src/routes/craft.ts
   - src/routes/admin/recipes.ts
   - src/routes/market.ts
+  - src/game/bag.ts
 symbols:
   - src/routes/craft.ts:missing
   - src/routes/admin/recipes.ts:recipeRoutes
+  - src/game/bag.ts:bagState
+  - src/game/bag.ts:bagRoom
+  - src/game/bag.ts:resStacks
 tests:
   - test/integration/craftShop.test.ts
   - test/integration/equipMap.test.ts
+  - test/integration/bagResources.test.ts
 ---
 ## Purpose
 Boutique de l'hôtel de ville filtrée par race (objets et sorts) et fabrication par parchemin : un parchemin dans le sac + les
@@ -28,6 +33,8 @@ ressources de sa recette donnent un objet, un sort appris ou un bâtiment (copie
 - Objet : ajouté au sac (empilé), sac plein → 409. Sort : appris (déjà connu → 409, parchemin conservé). Bâtiment : copie complète du modèle (caractéristiques et sorts liés, `copyBuilding`), appartenant au joueur, sur une case ADJACENTE libre, jamais eau ni lave (400 sans case, 409 sinon).
 - Un nouveau parchemin créé depuis l'admin est un objet `slot = scroll`, hors boutique.
 - Amélioration de carte (`POST /shop/map-upgrade`, à la capitale) : prix `game_config.map_upgrade_price` (défaut 500, réglé en admin Ressources), 409 si déjà acquise ou or insuffisant ; `characters.map_upgrade` ; `GET /shop` renvoie `mapUpgrade.price`.
+- Sac et coffre (`game/bag.ts`, migration 33) : les ressources (`characters.resources` = sac, `chest_resources` = coffre) occupent des emplacements par piles de `stack_max` (défaut 20) ; place libre du sac = `bag_size` − (objets non équipés hors coffre + piles) ; tout ajout d'objet au sac passe par `bagRoom` (achat, retrait du coffre, fabrication, déséquipement de monture, invocation d'objet).
+- `POST /chest/resource` (à la capitale) : déplace une ressource (tout ou `qty`) sac ⇄ coffre, place vérifiée en piles côté destination (409 « Coffre plein » / « Sac plein ») ; `GET /chest` renvoie `used` et les piles `resources`.
 
 ## Gotchas
 - Les anciens parchemins de construction (`data.kind` wall/tower/factory/totem/ship) gardent leur propre route `/buildings/place`.

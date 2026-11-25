@@ -1,13 +1,11 @@
 import { OpenAPIHono } from '@hono/zod-openapi'; import { def, router, z, P } from '../lib/route.js'; import { tx, ownChar, posOf, fail, log, dist } from '../lib/db.js';
-import { cfgNum } from '../game/content.js';
+import { cfgNum } from '../game/content.js'; import { bagRoom, bagState, chestState, resStacks, extraSlots } from '../game/bag.js'; import { resName } from '../game/deposits.js';
 export const market = router();
 const TBL: Record<string, [string, string]> = { item: ['character_items', 'item_id'], spell: ['character_spells', 'spell_id'], mount: ['character_mounts', 'mount_id'] };
-export const BAG_MAX = 20;
 export async function atCapital(db: any, ch: any) {
   const mp = await posOf(db, ch.id); const { rows } = await db.query(`SELECT p.coord_x,p.coord_y,p.map_id FROM buildings b JOIN positions p ON p.building_id=b.id WHERE b.kind='capital' AND b.data->>'race'=$1`, [ch.race]);
   if (!rows.some((r: any) => r.map_id === mp.map_id && dist(mp, r) <= 2)) fail(409, 'Rendez-vous à la capitale de votre faction');
 }
-export const bagCount = async (db: any, id: number) => (await db.query('SELECT count(*)::int n FROM character_items WHERE character_id=$1 AND NOT in_chest AND equipped_slot IS NULL', [id])).rows[0].n;
 /** Boutique de l'hôtel de ville : objets et sorts en vente (shop) pour la race du personnage (shop_races vide = toutes). */
 const FOR_RACE = `shop AND (shop_races='[]'::jsonb OR shop_races ? $1)`;
 def(market, 'get', '/shop', null, async c => { const { pool } = await import('../lib/db.js');
@@ -32,7 +30,7 @@ def(market, 'post', '/shop/learn', z.object({ characterId: z.number(), spellId: 
 def(market, 'post', '/shop/buy', z.object({ characterId: z.number(), itemId: z.number() }), (c, b) => tx(async db => {
   const me = await ownChar(db, c, b.characterId); await atCapital(db, me);
   const { rows: [it] } = await db.query(`SELECT * FROM items WHERE id=$2 AND ${FOR_RACE}`, [me.race, b.itemId]); if (!it) fail(404, 'Article introuvable');
-  if (it.shop_stock <= 0) fail(409, 'Réserve de la faction épuisée'); if (me.gold < it.price) fail(409, 'Or insuffisant'); if (await bagCount(db, me.id) >= BAG_MAX) fail(409, 'Inventaire plein');
+  if (it.shop_stock <= 0) fail(409, 'Réserve de la faction épuisée'); if (me.gold < it.price) fail(409, 'Or insuffisant'); if (await bagRoom(db, me.id) <= 0) fail(409, 'Inventaire plein');
   await db.query('UPDATE items SET shop_stock=shop_stock-1 WHERE id=$1', [it.id]); await db.query('UPDATE characters SET gold=gold-$2 WHERE id=$1', [me.id, it.price]); await db.query('INSERT INTO character_items(character_id,item_id) VALUES ($1,$2)', [me.id, it.id]); return { ok: true };
 }));
 def(market, 'post', '/market/list', z.object({ characterId: z.number(), kind: z.enum(['item', 'spell', 'mount']), refId: z.number(), price: z.number().int().positive() }), (c, b) => tx(async db => {
@@ -51,15 +49,29 @@ def(market, 'post', '/market/{id}/buy', z.object({ characterId: z.number() }), (
   await db.query(`INSERT INTO ${t}(character_id,${col}) VALUES ($1,$2)`, [me.id, l.ref_id]); await db.query('UPDATE market_listings SET sold=true WHERE id=$1', [l.id]); await log(db, me.id, `Achat marketplace #${l.id}`); return { ok: true };
 }));
 def(market, 'get', '/chest/{characterId}', null, c => tx(async db => { const me = await ownChar(db, c, P(c, 'characterId')); await atCapital(db, me);
-  return { size: me.chest_size, nextCost: 50 * me.chest_size, items: (await db.query('SELECT i.id,i.name FROM character_items ci JOIN items i ON i.id=ci.item_id WHERE ci.character_id=$1 AND ci.in_chest', [me.id])).rows }; }));
+  const ch = await chestState(db, me.id);
+  return { size: me.chest_size, used: ch.used, nextCost: 50 * me.chest_size, items: (await db.query('SELECT i.id,i.name FROM character_items ci JOIN items i ON i.id=ci.item_id WHERE ci.character_id=$1 AND ci.in_chest', [me.id])).rows,
+    resources: resStacks(ch.resources, ch.st) }; }));
+/** Ressources entre sac et coffre (tout, ou `qty`) : place vérifiée en piles des deux côtés. */
+def(market, 'post', '/chest/resource', z.object({ characterId: z.number(), resource: z.string().max(60), qty: z.number().int().min(1).optional(), to: z.enum(['chest', 'bag']) }), (c, b) => tx(async db => {
+  const me = await ownChar(db, c, b.characterId); await atCapital(db, me); const toChest = b.to === 'chest';
+  const from = toChest ? await bagState(db, me.id) : await chestState(db, me.id), dest = toChest ? await chestState(db, me.id) : await bagState(db, me.id);
+  const have = Number(from.resources[b.resource]) || 0, qty = Math.min(have, b.qty ?? have);
+  if (!qty) fail(404, `Aucune ressource « ${resName(b.resource)} » ${toChest ? 'dans le sac' : 'dans le coffre'}`);
+  if (dest.used + extraSlots(dest.resources, b.resource, qty, dest.st) > dest.size) fail(409, toChest ? 'Coffre plein' : 'Sac plein');
+  const [src, dst] = toChest ? ['resources', 'chest_resources'] : ['chest_resources', 'resources'];
+  await db.query(`UPDATE characters SET ${src}=jsonb_set(${src}, ARRAY[$2::text], to_jsonb(COALESCE((${src}->>$2)::int,0) - $3)),
+    ${dst}=jsonb_set(${dst}, ARRAY[$2::text], to_jsonb(COALESCE((${dst}->>$2)::int,0) + $3)) WHERE id=$1`, [me.id, b.resource, qty]);
+  return { ok: true, qty };
+}));
 def(market, 'post', '/chest/expand', z.object({ characterId: z.number() }), (c, b) => tx(async db => {
   const me = await ownChar(db, c, b.characterId); await atCapital(db, me); const cost = 50 * me.chest_size;   // coût progressif
   if (me.gold < cost) fail(409, `Or insuffisant (${cost})`); await db.query('UPDATE characters SET gold=gold-$2, chest_size=chest_size+1 WHERE id=$1', [me.id, cost]); return { size: me.chest_size + 1, cost };
 }));
 def(market, 'post', '/chest/move', z.object({ characterId: z.number(), itemId: z.number(), to: z.enum(['chest', 'bag']) }), (c, b) => tx(async db => {
   const me = await ownChar(db, c, b.characterId); await atCapital(db, me); const toChest = b.to === 'chest';
-  if (toChest && (await db.query('SELECT count(*)::int n FROM character_items WHERE character_id=$1 AND in_chest', [me.id])).rows[0].n >= me.chest_size) fail(409, 'Coffre plein');
-  if (!toChest && await bagCount(db, me.id) >= BAG_MAX) fail(409, 'Inventaire plein');
+  if (toChest) { const ch = await chestState(db, me.id); if (ch.used >= ch.size) fail(409, 'Coffre plein'); }
+  if (!toChest && await bagRoom(db, me.id) <= 0) fail(409, 'Inventaire plein');
   const r = await db.query(`UPDATE character_items SET in_chest=$3 WHERE ctid=(SELECT ctid FROM character_items WHERE character_id=$1 AND item_id=$2 AND in_chest=$4 AND equipped_slot IS NULL LIMIT 1)`, [me.id, b.itemId, toChest, !toChest]);
   if (!r.rowCount) fail(404, 'Objet introuvable'); return { ok: true };
 }));

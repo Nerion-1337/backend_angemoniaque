@@ -1,6 +1,6 @@
 import { def, router, z, P } from '../lib/route.js'; import { pool, tx, ownChar, fail, log } from '../lib/db.js'; import { copyBuilding } from '../game/spellSummon.js';
 import { actor, spend } from '../game/movement.js'; import { terrain } from '../game/terrain.js'; import { broadcast } from '../realtime/ws.js';
-import { atCapital, bagCount, BAG_MAX } from './market.js';
+import { atCapital } from './market.js'; import { bagRoom } from '../game/bag.js';
 /**
  * Fabrication : un parchemin (dans le SAC) + les ressources de sa recette → objet (au sac), sort appris, ou bâtiment
  * (copie du modèle, posée sur une case adjacente libre). Recette : parchemin consommé ou non, hôtel de ville requis ou non,
@@ -45,7 +45,7 @@ def(craft, 'post', '/craft', z.object({ characterId: z.number(), recipeId: z.num
   if (r.consume_scroll)
     await db.query('DELETE FROM character_items WHERE ctid=(SELECT ctid FROM character_items WHERE character_id=$1 AND item_id=$2 AND NOT in_chest LIMIT 1)', [me.id, r.scroll_item_id]);
   if (r.target_kind === 'item') {
-    if (await bagCount(db, me.id) >= BAG_MAX) fail(409, 'Inventaire plein');
+    if (await bagRoom(db, me.id) <= 0) fail(409, 'Inventaire plein');
     const up = await db.query('UPDATE character_items SET qty=qty+$3 WHERE ctid=(SELECT ctid FROM character_items WHERE character_id=$1 AND item_id=$2 AND NOT in_chest AND equipped_slot IS NULL LIMIT 1)', [me.id, r.target_id, r.qty_out]);
     if (!up.rowCount) await db.query('INSERT INTO character_items(character_id,item_id,qty) VALUES ($1,$2,$3)', [me.id, r.target_id, r.qty_out]);
   } else if (r.target_kind === 'spell') {

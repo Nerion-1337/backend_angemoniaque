@@ -80,8 +80,7 @@ def(depositRoutes, 'put', '/admin/content/resource-rules/{resource}', Activation
   const res = c.req.param('resource');
   if (!resourceExists(res)) fail(404, `Ressource inconnue : ${res}`);
   await checkActivation(pool, b);
-  if (!b.groups.length) await pool.query('DELETE FROM resource_rules WHERE resource=$1', [res]);
-  else await pool.query('INSERT INTO resource_rules(resource,harvest) VALUES ($1,$2) ON CONFLICT (resource) DO UPDATE SET harvest=EXCLUDED.harvest', [res, JSON.stringify(b)]);
+  await pool.query('INSERT INTO resource_rules(resource,harvest) VALUES ($1,$2) ON CONFLICT (resource) DO UPDATE SET harvest=EXCLUDED.harvest', [res, JSON.stringify(b)]);   // groups [] = récolte libre (la ligne garde la taille de pile)
   await bumpContent(); await audit(c, 'resource.rules', 'resource', null, null, { resource: res, ...b });
   return { resource: res, harvest: b };
 });
@@ -92,4 +91,12 @@ def(depositRoutes, 'put', '/admin/content/map-upgrade', z.object({ price: z.numb
   await pool.query("INSERT INTO game_config(key,value) VALUES ('map_upgrade_price',$1) ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value, updated_at=now()", [JSON.stringify(b.price)]);
   await bumpContent(); await audit(c, 'config.map_upgrade_price', 'config', undefined, null, b);
   return { price: b.price };
+});
+/** Quantité d'une ressource par emplacement du sac et du coffre (migration 33, défaut 20). */
+def(depositRoutes, 'put', '/admin/content/resource-stack/{resource}', z.object({ stackMax: z.number().int().min(1).max(100000) }), async (c, b) => {
+  const res = c.req.param('resource');
+  if (!resourceExists(res)) fail(404, `Ressource inconnue : ${res}`);
+  await pool.query('INSERT INTO resource_rules(resource,stack_max) VALUES ($1,$2) ON CONFLICT (resource) DO UPDATE SET stack_max=EXCLUDED.stack_max', [res, b.stackMax]);
+  await bumpContent(); await audit(c, 'resource.stack', 'resource', undefined, null, { resource: res, ...b });
+  return { resource: res, stack_max: b.stackMax };
 });

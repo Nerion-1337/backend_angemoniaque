@@ -30,11 +30,13 @@ symbols:
   - src/game/spawn.ts:hourlySpawns
   - src/routes/map.ts:mapRoutes
   - src/routes/actions.ts:actions
+  - src/game/harvest.ts:harvestMissing
 tests:
   - test/rules.test.ts
   - test/world.test.ts
   - test/integration/map-gather.test.ts
   - test/flyingSummon.test.ts
+  - test/integration/bagResources.test.ts
 ---
 ## Purpose
 Modèle du monde : Monde des Hommes (carte 1, grille 200×200 dessinée), autres mondes générés ; chaque case a un type (9),
@@ -57,6 +59,8 @@ et API des cartes (`/map/*`) et actions (`/actions/*`). Le front en garde un mir
 - `/map/{id}/area` et `/cell` : `flying` = monture volante du cavalier, ou monstre / invocation dont la locomotion comprend `air` (affichage au niveau du ciel côté front).
 - Créature contrôlée : sa locomotion vient de son type de monstre (`actor().loco`, exposée dans `actor.loco` de `/characters/{id}`) ; aquatique = 1 sur l'eau, terre ferme interdite sans `land` ; récolte en eau profonde possible si volante ou aquatique.
 - Royaume des Morts (carte 3, et tout monde généré) : AUCUNE ressource des autres mondes ; 3 ressources uniques (`resources3` : asphodèle spectrale / plaine, saule des Lamentations / forêt, âme cristallisée / massif) sur ≈ 0,5 % des cases de leur type (`RARE3`, hash fixe) ; les autres cases n'ont rien à récolter.
+- Récolte : refus 409 « Sac plein » AVANT tout trajet / toute dépense si la quantité récoltée demande un emplacement de plus que la place libre.
+- `/map/{id}/cell?characterId=` (personnage du joueur) : `harvestMissing` = null (récolte libre), [] (rien ne manque) ou une ligne par option de ce qui manque (objets équipés comptés).
 
 ## Gotchas
 - Terrain dupliqué back ⇄ front (fichiers générés : modifier les scripts `tools/gen_*`, jamais les fichiers générés).

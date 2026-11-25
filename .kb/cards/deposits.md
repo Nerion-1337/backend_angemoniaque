@@ -42,6 +42,7 @@ part de cases, un type de case éventuel et son propre stock (vidé à la récol
 - Récolte : `checkHarvest` AVANT tout trajet ; les objets ÉQUIPÉS comptent (outil en main) et peuvent être consommés ; refus 403 « Récolte de X impossible — option 1 : … ; option 2 : … ».
 - `/map/{id}/cell` expose `harvestNeeds` (texte des conditions de la ressource effective de la case, null si libre) ; admin GET/PUT `/admin/content/resource-rules[/{resource}]` (ressource / objet / sort inconnus → 404 ; `groups: []` supprime la règle ; `needs` = texte).
 - Admin : `GET/PUT /admin/content/map-upgrade` = prix de l'amélioration de carte vendue à l'Hôtel de ville.
+- `PUT /admin/content/resource-stack/{resource}` : quantité par emplacement (1–100000) ; une ligne `resource_rules` peut n'avoir aucune condition (groups []) — vider les conditions ne supprime plus la ligne.
 
 ## Gotchas
 - `cellRoll` / `pickShare` / `shareTotals` ont un miroir front (`admin/deposits.js`) : valeurs figées dans les deux tests ; modifier les deux côtés.

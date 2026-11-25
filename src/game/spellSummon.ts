@@ -1,5 +1,5 @@
 import { fail, log } from '../lib/db.js'; import { freeCell } from './spawn.js'; import { maxSummons } from './stats.js';
-import { bagCount, BAG_MAX } from '../routes/market.js'; import { Effects, applyEffects } from './spellEffects.js';
+import { bagRoom } from './bag.js'; import { Effects, applyEffects } from './spellEffects.js';
 import { loadTarget, type Target } from './combatlib.js';
 /**
  * Lot D (migration 27) — invocations par sort et sorts déclenchés par les objets portés.
@@ -38,7 +38,7 @@ export async function castSummon(db: any, me: any, mp: any, s: any) {   // s : e
     refId = mo.id; label = `obtient la monture ${mo.name}`;
   } else if (s.kind === 'item') {
     const { rows: [it] } = await db.query('SELECT id, name FROM items WHERE id=$1', [s.refId]); if (!it) fail(404, 'Objet à invoquer inconnu');
-    if (await bagCount(db, me.id) >= BAG_MAX) fail(409, 'Inventaire plein');
+    if (await bagRoom(db, me.id) <= 0) fail(409, 'Inventaire plein');
     await db.query('INSERT INTO character_items(character_id,item_id,qty) VALUES ($1,$2,$3)', [me.id, it.id, s.qty]);
     refId = it.id; label = `obtient ${it.name}${s.qty > 1 ? ` ×${s.qty}` : ''}`;
   } else {

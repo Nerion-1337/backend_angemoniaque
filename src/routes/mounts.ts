@@ -1,6 +1,6 @@
 import { def, router, z, P } from '../lib/route.js'; import { tx, ownChar, fail, log, posOf } from '../lib/db.js'; import { broadcast } from '../realtime/ws.js';
 import { activeMount } from '../game/movement.js'; import { terrain } from '../game/terrain.js'; import { freeCell } from '../game/spawn.js'; import { maxSummons } from '../game/stats.js';
-import { bagCount, BAG_MAX } from './market.js';
+import { bagRoom } from '../game/bag.js';
 /**
  * Montures possédées (character_mounts, migration 29) :
  *  - MONTÉE (`active`) : le cavalier se déplace, l'énergie des déplacements est prise sur la monture ; ses capacités actives
@@ -90,7 +90,7 @@ def(mounts, 'post', '/mounts/equip', z.object({ characterId: z.number(), cmId: z
 def(mounts, 'post', '/mounts/unequip', z.object({ characterId: z.number(), cmId: z.number(), slot: Slot }), (c, b) => tx(async db => {
   const me = await ownChar(db, c, b.characterId), m = await ownMount(db, me.id, b.cmId);
   if ((await db.query('SELECT 1 FROM summons WHERE char_mount_id=$1', [m.id])).rowCount) fail(409, 'Renvoyez d\'abord la créature invoquée');
-  if (await bagCount(db, me.id) >= BAG_MAX) fail(409, 'Inventaire plein');
+  if (await bagRoom(db, me.id) <= 0) fail(409, 'Inventaire plein');
   const { rows: [e] } = await db.query('DELETE FROM mount_equips WHERE char_mount_id=$1 AND slot=$2 RETURNING item_id', [m.id, b.slot]);
   if (!e) fail(404, 'Rien sur cette partie');
   await db.query('INSERT INTO character_items(character_id,item_id) VALUES ($1,$2)', [me.id, e.item_id]);

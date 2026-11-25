@@ -6,6 +6,14 @@ describe.skipIf(!process.env.DATABASE_URL)('Équipement et carte des ressources'
     const r = await app.request(path, { method: method ?? (body ? 'POST' : 'GET'), headers: { 'content-type': 'application/json', ...(tk ? { authorization: `Bearer ${tk}` } : {}) }, body: body ? JSON.stringify(body) : undefined });
     return { status: r.status, j: await r.json().catch(() => null) };
   };
+  /** Case libre à 2 cases au plus de la capitale humaine (les tests y entassent des personnages). */
+  const nearCapital = async () => {
+    const { rows: [cap] } = await pool.query("SELECT p.map_id m, p.coord_x x, p.coord_y y FROM buildings b JOIN positions p ON p.building_id=b.id WHERE b.kind='capital' AND b.data->>'race'='human'");
+    for (const [dx, dy] of [[1, 1], [-1, 1], [1, -1], [-1, -1], [2, 0], [0, 2], [-2, 0], [0, -2], [2, 2], [-2, -2], [2, -2], [-2, 2], [1, 2], [2, 1], [-1, 2], [-2, 1], [1, -2], [2, -1], [-1, -2], [-2, -1], [1, 0], [0, 1], [-1, 0], [0, -1]])
+      if (!(await pool.query('SELECT 1 FROM positions WHERE map_id=$1 AND coord_x=$2 AND coord_y=$3', [cap.m, cap.x + dx, cap.y + dy])).rowCount) {
+        await pool.query('UPDATE positions SET map_id=$2, coord_x=$3, coord_y=$4 WHERE character_id=$1', [T.c, cap.m, cap.x + dx, cap.y + dy]); return; }
+    throw new Error('capitale encerclée');
+  };
   const login = async (email: string) => { let r = await call('/auth/register', { email, password: 'password1' }); if (r.status !== 200) r = await call('/auth/login', { email, password: 'password1' }); return r.j.token; };
   const give = async (name: string, extra: any) => { const id = (await call('/admin/content/items', { name: `${name}${s}`, ...extra }, T.adm)).j.id; await call(`/admin/players/${T.c}/items`, { itemId: id, qty: 1, place: 'bag' }, T.adm); return id; };
   const equip = (itemId: number, slot: string | null) => call('/inventory/equip', { characterId: T.c, itemId, slot }, T.tk);
@@ -38,8 +46,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Équipement et carte des ressources'
     expect((await call(`/shop?characterId=${T.c}`, undefined, T.tk)).j.mapUpgrade.price).toBe(40);
     await call(`/admin/players/${T.c}/teleport`, { map: 3, x: 50, y: 50 }, T.adm);
     expect((await call('/shop/map-upgrade', { characterId: T.c }, T.tk)).status).toBe(409);   // loin de la capitale
-    const { rows: [cap] } = await pool.query("SELECT p.coord_x x, p.coord_y y FROM buildings b JOIN positions p ON p.building_id=b.id WHERE b.kind='capital' AND b.data->>'race'='human'");
-    await call(`/admin/players/${T.c}/teleport`, { map: 1, x: cap.x + 1, y: cap.y + 1 }, T.adm);
+    await nearCapital();
     await pool.query('UPDATE characters SET gold=100 WHERE id=$1', [T.c]);
     const r = await call('/shop/map-upgrade', { characterId: T.c }, T.tk); expect(r.status, JSON.stringify(r.j)).toBe(200);
     expect((await call(`/characters/${T.c}`, undefined, T.tk)).j).toMatchObject({ map_upgrade: true, gold: 60 });
