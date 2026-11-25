@@ -72,7 +72,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Admin phase 1 (socle)', () => {
   });
 
   test('monture & bâtiment : création + production au tick (rendement/h, plafond de stock)', async () => {
-    const mo = await call('/admin/content/mounts', { name: `Licorne${s}`, speed: 1.4, carry: 60, hp_max: 300 }, T.adm.tk);
+    const mo = await call('/admin/content/monsters', { name: `Licorne${s}`, mountable: true, speed: 1.4, carry: 60, hp_max: 300 }, T.adm.tk);   // montures = monstres montables (lot B)
     expect(mo.status).toBe(200);
     const bd = await call('/admin/content/buildings', { name: `Mine${s}`, kind: 'mine', owner_id: T.p.id, structure: 120, data: { production: { lorien: 2 }, storage: { lorien: 5 } } }, T.adm.tk);
     expect(bd.status).toBe(200);

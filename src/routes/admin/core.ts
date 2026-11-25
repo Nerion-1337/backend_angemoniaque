@@ -15,7 +15,8 @@ def(coreRoutes, 'post', '/admin/tick', null, async () => { await hourlyTick(); r
 def(coreRoutes, 'get', '/admin/catalog', null, async () => ({
   items: (await pool.query('SELECT id,name FROM items ORDER BY id')).rows,
   spells: (await pool.query('SELECT id,name FROM spells ORDER BY id')).rows,
-  mounts: (await pool.query('SELECT id,name FROM mounts ORDER BY id')).rows,
+  // Montures proposées (kits, fiches joueurs) : types de monstres montables (ou montures historiques sans type).
+  mounts: (await pool.query('SELECT mo.id, mo.name, mo.monster_id FROM mounts mo LEFT JOIN monsters m ON m.id=mo.monster_id WHERE m.id IS NULL OR m.mountable ORDER BY mo.id')).rows,
   maps: (await pool.query('SELECT id,name_file, width,height FROM maps ORDER BY id')).rows,
   // Catalogue des ressources du jeu (deux mondes) — dédoublonné par id, pour les menus
   // déroulants « ressource » du butin de monstre (phase 3c).

@@ -40,6 +40,12 @@ test('eau peu profonde = 4 ; eau profonde interdite à pied / monture terrestre'
   expect(stepCost(sh, { mount: null })).toBe(4); expect(stepCost(dp, { mount: null })).toBe(Infinity); expect(stepCost(dp, { mount: { flying: false, aquatic: false } })).toBe(Infinity); });
 test('navire / monture aquatique : l\'eau seulement ; monture volante : partout', () => { const dp = terrain(find('deep').x, find('deep').y), pl = terrain(find('plain').x, find('plain').y);
   expect(stepCost(dp, { mount: { aquatic: true } })).toBe(1); expect(stepCost(pl, { mount: { aquatic: true } })).toBe(Infinity); expect(stepCost(dp, { mount: { flying: true } })).toBe(1); expect(stepCost(pl, { mount: { flying: true } })).toBe(1); });
+test('combinaisons (migration 25) : amphibie = eau à 1 ET terre ferme ; aquatique non terrestre = eau seulement ; terrestre = profonde interdite', () => {
+  const dp = terrain(find('deep').x, find('deep').y), pl = terrain(find('plain').x, find('plain').y), sh = terrain(find('shallow').x, find('shallow').y);
+  const amphi = { aquatic: true, terrestrial: true }, fish = { aquatic: true, terrestrial: false }, land = { terrestrial: true };
+  expect(stepCost(dp, { mount: amphi })).toBe(1); expect(stepCost(sh, { mount: amphi })).toBe(1); expect(stepCost(pl, { mount: amphi })).toBeLessThan(Infinity);
+  expect(stepCost(pl, { mount: fish })).toBe(Infinity); expect(stepCost(dp, { mount: fish })).toBe(1);
+  expect(stepCost(dp, { mount: land })).toBe(Infinity); expect(stepCost(sh, { mount: land })).toBe(4); });
 test('relief : plus de forêts, montagnes et eaux', () => { const c: any = {}; for (let x = 0; x < 100; x++) for (let y = 0; y < 100; y++) { const k = terrain(x, y, 3).kind; c[k] = (c[k] ?? 0) + 1; } for (const k of ['plain', 'forest', 'mountain', 'shallow', 'deep']) expect(c[k]).toBeGreaterThan(300); });
 import { applyArmor } from '../src/game/rules';
 test('dégâts : exemples du cahier des charges', () => {

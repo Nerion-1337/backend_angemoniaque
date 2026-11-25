@@ -1,6 +1,6 @@
 import { def, router, z, P } from '../../lib/route.js'; import { pool, fail } from '../../lib/db.js';
 import { audit } from '../../lib/audit.js'; import { bumpContent } from '../../game/content.js';
-import { safeInsert, safeUpdate, requireRow, extras } from './common.js'; import { RespawnLimit } from '../../game/respawn.js';
+import { safeInsert, safeUpdate, requireRow, extras, RARITIES } from './common.js'; import { RespawnLimit } from '../../game/respawn.js';
 export const monsterRoutes = router();
 const Monster = z.object({
   name: z.string().max(80), hp_max: z.number().int().optional(), hp_current: z.number().int().optional(),
@@ -11,8 +11,14 @@ const Monster = z.object({
   guards_item: z.enum(['relique', 'arcane', 'artefact']).optional(), data: z.record(z.any()).optional(),
   /** Réapparition (migration 24) : recréé ou non, délai (h), conditions sur les éléments limités chez les joueurs. */
   respawn: z.boolean().optional(), reincarnate_delay_h: z.number().int().min(0).max(8760).optional(),
-  respawn_limits: z.array(RespawnLimit).max(20).optional()
+  respawn_limits: z.array(RespawnLimit).max(20).optional(),
+  /** Fusion monstres / montures (migration 25) : rareté, déplacement (combinaison), monture et ses bonus. */
+  rarity: z.enum(RARITIES).optional(), locomotion: z.array(z.enum(['land', 'air', 'water'])).min(1).max(3).optional(),
+  mountable: z.boolean().optional(), bonus_see: z.number().int().min(-50).max(50).optional(), bonus_range: z.number().int().min(-50).max(50).optional(),
+  speed: z.number().min(0).max(100).optional(), carry: z.number().int().min(0).max(1e6).optional()
 });
+/** `locomotion` est un TEXT[] : littéral Postgres (valeurs bornées par l'enum), pas du JSON (safeInsert/safeUpdate). */
+const pgArr = (b: any) => (b.locomotion ? { ...b, locomotion: `{${b.locomotion.join(',')}}` } : b);
 def(monsterRoutes, 'get', '/admin/content/monsters', null, async c => {
   const q = c.req.query('q');
   const { rows } = q ? await pool.query('SELECT * FROM monsters WHERE name ILIKE $1 ORDER BY name', [`%${q}%`])
@@ -20,7 +26,7 @@ def(monsterRoutes, 'get', '/admin/content/monsters', null, async c => {
   return rows;
 });
 def(monsterRoutes, 'post', '/admin/content/monsters', Monster, async (c, b) => {
-  const row = await safeInsert('monsters', b as any);
+  const row = await safeInsert('monsters', pgArr(b));
   await bumpContent(); await audit(c, 'monster.create', 'monster', row.id, null, b);
   return row;
 });
@@ -29,7 +35,7 @@ def(monsterRoutes, 'get', '/admin/content/monsters/{id}', null, async c => {
   return { ...(await requireRow('monsters', id)), ...(await extras('monster', id)) };
 });
 def(monsterRoutes, 'put', '/admin/content/monsters/{id}', Monster.partial(), async (c, b) => {
-  const row = await safeUpdate('monsters', P(c, 'id'), b as any);
+  const row = await safeUpdate('monsters', P(c, 'id'), pgArr(b));
   await bumpContent(); await audit(c, 'monster.update', 'monster', P(c, 'id'), null, b);
   return row;
 });
@@ -38,6 +44,7 @@ def(monsterRoutes, 'delete', '/admin/content/monsters/{id}', null, async c => {
   if ((await pool.query('SELECT 1 FROM positions WHERE monsters_id=$1', [id])).rowCount) fail(409, 'Ce monstre est placé sur une carte');
   if ((await pool.query('SELECT 1 FROM character_monster WHERE monster_id=$1', [id])).rowCount) fail(409, 'Des joueurs ont invoqué ce monstre');
   if ((await pool.query('SELECT 1 FROM divine_items WHERE guardian_monster_id=$1', [id])).rowCount) fail(409, 'Ce monstre est gardien d\'objets divins');
+  if ((await pool.query('SELECT 1 FROM character_mounts cm JOIN mounts mo ON mo.id=cm.mount_id WHERE mo.monster_id=$1', [id])).rowCount) fail(409, 'Des joueurs possèdent ce monstre comme monture');
   await pool.query('DELETE FROM monsters WHERE id=$1', [id]);
   await bumpContent(); await audit(c, 'monster.delete', 'monster', id, null, null);
   return { ok: true };

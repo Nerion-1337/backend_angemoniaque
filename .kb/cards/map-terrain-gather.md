@@ -2,7 +2,7 @@
 title: Procedural map & terrain: resources, movement rules, spawn, map/action routes
 slug: map-terrain-gather
 status: done
-updated: 2026-11-24
+updated: 2026-11-25
 files:
   - src/game/terrain.ts
   - src/game/humanMap.ts
@@ -41,7 +41,7 @@ et API des cartes (`/map/*`) et actions (`/actions/*`). Le front en garde un mir
 
 ## Business rules
 - Types de case : plain, forest, mountain, arid, snow, ether, volcano, shallow, deep. Coût d'un pas = coût du type DANS CE MONDE (admin « Cases », card `tile-types`), défaut `KIND_COST` (1, 2, 3, 2, 3, 3, 3, 4, 99).
-- Coût réel (`stepCost`) : monture volante = 1 partout ; monture aquatique = 1 sur l'eau, impossible sur terre ; à pied / monture terrestre = coût de la case, eau profonde impossible.
+- Coût réel (`stepCost`) : monture aérienne = 1 partout ; aquatique = 1 sur l'eau ; terre ferme impossible si la monture n'est pas terrestre (combinaisons, card `monster-mounts`) ; à pied / monture terrestre = coût de la case, eau profonde impossible.
 - Déplacement en ligne droite (8 directions, Chebyshev), sans contournement : une case occupée sur le trajet bloque tout le déplacement (409 « Chemin bloqué ») ; hors carte → 409.
 - Paiement : l'invocation contrôlée paie tout ; sinon la monture paie le trajet et le héros les actions ; énergie insuffisante → 409.
 - Traverser une case de lave enflamme le HÉROS (pas les invocations) : `burn_until = now + 3 h`, 10 PV/h au tick, jamais mortel (PV min 1).
