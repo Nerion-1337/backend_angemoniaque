@@ -18,7 +18,9 @@ const Item = z.object({
   /** XP gagnée à chaque utilisation (migration 35) : coup porté avec cette arme, parchemin utilisé. */
   xp_use: z.number().int().min(0).max(1e6).optional(),
   /** Portée de l'arme (1 = corps à corps) et, pour une arme à distance, pleine puissance jusqu'à N cases (< portée ; null = partout). Migration 36. */
-  reach: z.number().int().min(1).max(20).optional(), full_power_at: z.number().int().min(1).max(19).nullable().optional(),
+  reach: z.number().int().min(1).max(20).optional(), full_power_at: z.number().int().min(1).max(20).nullable().optional(),
+  /** Grande portée (migration 37) : puissance à la case 1 et à la dernière case de portée (%). */
+  power_start: z.number().int().min(0).max(100).optional(), power_end: z.number().int().min(0).max(100).optional(),
   data: z.record(z.any()).optional(),
   /** Caractéristiques reportées sur la fiche à l'équipement (migration 26) ; valeur négative = malus. */
   bonuses: z.record(z.enum(['hp_max', 'recovery', 'energy_max', 'divine_energy_max', 'see', 'range']), z.number().int().min(-1000).max(1000)).optional(),
@@ -69,7 +71,7 @@ const checkFamily = async (b: any) => {
 /** Pleine puissance (arme à distance) : strictement en deçà de la portée de l'arme. */
 const checkReach = (b: any, cur: any = {}) => {
   const reach = b.reach ?? cur.reach ?? 1, full = b.full_power_at !== undefined ? b.full_power_at : cur.full_power_at;
-  if (full != null && full >= reach) fail(400, `Pleine puissance (${full} case(s)) : doit être inférieure à la portée de l'arme (${reach})`);
+  if (full != null && full > reach) fail(400, `Case de pleine puissance (${full}) : au-delà de la portée de l'arme (${reach})`);
 };
 def(itemRoutes, 'post', '/admin/content/items', Item, async (c, b) => {
   await checkFamily(b); checkReach(b);

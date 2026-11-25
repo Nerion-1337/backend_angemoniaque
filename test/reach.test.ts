@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'vitest';
-import { dist3, groundReach, powerAt, mountElevation } from '../src/game/reach.js';
-// Portée 3D (Pythagore) et puissance des armes à distance (migration 36).
+import { dist3, groundReach, powerAt, powered, mountElevation } from '../src/game/reach.js';
+// Portée 3D (Pythagore) et puissance des armes à grande portée (migrations 36-37).
 describe('portée et hauteur', () => {
   test('cavalier (hauteur 1) collé : hors de portée 1, à portée 2 ; à 2 cases au sol : portée 2 ne suffit pas', () => {
     expect(dist3(1, 1)).toBeCloseTo(1.414, 3);
@@ -14,8 +14,13 @@ describe('portée et hauteur', () => {
   test('hauteur d\'une monture : à pied 0, taille 1 à 3, volante 6', () => {
     expect(mountElevation(null)).toBe(0); expect(mountElevation({ size: 2 })).toBe(2); expect(mountElevation({ size: 9 })).toBe(3); expect(mountElevation({ flying: true, size: 1 })).toBe(6);
   });
-  test('puissance : 100 % jusqu\'à la pleine puissance, puis baisse linéaire jusqu\'à 50 % à la portée max', () => {
-    expect(powerAt(3, 6, 3)).toBe(100); expect(powerAt(6, 6, 3)).toBe(50); expect(powerAt(4.5, 6, 3)).toBe(75);
-    expect(powerAt(6, 6, null)).toBe(100); expect(powerAt(9, 6, 3)).toBe(50);
+  test('puissance : départ à la case 1 → 100 % à la case X → reste à la dernière case (linéaire) ; sans case X : 100 %', () => {
+    expect(powerAt(1, 6, 3, 40, 20)).toBe(40); expect(powerAt(2, 6, 3, 40, 20)).toBe(70); expect(powerAt(3, 6, 3, 40, 20)).toBe(100);
+    expect(powerAt(4.5, 6, 3, 40, 20)).toBe(60); expect(powerAt(6, 6, 3, 40, 20)).toBe(20); expect(powerAt(9, 6, 3, 40, 20)).toBe(20);
+    expect(powerAt(1, 6, 1, 40, 20)).toBe(100); expect(powerAt(6, 6, 6, 40, 20)).toBe(100);   // X = 1 : pas de montée ; X = portée : pas de baisse
+    expect(powerAt(5, 6, null, 10, 10)).toBe(100);
+  });
+  test('dégâts arrondis au supérieur', () => {
+    expect(powered(10, 33)).toBe(4); expect(powered(10, 30)).toBe(3); expect(powered(7, 100)).toBe(7); expect(powered(7.2, 100)).toBe(8);
   });
 });

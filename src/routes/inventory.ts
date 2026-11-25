@@ -8,7 +8,7 @@ export const GROUP: Record<string, string[]> = { weapon: ['weapon_main', 'weapon
   ring: ['ring_l', 'ring_r'], bracelet: ['bracelet_l', 'bracelet_r'], special: ['special_1', 'special_2', 'special_3', 'special_4', 'special_5'] };
 def(inventory, 'get', '/inventory/{characterId}', null, c => tx(async db => {
   const me = await ownChar(db, c, P(c, 'characterId'));
-  const items = (await db.query(`SELECT i.id,i.name,i.slot,i.two_handed,i.rarity,i.data,i.armor,i.magic_armor,i.bonuses,i.req_strength,i.weapon_damage,i.reach,i.full_power_at,i.strength_bonus,i.agility_bonus,ci.equipped_slot, GREATEST(0, EXTRACT(EPOCH FROM (ci.equipped_at + interval '12 hours' - now())))::int lock_seconds, ci.qty FROM character_items ci JOIN items i ON i.id=ci.item_id WHERE ci.character_id=$1 AND NOT ci.in_chest`, [me.id])).rows;
+  const items = (await db.query(`SELECT i.id,i.name,i.slot,i.two_handed,i.rarity,i.data,i.armor,i.magic_armor,i.bonuses,i.req_strength,i.weapon_damage,i.reach,i.full_power_at,i.power_start,i.power_end,i.strength_bonus,i.agility_bonus,ci.equipped_slot, GREATEST(0, EXTRACT(EPOCH FROM (ci.equipped_at + interval '12 hours' - now())))::int lock_seconds, ci.qty FROM character_items ci JOIN items i ON i.id=ci.item_id WHERE ci.character_id=$1 AND NOT ci.in_chest`, [me.id])).rows;
   const bag = await bagState(db, me.id);
   return { items, lockHours: 12, specialSlots: me.race === 'human' ? 5 : 4, bagMax: bag.size, bagUsed: bag.used, resources: me.resources, resStacks: resStacks(bag.resources, bag.st) };
 }));

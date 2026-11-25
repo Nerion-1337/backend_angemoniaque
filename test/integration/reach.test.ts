@@ -55,11 +55,17 @@ describe.skipIf(!process.env.DATABASE_URL)('Portée des armes et hauteur', () =>
     expect(p.inRange).toBe(true); expect(p.power).toBeLessThan(100); expect(p.power).toBeGreaterThanOrEqual(50);
   });
 
-  test('admin : pleine puissance doit rester sous la portée', async () => {
-    expect((await call('/admin/content/items', { name: `Arc bad${s}`, slot: 'weapon', reach: 3, full_power_at: 3 }, T.adm)).status).toBe(400);
-    const it = (await call('/admin/content/items', { name: `Arc ok${s}`, slot: 'weapon', reach: 5, full_power_at: 3 }, T.adm)).j;
-    expect(it).toMatchObject({ reach: 5, full_power_at: 3 });
+  test('admin : case de pleine puissance dans la portée, puissances de départ et de fin ; aperçu selon la courbe', async () => {
+    expect((await call('/admin/content/items', { name: `Arc bad${s}`, slot: 'weapon', reach: 3, full_power_at: 4 }, T.adm)).status).toBe(400);
+    expect((await call('/admin/content/items', { name: `Arc pct${s}`, slot: 'weapon', reach: 3, full_power_at: 2, power_start: 120 }, T.adm)).status).toBe(400);
+    const it = (await call('/admin/content/items', { name: `Arc ok${s}`, slot: 'weapon', reach: 5, full_power_at: 3, power_start: 40, power_end: 10 }, T.adm)).j;
+    expect(it).toMatchObject({ reach: 5, full_power_at: 3, power_start: 40, power_end: 10 });
     expect((await call(`/admin/content/items/${it.id}`, { reach: 2 }, T.adm, 'PUT')).status).toBe(400);
-    expect((await call(`/admin/content/items/${it.id}`, { reach: 2, full_power_at: null }, T.adm, 'PUT')).status).toBe(200);
+    expect((await call(`/admin/content/items/${it.id}`, { reach: 3 }, T.adm, 'PUT')).status).toBe(200);   // case X = dernière case : permis
+    await equip(5, 3); await pool.query('UPDATE items SET power_start=40, power_end=10 WHERE id=(SELECT item_id FROM character_items WHERE character_id=$1 AND equipped_slot=$2)', [T.a, 'weapon_main']);
+    await pool.query('UPDATE positions SET coord_x=$2 WHERE character_id=$1', [T.a, T.xy[0]]);
+    await pool.query('UPDATE positions SET coord_x=$2 WHERE character_id=$1', [T.b, T.xy[0] + 2]);
+    const p = (await call(`/combat/preview/${T.a}/${T.xy[0] + 2}/${T.xy[1]}`, undefined, T.tka)).j;   // √5 ≈ 2,24 → 40 + 60 × 1,24 / 2 ≈ 77 %
+    expect(p.power).toBe(77);
   });
 });

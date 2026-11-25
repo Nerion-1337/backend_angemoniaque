@@ -39,7 +39,7 @@ pour toutes les cibles (personnages, monstres, invocations), y compris les dég�
 - `GET /inventory` : `bagMax` (= `bag_size`), `bagUsed`, `resStacks` (piles de ressources du sac, une par emplacement).
 - `POST /inventory/use` : parchemin d'agrandissement du sac (`data = { kind: 'bag', add, max }`) → `bag_size = min(max, bag_size + add)`, consommé ; 409 si le sac a déjà `max` emplacements ; autre objet → 400.
 - Amélioration de `hp_max` / `energy_max` / `divine_energy_max` : +1 aussi sur la réserve actuelle (`hp_current`, `energy_current`, `divine_energy_current`) ; les autres stats ne touchent aucune réserve.
-- Objets : `reach` (portée de l'arme, 1 à 20, défaut 1) et `full_power_at` (pleine puissance jusqu'à N cases, < portée, null = partout ; 400 sinon, vérifié aussi à la modification) — distincts du bonus « Portée » des caractéristiques offertes.
+- Objets : `reach` (portée de l'arme, 1 à 20, défaut 1), `full_power_at` (case de pleine puissance, 1 ≤ X ≤ portée, null = 100 % partout ; 400 sinon, vérifié aussi à la modification), `power_start` / `power_end` (0 à 100 %, puissance à la case 1 et à la dernière case) — distincts du bonus « Portée » des caractéristiques offertes.
 
 ## Gotchas
 - Ne jamais additionner `items.bonuses` dans `gearStats` : ces valeurs sont DÉJÀ sur la fiche (double comptage).

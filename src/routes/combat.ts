@@ -7,7 +7,7 @@ import { loadTarget, targetAt, applyDamage } from '../game/combatlib.js';
 import { computeHitChance } from '../game/rules.js'; import { inSafeZone } from '../game/terrain.js';
 import { applyArmor } from '../game/rules.js';
 import { broadcast } from '../realtime/ws.js';
-import { combatEvent } from '../lib/events.js'; import { triggerItemSpells } from '../game/spellSummon.js'; import { gainXp, weaponXp } from '../game/xp.js'; import { dist3, groundReach, powerAt, actorElevation, targetElevation, weaponReach } from '../game/reach.js';
+import { combatEvent } from '../lib/events.js'; import { triggerItemSpells } from '../game/spellSummon.js'; import { gainXp, weaponXp } from '../game/xp.js'; import { dist3, groundReach, powerAt, powered, actorElevation, targetElevation, weaponReach } from '../game/reach.js';
 
 export const combat = router();
 const ATTACK_COST = 5;
@@ -18,7 +18,7 @@ async function attacker(db: any, ch: any, a: any) {
 }
 /** Portée de l'attaque (migration 36) : portée de l'acteur + (portée de l'arme − 1) ; distance 3D (sol + écart de hauteur). */
 async function reachOf(db: any, ch: any, a: any, t: any, tp: any, breath = false) {
-  const w = a.sm || breath ? { reach: 1, fullAt: null, name: null } : await weaponReach(db, ch.id);
+  const w = a.sm || breath ? { reach: 1, fullAt: null, start: 100, end: 100, name: null } : await weaponReach(db, ch.id);
   const range = a.range + w.reach - 1, dh = Math.abs(actorElevation(a) - await targetElevation(db, t)), ground = dist(a.mp, tp);
   return { w, range, dh, ground, d: dist3(ground, dh), maxGround: groundReach(range, dh) };
 }
@@ -27,7 +27,7 @@ def(combat, 'get', '/combat/preview/{characterId}/{x}/{y}', null, c => tx(async 
   const at = await attacker(db, ch, a), r = await reachOf(db, ch, a, t, t.pos);
   // Portée : distance réelle (Pythagore), portée d'attaque, cible atteignable (sinon trop haute), puissance à cette distance.
   return { hitChance: computeHitChance(at.agility, t.agility), dodge: 100 - computeHitChance(at.agility, t.agility),
-    range: r.range, distance: Math.round(r.d * 100) / 100, height: r.dh, reachable: r.maxGround >= 1, inRange: r.d <= r.range, power: r.d <= r.range ? powerAt(r.d, r.range, r.w.fullAt) : powerAt(Math.min(r.range, Math.max(r.d, 1)), r.range, r.w.fullAt) };
+    range: r.range, distance: Math.round(r.d * 100) / 100, height: r.dh, reachable: r.maxGround >= 1, inRange: r.d <= r.range, power: Math.round(powerAt(Math.min(r.d, r.range), r.range, r.w.fullAt, r.w.start, r.w.end)) };
 }));
 def(combat, 'post', '/combat/attack', z.object({ characterId: z.number(), targetCharacterId: z.number().optional(), targetMonsterId: z.number().optional(), targetSummonId: z.number().optional(), useMountBreath: z.boolean().optional() }), (c, b) => tx(async db => {
   const me = await ownChar(db, c, b.characterId), a = await actor(db, me);
@@ -45,8 +45,8 @@ def(combat, 'post', '/combat/attack', z.object({ characterId: z.number(), target
   if (breath) await spend(db, me, a, cost, 'mount');                                                                      // le souffle spécial coûte l'énergie de la monture
   const hit = computeHitChance(at.agility, t.agility), ok = Math.random() * 100 < hit;
   if (!ok) { await log(db, me.id, `Attaque ratée sur ${t.name}`); broadcast(a.mp.map_id, combatEvent(t.id, false, true)); return { dmg: 0, missed: true, hitChance: hit, killed: false }; }
-  const power = breath ? 100 : powerAt(rg.d, rg.range, rg.w.fullAt);   // arme à distance : pleine puissance jusqu'à N cases, puis baisse jusqu'à 50 %
-  const raw = Math.round((breath ? a.mount.special_attack_damage : at.damage) * power / 100), dmg = applyArmor(raw, t.armor);   // armure physique : réduction directe
+  const pw = breath ? 100 : powerAt(rg.d, rg.range, rg.w.fullAt, rg.w.start, rg.w.end), power = Math.round(pw);   // grande portée : départ → 100 % à la case X → reste au bout
+  const raw = powered(breath ? a.mount.special_attack_damage : at.damage, pw), dmg = applyArmor(raw, t.armor);   // dégâts arrondis au supérieur ; armure physique : réduction directe
   const r = await applyDamage(db, t, dmg, me.id);
   // XP des armes portées (items.xp_use) à chaque coup porté par le héros (pas l'invocation contrôlée ni le souffle de monture), selon l'écart de rang.
   const xp = !a.sm && !breath ? await gainXp(db, me.id, await weaponXp(db, me.id), t) : 0;

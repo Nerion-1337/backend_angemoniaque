@@ -35,7 +35,7 @@ publie un événement `combat` public sur le canal Redis de la carte, et les cli
 - Portée d'attaque (migration 36, `game/reach.ts`) : portée de l'acteur (caractéristique + hauteur + bâtiment) + (portée de l'arme la plus longue − 1) ; sans arme, invocation contrôlée ou souffle de monture : portée de l'acteur.
 - Distance à la cible = Pythagore (distance au sol, écart de hauteur au-dessus du sol : à pied 0, monture terrestre / aquatique = sa taille, volant = 6) ; le relief n'y entre pas. Cavalier (hauteur 1) collé : hors de portée 1, à portée 2.
 - Trop loin : le héros s'approche jusqu'à la distance au sol permise (`groundReach`) ; cible inatteignable même collée (portée < √(1 + écart²)) → 409 « hors d'atteinte ».
-- Arme à distance (`full_power_at`) : 100 % des dégâts jusqu'à N cases, puis baisse linéaire jusqu'à 50 % à la portée max (`powerAt`) ; l'aperçu (`/combat/preview`) renvoie portée, distance, hauteur, atteignable, à portée, puissance.
+- Arme à grande portée (migration 37, `powerAt`) : `power_start` % à la case 1 → 100 % à la case `full_power_at` (≤ portée) → `power_end` % à la dernière case de portée, linéaire sur la distance 3D ; sans case de pleine puissance : 100 % partout. Dégâts de toute attaque à l'arme arrondis au supérieur (`powered`). L'aperçu renvoie la puissance arrondie.
 
 ## Gotchas
 - Supprimer la diffusion du raté réintroduit 8 s de retard chez les spectateurs (rafraîchissement par sondage).
