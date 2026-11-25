@@ -8,7 +8,7 @@ const Building = z.object({
   prerequisites: z.record(z.any()).optional(), data: z.record(z.any()).optional(),
   /** Lot 4 : armure de la structure ; case occupable ; bonus de l'occupant ; attaques possibles contre l'occupant. */
   armor: z.number().int().min(0).optional(), occupiable: z.boolean().optional(),
-  bonus_armor: z.number().int().optional(), bonus_see: z.number().int().optional(), bonus_range: z.number().int().optional(),
+  bonus_armor: z.number().int().optional(), bonus_magic_armor: z.number().int().optional(), bonus_see: z.number().int().optional(), bonus_range: z.number().int().optional(),
   occupant_attack: z.object({ melee: z.boolean(), ranged: z.boolean(), spell: z.boolean() }).optional()
 });
 def(buildingRoutes, 'get', '/admin/content/buildings', null, async c => {

@@ -2,8 +2,12 @@ import { die, refreshSurcharge, grantDivine } from './divine.js'; import { gearS
 import { rollLoot } from './loot.js'; import { protoOf } from './respawn.js'; import { occupiableAt } from './buildingCell.js'; import { log } from '../lib/db.js';
 export type Target = { kind: 'character' | 'monster' | 'summon'; id: number; row: any; pos: any; armor: number; magicArmor: number; agility: number; name: string };
 export async function loadTarget(db: any, p: any): Promise<Target | null> {
-  if (p.character_id) { const { rows: [c] } = await db.query('SELECT * FROM characters WHERE id=$1', [p.character_id]); const g = await gearStats(db, c), bc = await occupiableAt(db, p.map_id, p.coord_x, p.coord_y); return { kind: 'character', id: c.id, row: c, pos: p, armor: g.armor + (bc?.bonus_armor ?? 0), magicArmor: g.magicArmor, agility: g.agility, name: c.pseudo }; }
-  if (p.monsters_id) { const { rows: [m] } = await db.query('SELECT * FROM monsters WHERE id=$1', [p.monsters_id]); return { kind: 'monster', id: m.id, row: m, pos: p, armor: m.armor, magicArmor: m.magic_armor ?? 0, agility: m.agility, name: m.name }; }
+  if (p.character_id) { const { rows: [c] } = await db.query('SELECT * FROM characters WHERE id=$1', [p.character_id]); const g = await gearStats(db, c), bc = await occupiableAt(db, p.map_id, p.coord_x, p.coord_y); return { kind: 'character', id: c.id, row: c, pos: p, armor: g.armor + (bc?.bonus_armor ?? 0), magicArmor: g.magicArmor + (bc?.bonus_magic_armor ?? 0), agility: g.agility, name: c.pseudo }; }
+  if (p.monsters_id) {   // armures du monstre + celles des objets qu'il porte (monster_equips)
+    const { rows: [m] } = await db.query('SELECT * FROM monsters WHERE id=$1', [p.monsters_id]);
+    const { rows: [e] } = await db.query('SELECT COALESCE(sum(i.armor),0)::int a, COALESCE(sum(i.magic_armor),0)::int ma FROM monster_equips me JOIN items i ON i.id=me.item_id WHERE me.monster_id=$1', [m.id]);
+    return { kind: 'monster', id: m.id, row: m, pos: p, armor: (m.armor ?? 0) + (e?.a ?? 0), magicArmor: (m.magic_armor ?? 0) + (e?.ma ?? 0), agility: m.agility, name: m.name };
+  }
   if (p.summon_id) { const { rows: [s] } = await db.query('SELECT * FROM summons WHERE id=$1', [p.summon_id]); return { kind: 'summon', id: s.id, row: s, pos: p, armor: s.armor, magicArmor: s.magic_armor ?? 0, agility: s.agility, name: s.name }; }
   return null;
 }

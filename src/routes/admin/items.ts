@@ -14,6 +14,8 @@ const Item = z.object({
   armor: z.number().int().optional(), strength_bonus: z.number().int().optional(), agility_bonus: z.number().int().optional(),
   req_strength: z.number().int().optional(), weapon_damage: z.number().int().optional(), magic_armor: z.number().int().optional(),
   data: z.record(z.any()).optional(),
+  /** Caractéristiques reportées sur la fiche à l'équipement (migration 26) ; valeur négative = malus. */
+  bonuses: z.record(z.enum(['hp_max', 'recovery', 'energy_max', 'divine_energy_max', 'see', 'range']), z.number().int().min(-1000).max(1000)).optional(),
   /** Races qui trouvent l'objet dans la boutique de leur hôtel de ville ([] = toutes) — avec `shop`. */
   shop_races: z.array(z.string().max(40)).max(20).optional(),
   /** Famille d'objet divin (rareté « divin » uniquement) : clé de divine_families. */

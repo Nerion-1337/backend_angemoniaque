@@ -2,7 +2,7 @@
 title: Moteur de sorts paramétrable (zone, cible, dégâts, durée, caractéristiques) et liens sort ↔ objet / monture / monstre
 slug: spell-engine
 status: done
-updated: 2026-11-24
+updated: 2026-11-25
 files:
   - src/game/spellEffects.ts
   - src/game/spellTick.ts
@@ -26,9 +26,9 @@ modifications de caractéristiques ; et liens d'un sort avec des objets, monture
 - Effet hostile (dégâts, dégâts sur la durée, caractéristique négative) sur un autre personnage : refusé si le lanceur ou la cible est en zone sacrée (403).
 - Coût : `energy_cost` payé après les contrôles.
 - Dégâts instantanés réduits par l'armure magique, peuvent tuer ; soin borné au PV max.
-- Dégâts sur la durée : n PV par heure au tick pendant `hours`, jamais mortels (PV min 1).
+- Dégâts sur la durée : n PV par heure au tick pendant `hours`, jamais mortels (PV min 1) ; n réduit par l'armure magique de la cible au lancer (minimum 1 / h).
 - Réserves (`hp`, `energy`, `divine_energy`) : valeur actuelle rendue ou retirée, bornée à [0 (1 pour hp), max].
-- Capacités (`*_max`, force, agilité, armure, vue, portée, récupération) : modifiées pour `durationH` heures (0 = permanent), puis rétablies au tick ; une capacité qui baisse ramène la réserve au nouveau max. Seuls les personnages ont des capacités modifiables.
+- Capacités (`*_max`, force, agilité, armure, armure magique, vue, portée, récupération) : modifiées pour `durationH` heures (0 = permanent), puis rétablies au tick ; une capacité qui baisse ramène la réserve au nouveau max. Seuls les personnages ont des capacités modifiables.
 - Sorts lançables = appris ∪ liés en ACTIF à un objet ÉQUIPÉ ∪ liés en ACTIF à la monture ACTIVE ; la liste indique la provenance.
 - Sort lié en PASSIF à un objet équipé ou à la monture active : ses effets instantanés sur soi (soin, réserves ±) s'appliquent une fois par heure ; capacités et dégâts ignorés.
 - Liens admin : monstre (table `monster_spells`), objet, monture, bâtiment (`entity_spells`) ; doublon → 409 ; élément ou sort inconnu → 404.

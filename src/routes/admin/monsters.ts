@@ -6,7 +6,7 @@ const Monster = z.object({
   name: z.string().max(80), hp_max: z.number().int().optional(), hp_current: z.number().int().optional(),
   recovery: z.number().int().optional(), see: z.number().int().optional(),
   strength: z.number().int().optional(), agility: z.number().int().optional(),
-  energy_max: z.number().int().optional(), range: z.number().int().optional(), armor: z.number().int().optional(),
+  energy_max: z.number().int().optional(), range: z.number().int().optional(), armor: z.number().int().optional(), magic_armor: z.number().int().min(0).optional(),
   gain_xp_hour: z.number().int().optional(), gold_current: z.number().optional(),
   guards_item: z.enum(['relique', 'arcane', 'artefact']).optional(), data: z.record(z.any()).optional(),
   /** Réapparition (migration 24) : recréé ou non, délai (h), conditions sur les éléments limités chez les joueurs. */

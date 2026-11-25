@@ -9,7 +9,7 @@ import { applyDamage, type Target } from './combatlib.js'; import { applyArmor }
  * - stats : [{ stat, value }] ± ; capacités (*_max, force…) modifiées pour `durationH` heures (0 = permanent) ;
  *   réserves (hp, energy, divine_energy) : la valeur actuelle est rendue / retirée, bornée à [0 (1 pour hp), max].
  */
-export const CAPS = ['strength', 'agility', 'armor', 'see', 'range', 'recovery', 'hp_max', 'energy_max', 'divine_energy_max'] as const;
+export const CAPS = ['strength', 'agility', 'armor', 'magic_armor', 'see', 'range', 'recovery', 'hp_max', 'energy_max', 'divine_energy_max'] as const;
 export const POOLS: Record<string, [string, string]> = { hp: ['hp_current', 'hp_max'], energy: ['energy_current', 'energy_max'], divine_energy: ['divine_energy_current', 'divine_energy_max'] };
 const STAT_KEYS = [...CAPS, ...Object.keys(POOLS)] as [string, ...string[]];
 export const Effects = z.object({
@@ -41,7 +41,9 @@ export async function applyEffects(db: any, caster: any, spellId: number, e: Eff
   if (e.damage > 0) { const dmg = applyArmor(e.damage, t.magicArmor), r = await applyDamage(db, t, dmg, caster.id); out.push(`-${dmg} PV${r.killed ? ' (vaincu)' : ''}`); if (r.killed) return out.join(', '); }
   const tbl = { character: 'characters', monster: 'monsters', summon: 'summons' }[t.kind];
   if (e.heal > 0) { await db.query(`UPDATE ${tbl} SET hp_current=LEAST(hp_max, hp_current+$2) WHERE id=$1`, [t.id, e.heal]); out.push(`+${e.heal} PV`); }
-  if (e.dot) { await db.query("INSERT INTO spell_dots(target_kind,target_id,spell_id,caster_id,damage_per_h,until) VALUES ($1,$2,$3,$4,$5,now()+make_interval(hours=>$6))", [t.kind, t.id, spellId, caster.id, e.dot.damage, e.dot.hours]); out.push(`-${e.dot.damage} PV/h pendant ${e.dot.hours} h`); }
+  if (e.dot) {   // dégâts sur la durée : réduits par l'armure magique de la cible au moment du lancer (minimum 1/h)
+    const dph = applyArmor(e.dot.damage, t.magicArmor);
+    await db.query("INSERT INTO spell_dots(target_kind,target_id,spell_id,caster_id,damage_per_h,until) VALUES ($1,$2,$3,$4,$5,now()+make_interval(hours=>$6))", [t.kind, t.id, spellId, caster.id, dph, e.dot.hours]); out.push(`-${dph} PV/h pendant ${e.dot.hours} h`); }
   for (const s of e.stats) {
     if (POOLS[s.stat]) {   // réserve : valeur actuelle rendue / retirée, jamais au-delà du max (PV min 1 : seuls les dégâts tuent)
       const [cur, max] = POOLS[s.stat]; if (t.kind !== 'character' && s.stat !== 'hp') continue;

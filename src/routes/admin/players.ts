@@ -2,7 +2,7 @@ import { def, router, z, P } from '../../lib/route.js'; import { pool, tx, fail 
 import { audit } from '../../lib/audit.js'; import { freeCell } from '../../game/spawn.js';
 /** Endpoints hérités de l'admin historique — complétés en phase 4 (modération, rôles mod). */
 export const playerRoutes = router();
-const STATS = ['hp_max', 'energy_max', 'divine_energy_max', 'recovery', 'see', 'strength', 'agility', 'armor', 'range', 'xp', 'gold'];
+const STATS = ['hp_max', 'energy_max', 'divine_energy_max', 'recovery', 'see', 'strength', 'agility', 'armor', 'magic_armor', 'range', 'xp', 'gold'];
 def(playerRoutes, 'post', '/admin/players/{id}/block', z.object({ blocked: z.boolean() }), async (c, b) => {
   await pool.query('UPDATE characters SET blocked=$2 WHERE id=$1', [P(c, 'id'), b.blocked]);
   await audit(c, 'player.block', 'player', P(c, 'id'), null, b);
@@ -38,7 +38,7 @@ def(playerRoutes, 'post', '/admin/players/{id}/grant', z.object({ kind: z.enum([
 
 // ---- Section admin « Joueurs » : liste paginée par race + fiche complète éditable ----
 /** Caractéristiques éditables en valeur absolue (fiche joueur). */
-export const EDITABLE = ['hp_current', 'hp_max', 'energy_current', 'energy_max', 'divine_energy_current', 'divine_energy_max', 'recovery', 'see', 'strength', 'agility', 'armor', 'range', 'xp', 'gold', 'chest_size', 'summon_cap'] as const;
+export const EDITABLE = ['hp_current', 'hp_max', 'energy_current', 'energy_max', 'divine_energy_current', 'divine_energy_max', 'recovery', 'see', 'strength', 'agility', 'armor', 'magic_armor', 'range', 'xp', 'gold', 'chest_size', 'summon_cap'] as const;
 const LIST_SQL = `FROM characters c JOIN accounts a ON a.id=c.account_id LEFT JOIN positions p ON p.character_id=c.id LEFT JOIN specializations s ON s.id=c.specialization_id`;
 def(playerRoutes, 'get', '/admin/players', null, async c => {
   const q = c.req.query(), per = Math.min(Math.max(Number(q.per ?? 20) || 20, 1), 100), page = Math.max(Number(q.page ?? 1) || 1, 1);
