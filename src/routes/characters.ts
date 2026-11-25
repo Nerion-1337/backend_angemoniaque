@@ -1,5 +1,5 @@
 import { OpenAPIHono } from '@hono/zod-openapi'; import { def, router, z, P } from '../lib/route.js'; import { pool, tx, ownChar, posOf, fail } from '../lib/db.js';
-import { statUpgradeCost } from '../game/rules.js'; import { applySpec } from '../game/divine.js'; import { spawn } from '../game/spawn.js'; import { Kit, startRank, grantKit } from '../game/startKit.js'; import { nextRank, rankUp, MODES } from '../game/rankUp.js'; import { activeMount, actor } from '../game/movement.js'; import { gearStats, maxSummons } from '../game/stats.js'; import { canUseDivineEnergy } from '../game/rules.js';
+import { statUpgradeCost } from '../game/rules.js'; import { applySpec } from '../game/divine.js'; import { spawn } from '../game/spawn.js'; import { Kit, startRank, grantKit } from '../game/startKit.js'; import { nextRank, rankUp, MODES } from '../game/rankUp.js'; import { activeMount, actor } from '../game/movement.js'; import { gearStats, maxSummons, statBreakdown } from '../game/stats.js'; import { canUseDivineEnergy } from '../game/rules.js';
 export const characters = router();
 /**
  * Règles de création (vérifiées côté serveur) : race existante, active et dotée d'un premier rang ;
@@ -66,7 +66,8 @@ def(characters, 'get', '/characters/{id}', null, (c) => tx(async db => {
     : { kind: 'hero', name: ch.pseudo, hp_current: ch.hp_current, hp_max: ch.hp_max, energy_current: ch.energy_current, energy_max: ch.energy_max, recovery: ch.recovery, see: a.see, agility: st.agility, strength: st.strength, damage: st.damage, armor: st.armor, magic_armor: st.magicArmor };
   const scrolls = Object.fromEntries((await db.query("SELECT i.data->>'kind' k, count(*)::int n FROM character_items ci JOIN items i ON i.id=ci.item_id WHERE ci.character_id=$1 AND i.slot='scroll' AND NOT ci.in_chest GROUP BY 1", [ch.id])).rows.map((r: any) => [r.k, r.n]));
   return { ...ch, scrolls, rank: s, pos: { map_id: hp.map_id, x: hp.coord_x, y: hp.coord_y, ...m }, mount: mount ?? null, stats: st, hasDivine: canUseDivineEnergy(ch.race, s.rank_name), summons, maxSummons: await maxSummons(db, ch),
-    actor: { ...act, pos: { map_id: a.mp.map_id, x: a.mp.coord_x, y: a.mp.coord_y, ...m } }, see_eff: a.see, range_eff: a.range };
+    actor: { ...act, pos: { map_id: a.mp.map_id, x: a.mp.coord_x, y: a.mp.coord_y, ...m } }, see_eff: a.see, range_eff: a.range,
+    breakdown: await statBreakdown(db, ch, st, sm ? await actor(db, { ...ch, controlled_summon_id: null }) : a, mount) };
 }));
 def(characters, 'get', '/characters/{id}/upgrades', null, (c) => tx(async db => {      // coûts par paliers (stat_cost_rules) pour l'onglet « Amélioration »
   const ch = await ownChar(db, c, P(c, 'id')); const { rows } = await db.query('SELECT * FROM stat_cost_rules ORDER BY base_xp_cost,stat');

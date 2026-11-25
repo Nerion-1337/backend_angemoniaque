@@ -1,7 +1,7 @@
-// ⚠ GÉNÉRÉ par tools/gen_human_map.py — copie identique dans backend/src/game/terrain.ts et frontend/src/lib/terrain.js. Ne pas éditer à la main.
+// ⚠ Généré à l'origine par tools/gen_human_map.py (absent du dépôt) — copie identique dans back/src/game/terrain.ts et front/src/lib/terrain.js : toute modification se fait DANS LES DEUX.
 // Monde des Hommes (carte 1) : grille dessinée (humanMap) ; autres mondes : bruit procédural d'origine.
 import { W, H, ROWS, CODES, FEATURES } from './humanMap.js';
-import { RES_BY_ID } from './resources.js'; import { terrain2, noise2 } from './world2.js';
+import { RES_BY_ID } from './resources.js'; import { RES3_BY_ID, RESOURCES3, RARE3 } from './resources3.js'; import { terrain2, noise2 } from './world2.js';
 export { FEATURES };
 export const MAP_HUMAN = 1;
 let WORLD = MAP_HUMAN;
@@ -33,12 +33,12 @@ function procNoise(x, y) {
   const s = 8, gx = Math.floor(x / s), gy = Math.floor(y / s), ex = x / s - gx, ey = y / s - gy, fx = ex * ex * (3 - 2 * ex), fy = ey * ey * (3 - 2 * ey);
   return h0(gx, gy) * (1 - fx) * (1 - fy) + h0(gx + 1, gy) * fx * (1 - fy) + h0(gx, gy + 1) * (1 - fx) * fy + h0(gx + 1, gy + 1) * fx * fy;
 }
-const POOL = {
-  plain: ['pissenlit_tempete', 'lavande_crepusculaire', 'tresle_six_feuilles'], forest: ['lorien', 'shinju', 'adam', 'weirwood'],
-  mountain: ['adamantine', 'mithril', 'uru', 'ebonite'], shallow: ['nenuphar_spectres', 'gingembre_marees'], deep: ['granit_marin', 'corail_abyssal', 'sable_noir', 'perle_ecume'],
-};
-const PROC = {};
-for (const k of Object.keys(POOL)) PROC[k] = POOL[k].map(id => mk(k, id));
+// Royaume des Morts (et autres mondes générés) : aucune ressource des autres mondes ; ses 3 ressources uniques (resources3) sur
+// ≈ 0,5 % des cases de leur type, tirées par un hash fixe (identique navigateur / serveur).
+const mkDead = (kind, id = null) => Object.freeze({ kind, cost: KIND_COST[kind], resourceId: id, resource: id ? RES3_BY_ID[id].name : null, burn: 0 });
+const DEAD = {}, DEAD_RES = {};
+for (const k of ['deep', 'shallow', 'plain', 'forest', 'mountain']) DEAD[k] = mkDead(k);
+for (const r of RESOURCES3) DEAD_RES[r.kind] = mkDead(r.kind, r.id);
 
 /** Scalaire d'élévation (0..1) ; interpolé entre les cases, exact aux coordonnées entières. */
 export function noiseAt(x, y, mapId = WORLD) {
@@ -51,8 +51,8 @@ export function noiseAt(x, y, mapId = WORLD) {
 export function terrain(x, y, mapId = WORLD) {
   if (mapId === MAP_HUMAN) return humanCell(x, y);
   if (mapId === 2) return terrain2(x, y);
-  const v = procNoise(x, y), k = v < 0.14 ? 'deep' : v < 0.22 ? 'shallow' : v < 0.58 ? 'plain' : v < 0.74 ? 'forest' : 'mountain', a = PROC[k];
-  return a[Math.floor(h0(x + 11.3, y + 5.7) * a.length) % a.length];
+  const v = procNoise(x, y), k = v < 0.14 ? 'deep' : v < 0.22 ? 'shallow' : v < 0.58 ? 'plain' : v < 0.74 ? 'forest' : 'mountain', u = DEAD_RES[k];
+  return u && h0(x + 31.7, y + 17.3) < RARE3 ? u : DEAD[k];
 }
 
 // ---------- Zone sacrée : aucun combat entre joueurs (personnages et invocations) autour de l'Hôtel de ville ----------

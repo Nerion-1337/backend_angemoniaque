@@ -1,6 +1,6 @@
 import { def, router, z, P } from '../../lib/route.js'; import { pool, fail, tx } from '../../lib/db.js';
 import { audit } from '../../lib/audit.js'; import { bumpContent } from '../../game/content.js';
-import { resourceExists } from '../../game/startKit.js'; import { Activation, checkActivation, describeActivation } from '../../game/activation.js'; import { resName, shareTotals, KINDS } from '../../game/deposits.js';
+import { resourceExists } from '../../game/startKit.js'; import { Activation, checkActivation, describeActivation } from '../../game/activation.js'; import { mapUpgradePrice } from '../market.js'; import { resName, shareTotals, KINDS } from '../../game/deposits.js';
 /**
  * Section admin « Ressources » : secteurs (zone d'un monde, nom, actif) et leurs ressources (part de cases %, type de case
  * éventuel, stock, régénération, rendement par récolte). Somme des parts ≤ 100 % pour chaque type de case.
@@ -84,4 +84,12 @@ def(depositRoutes, 'put', '/admin/content/resource-rules/{resource}', Activation
   else await pool.query('INSERT INTO resource_rules(resource,harvest) VALUES ($1,$2) ON CONFLICT (resource) DO UPDATE SET harvest=EXCLUDED.harvest', [res, JSON.stringify(b)]);
   await bumpContent(); await audit(c, 'resource.rules', 'resource', null, null, { resource: res, ...b });
   return { resource: res, harvest: b };
+});
+
+/** Prix de l'amélioration de carte vendue à l'Hôtel de ville (game_config.map_upgrade_price). */
+def(depositRoutes, 'get', '/admin/content/map-upgrade', null, async () => ({ price: await mapUpgradePrice() }));
+def(depositRoutes, 'put', '/admin/content/map-upgrade', z.object({ price: z.number().int().min(0).max(1e9) }), async (c, b) => {
+  await pool.query("INSERT INTO game_config(key,value) VALUES ('map_upgrade_price',$1) ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value, updated_at=now()", [JSON.stringify(b.price)]);
+  await bumpContent(); await audit(c, 'config.map_upgrade_price', 'config', undefined, null, b);
+  return { price: b.price };
 });

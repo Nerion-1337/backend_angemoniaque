@@ -2,7 +2,7 @@
 title: Admin « Joueurs » (liste paginée + fiche éditable) et objets divins à familles libres
 slug: admin-players-divine
 status: done
-updated: 2026-11-24
+updated: 2026-11-25
 files:
   - src/routes/admin/players.ts
   - src/routes/admin/items.ts
@@ -32,6 +32,7 @@ sorts, montures, bâtiments, divins) et objets divins gérés comme les autres o
 - Exemplaires : créés dans la limite du plafond de la famille (409) ; un exemplaire détenu ne se supprime pas (409) ; un objet avec exemplaires ne se supprime pas (409).
 - `divineCap` lit la famille, sinon `game_config.divine_caps`.
 - Objets : `shop_races` (races qui le voient en boutique, [] = toutes) en plus de `shop` / `shop_stock` (card `craft-shop`).
+- Fiche joueur : `map_upgrade` (carte des ressources) modifiable par PUT ; objets : champ `two_handed`.
 
 ## Gotchas
 - Seules relique/arcane/artefact donnent des rangs par race ; une famille libre est un objet unique sans effet de rang ; `monsters.guards_item` reste limité à ces 3.

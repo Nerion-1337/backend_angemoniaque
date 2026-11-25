@@ -1,4 +1,5 @@
 import { OpenAPIHono } from '@hono/zod-openapi'; import { def, router, z, P } from '../lib/route.js'; import { tx, ownChar, posOf, fail, log, dist } from '../lib/db.js';
+import { cfgNum } from '../game/content.js';
 export const market = router();
 const TBL: Record<string, [string, string]> = { item: ['character_items', 'item_id'], spell: ['character_spells', 'spell_id'], mount: ['character_mounts', 'mount_id'] };
 export const BAG_MAX = 20;
@@ -13,7 +14,16 @@ def(market, 'get', '/shop', null, async c => { const { pool } = await import('..
   const cid = Number(c.req.query('characterId')); const race = cid ? (await ownChar(pool, c, cid)).race : null;
   const w = race ? FOR_RACE : 'shop', a = race ? [race] : [];
   return { items: (await pool.query(`SELECT id,name,slot,price,shop_stock stock,armor,weapon_damage,req_strength FROM items WHERE ${w} ORDER BY price`, a)).rows,
-    spells: (await pool.query(`SELECT id,name,kind,price,energy_cost,description FROM spells WHERE ${w} ORDER BY price`, a)).rows }; });
+    spells: (await pool.query(`SELECT id,name,kind,price,energy_cost,description FROM spells WHERE ${w} ORDER BY price`, a)).rows,
+    mapUpgrade: { price: await mapUpgradePrice() } }; });
+/** Amélioration de carte (migration 32) : la carte du monde met en valeur la ressource choisie. Prix réglé en admin. */
+export const mapUpgradePrice = async () => Number(await cfgNum('map_upgrade_price', 500));
+def(market, 'post', '/shop/map-upgrade', z.object({ characterId: z.number() }), (c, b) => tx(async db => {
+  const me = await ownChar(db, c, b.characterId); await atCapital(db, me);
+  if (me.map_upgrade) fail(409, 'Carte déjà améliorée');
+  const price = await mapUpgradePrice(); if (me.gold < price) fail(409, 'Or insuffisant');
+  await db.query('UPDATE characters SET gold=gold-$2, map_upgrade=TRUE WHERE id=$1', [me.id, price]); await log(db, me.id, `Achète l'amélioration de carte (${price} or)`); return { ok: true };
+}));
 def(market, 'post', '/shop/learn', z.object({ characterId: z.number(), spellId: z.number() }), (c, b) => tx(async db => {      // les sorts de base s'apprennent à la capitale
   const me = await ownChar(db, c, b.characterId); await atCapital(db, me); const { rows: [sp] } = await db.query(`SELECT * FROM spells WHERE id=$2 AND ${FOR_RACE}`, [me.race, b.spellId]); if (!sp) fail(404, 'Sort introuvable');
   if ((await db.query('SELECT 1 FROM character_spells WHERE character_id=$1 AND spell_id=$2', [me.id, sp.id])).rowCount) fail(409, 'Sort déjà appris'); if (me.gold < sp.price) fail(409, 'Or insuffisant');

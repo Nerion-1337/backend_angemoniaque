@@ -9,11 +9,14 @@ files:
   - src/game/spellEffects.ts
   - src/routes/admin/items.ts
   - src/routes/inventory.ts
+  - src/routes/characters.ts
 symbols:
   - src/game/stats.ts:gearStats
   - src/game/combatlib.ts:loadTarget
+  - src/game/stats.ts:statBreakdown
 tests:
   - test/integration/itemStats.test.ts
+  - test/integration/equipMap.test.ts
 ---
 ## Purpose
 Un objet porté peut offrir ou retirer chacune des caractéristiques du joueur ; l'armure magique réduit les dégâts de sort
@@ -27,6 +30,9 @@ pour toutes les cibles (personnages, monstres, invocations), y compris les dég�
 - Sort direct : dégâts − armure magique (minimum 1). Dégâts sur la durée : réduits de la même façon au lancer (minimum 1 / h).
 - Les sorts peuvent modifier `magic_armor` comme les autres caractéristiques (liste `CAPS`).
 - L'inventaire renvoie `bonuses` pour l'affichage en jeu ; fiche joueur admin : `magic_armor` éditable.
+- Plus d'emplacement « arc » (migration 32) : un arc est une arme `two_handed` ; une arme à deux mains se pose en main principale seulement (400), exige l'autre main libre (409) et bloque ensuite bouclier / seconde arme (409).
+- Types d'objets = types de l'inventaire (`GROUP` : weapon, shield, head, chest, foot, amulet, ring, bracelet, special) ; la migration 32 a ramené les types « mains / tete / torse / pieds / collier / bague » (noms de parties du corps des monstres, saisis par l'ancien admin) aux types du jeu — ils n'étaient équipables nulle part.
+- `statBreakdown` (`/characters/{id}.breakdown`) : par caractéristique, valeur finale, base et apports (objets équipés, effets temporaires de sorts / pactes `temp_buffs`, monture et bâtiment occupé pour vision / portée) ; base = finale − apports.
 
 ## Gotchas
 - Ne jamais additionner `items.bonuses` dans `gearStats` : ces valeurs sont DÉJÀ sur la fiche (double comptage).

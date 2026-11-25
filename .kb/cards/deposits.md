@@ -41,6 +41,7 @@ part de cases, un type de case éventuel et son propre stock (vidé à la récol
 - Conditions de récolte par ressource du catalogue (`game/harvest.ts`, table `resource_rules`) : groupes alternatifs au format de l'activation des bâtiments (objets, sort, ressources, or, rang, `consume`) ; valent sur le terrain naturel ET dans les secteurs ; sans groupe = libre.
 - Récolte : `checkHarvest` AVANT tout trajet ; les objets ÉQUIPÉS comptent (outil en main) et peuvent être consommés ; refus 403 « Récolte de X impossible — option 1 : … ; option 2 : … ».
 - `/map/{id}/cell` expose `harvestNeeds` (texte des conditions de la ressource effective de la case, null si libre) ; admin GET/PUT `/admin/content/resource-rules[/{resource}]` (ressource / objet / sort inconnus → 404 ; `groups: []` supprime la règle ; `needs` = texte).
+- Admin : `GET/PUT /admin/content/map-upgrade` = prix de l'amélioration de carte vendue à l'Hôtel de ville.
 
 ## Gotchas
 - `cellRoll` / `pickShare` / `shareTotals` ont un miroir front (`admin/deposits.js`) : valeurs figées dans les deux tests ; modifier les deux côtés.

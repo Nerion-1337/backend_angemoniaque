@@ -12,6 +12,7 @@ symbols:
   - src/routes/admin/recipes.ts:recipeRoutes
 tests:
   - test/integration/craftShop.test.ts
+  - test/integration/equipMap.test.ts
 ---
 ## Purpose
 Boutique de l'hôtel de ville filtrée par race (objets et sorts) et fabrication par parchemin : un parchemin dans le sac + les
@@ -26,6 +27,7 @@ ressources de sa recette donnent un objet, un sort appris ou un bâtiment (copie
 - Ordre : contrôles, énergie (payée par le personnage), ressources retirées, parchemin retiré s'il est consommé, puis résultat ; tout dans une transaction (un refus final annule tout).
 - Objet : ajouté au sac (empilé), sac plein → 409. Sort : appris (déjà connu → 409, parchemin conservé). Bâtiment : copie complète du modèle (caractéristiques et sorts liés, `copyBuilding`), appartenant au joueur, sur une case ADJACENTE libre, jamais eau ni lave (400 sans case, 409 sinon).
 - Un nouveau parchemin créé depuis l'admin est un objet `slot = scroll`, hors boutique.
+- Amélioration de carte (`POST /shop/map-upgrade`, à la capitale) : prix `game_config.map_upgrade_price` (défaut 500, réglé en admin Ressources), 409 si déjà acquise ou or insuffisant ; `characters.map_upgrade` ; `GET /shop` renvoie `mapUpgrade.price`.
 
 ## Gotchas
 - Les anciens parchemins de construction (`data.kind` wall/tower/factory/totem/ship) gardent leur propre route `/buildings/place`.

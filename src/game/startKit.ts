@@ -1,4 +1,4 @@
-import { z } from '../lib/route.js'; import { fail } from '../lib/db.js'; import { RES_BY_ID } from './resources.js'; import { RES2_BY_ID } from './resources2.js';
+import { z } from '../lib/route.js'; import { fail } from '../lib/db.js'; import { RES_BY_ID } from './resources.js'; import { RES2_BY_ID } from './resources2.js'; import { RES3_BY_ID } from './resources3.js';
 /**
  * Équipement de départ d'une race (races.start_kit, migration 18) : rang, or, XP, ressources, objets (sac / coffre),
  * sorts et montures reçus par un NOUVEAU personnage. Un kit vide = premier palier, 0 or, rien d'autre.
@@ -13,7 +13,7 @@ export const Kit = z.object({
   mounts: z.array(z.object({ mountId: z.number().int(), active: z.boolean().default(false) })).max(10).optional()
 });
 export type KitT = z.infer<typeof Kit>;
-export const resourceExists = (id: string) => !!((RES_BY_ID as any)[id] ?? (RES2_BY_ID as any)[id]);
+export const resourceExists = (id: string) => !!((RES_BY_ID as any)[id] ?? (RES2_BY_ID as any)[id] ?? (RES3_BY_ID as any)[id]);
 /** Vérifie que chaque référence du kit existe (rang de CETTE race, objets, sorts, montures, ressources du catalogue). */
 export async function checkKit(db: any, race: string, k: KitT) {
   if (k.rank != null && !(await db.query('SELECT 1 FROM specializations WHERE race=$1 AND current_rank=$2', [race, k.rank])).rowCount) fail(400, `Palier ${k.rank} inconnu pour cette race`);

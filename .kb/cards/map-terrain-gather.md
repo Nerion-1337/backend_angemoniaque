@@ -13,6 +13,7 @@ files:
   - src/routes/map.ts
   - src/routes/actions.ts
   - src/routes/inventory.ts
+  - src/game/resources3.ts
 symbols:
   - src/game/terrain.ts:terrain
   - src/game/terrain.ts:noiseAt
@@ -50,11 +51,12 @@ et API des cartes (`/map/*`) et actions (`/actions/*`). Le front en garde un mir
 - Zone sacrée : Chebyshev ≤ 10 de l'Hôtel de ville (carte 1) ; aucun combat joueur contre joueur si l'un des deux y est ; monstres exemptés.
 - Apparition d'un personnage : zone de sa race (card `races-spawn-clock`), sinon capitale ; case libre jamais sur eau ni lave, rayon élargi par pas de 2 si plein (503 seulement si la carte est pleine).
 - Les réponses de carte ne donnent jamais de PV exacts (état public sur 4 niveaux) ; `/map/{id}/area` limité à r ≤ 25.
-- Inventaire : verrou de 12 h au déséquipement, compatibilité slot/objet, arme à deux mains interdit la main secondaire, 5 emplacements spéciaux pour un humain (4 sinon), sac de 20.
+- Inventaire : verrou de 12 h au déséquipement, compatibilité slot/objet, arme à deux mains (`two_handed`, card `item-stats`) en main principale seulement et l'autre main libre, 5 emplacements spéciaux pour un humain (4 sinon), sac de 20.
 - Un bâtiment occupable ne bloque pas le trajet (`BLOCKING`) ; son occupant reçoit ses bonus de vue / portée (card `buildings-occupy`).
 - Récolte sur une case couverte par un gisement : sa ressource, son stock et son rendement priment (card `deposits`) ; `/map/{id}/cell` expose `deposit`.
 - `/map/{id}/area` et `/cell` : `flying` = monture volante du cavalier, ou monstre / invocation dont la locomotion comprend `air` (affichage au niveau du ciel côté front).
 - Créature contrôlée : sa locomotion vient de son type de monstre (`actor().loco`, exposée dans `actor.loco` de `/characters/{id}`) ; aquatique = 1 sur l'eau, terre ferme interdite sans `land` ; récolte en eau profonde possible si volante ou aquatique.
+- Royaume des Morts (carte 3, et tout monde généré) : AUCUNE ressource des autres mondes ; 3 ressources uniques (`resources3` : asphodèle spectrale / plaine, saule des Lamentations / forêt, âme cristallisée / massif) sur ≈ 0,5 % des cases de leur type (`RARE3`, hash fixe) ; les autres cases n'ont rien à récolter.
 
 ## Gotchas
 - Terrain dupliqué back ⇄ front (fichiers générés : modifier les scripts `tools/gen_*`, jamais les fichiers générés).

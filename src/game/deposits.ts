@@ -1,10 +1,10 @@
-import { pool, fail } from '../lib/db.js'; import { RES_BY_ID } from './resources.js'; import { RES2_BY_ID } from './resources2.js'; import { terrain } from './terrain.js';
+import { pool, fail } from '../lib/db.js'; import { RES_BY_ID } from './resources.js'; import { RES2_BY_ID } from './resources2.js'; import { RES3_BY_ID } from './resources3.js'; import { terrain } from './terrain.js';
 /**
  * Secteurs de ressources (resource_deposits + deposit_resources, migrations 23 et 30) : une zone d'un monde qui contient une
  * ou plusieurs ressources, chacune avec sa part de cases (%), un type de case éventuel et son propre stock. Une case reçoit une
  * seule ressource (tirage déterministe, miroir front `admin/deposits.js:pickShare`) ; la part restante garde le terrain naturel.
  */
-export const resName = (id: string) => ((RES_BY_ID as any)[id] ?? (RES2_BY_ID as any)[id])?.name ?? id;
+export const resName = (id: string) => ((RES_BY_ID as any)[id] ?? (RES2_BY_ID as any)[id] ?? (RES3_BY_ID as any)[id])?.name ?? id;
 /** Tirage 0..99 d'une case dans un secteur (entiers 32 bits : identique navigateur / serveur). */
 export const cellRoll = (x: number, y: number, sid: number) => {
   let h = Math.imul(x | 0, 0x27d4eb2d) ^ Math.imul(y | 0, 0x165667b1) ^ Math.imul(sid | 0, 0x9e3779b1);

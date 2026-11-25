@@ -1,8 +1,8 @@
 import { def, router, z } from '../../lib/route.js'; import { pool, fail } from '../../lib/db.js';
 import { audit } from '../../lib/audit.js'; import { hourlyTick } from '../tick.js';
-import { RESOURCES } from '../../game/resources.js'; import { RESOURCES2 } from '../../game/resources2.js';
+import { RESOURCES } from '../../game/resources.js'; import { RESOURCES2 } from '../../game/resources2.js'; import { RESOURCES3 } from '../../game/resources3.js';
 /** Catalogue des ressources des deux mondes (menus déroulants admin) — dédoublonné par id. */
-export const RESCATALOG = [...RESOURCES, ...RESOURCES2].reduce((acc, r) => {
+export const RESCATALOG = [...RESOURCES, ...RESOURCES2, ...RESOURCES3].reduce((acc, r) => {
   if (!acc.some(x => x.id === r.id)) acc.push({ id: r.id, name: r.name, group: r.group });
   return acc;
 }, [] as { id: string; name: string; group: string }[]);

@@ -1,3 +1,4 @@
+import { RES3_BY_ID, RESOURCES3 } from '../src/game/resources3';
 import { test, expect } from 'vitest'; import { statUpgradeCost, pathEnergy, effectiveRank, walk, routeEnergy } from '../src/game/rules';
 import { terrain, BURN_DAMAGE } from '../src/game/terrain'; import { RES_BY_ID } from '../src/game/resources'; import { RES2_BY_ID } from '../src/game/resources2';
 const r = { base_xp_cost: 50, numb_up: 10, multi_1: 1, multi_2: 2, multi_3: 3 };
@@ -9,12 +10,15 @@ test('terrain déterministe', () => expect(terrain(10, 10)).toEqual(terrain(10, 
 test('ressources : le nom affiché est celui du catalogue (clé stable resourceId, 3 mondes)', () => {
   for (const mapId of [1, 2, 3]) for (let x = 0; x < 100; x++) for (let y = 0; y < 100; y++) {
     const t = terrain(x, y, mapId);
-    expect(t.resourceId ? (RES_BY_ID[t.resourceId] ?? RES2_BY_ID[t.resourceId]).name : null).toBe(t.resource);
+    expect(t.resourceId ? (RES_BY_ID[t.resourceId] ?? RES2_BY_ID[t.resourceId] ?? RES3_BY_ID[t.resourceId]).name : null).toBe(t.resource);
   }
 });
-const KIND_GROUP = { plain: 'plaines', forest: 'bois', mountain: 'minerai', shallow: 'eaux', deep: 'abysses' };
-test('autres mondes : la ressource suit le type de terrain (groupe du catalogue)', () => {
-  for (let x = 0; x < 100; x++) for (let y = 0; y < 100; y++) { const t = terrain(x, y, 3); expect(RES_BY_ID[t.resourceId].group).toBe(KIND_GROUP[t.kind]); }
+test('Royaume des Morts : seulement ses 3 ressources uniques, sur très peu de cases, chacune sur son type de case', () => {
+  const n: any = {};
+  for (let x = 0; x < 100; x++) for (let y = 0; y < 100; y++) { const t = terrain(x, y, 3); if (!t.resourceId) continue;
+    expect(RES3_BY_ID[t.resourceId], t.resourceId).toBeTruthy(); expect(t.kind).toBe(RES3_BY_ID[t.resourceId].kind); n[t.resourceId] = (n[t.resourceId] ?? 0) + 1; }
+  for (const r of RESOURCES3) { expect(n[r.id], r.id).toBeGreaterThan(0); expect(n[r.id]).toBeLessThan(60); }
+  for (const r of RESOURCES3) { expect(RES_BY_ID[r.id]).toBeUndefined(); expect(RES2_BY_ID[r.id]).toBeUndefined(); }
 });
 test('nouvelles cases du Monde des Hommes : coûts (aride 2, neige/éther/volcan 3) + brûlure 10/h', () => {
   const seen: Record<string, any> = {};
