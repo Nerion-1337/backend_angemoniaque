@@ -20,13 +20,14 @@ def(market, 'get', '/shop', null, async c => { const { pool } = await import('..
   return { items: (await pool.query(`SELECT id,name,slot,price,shop_stock stock,armor,weapon_damage,req_strength FROM items WHERE ${w} ORDER BY price`, a)).rows,
     spells: (await pool.query(`SELECT id,name,kind,price,energy_cost,description FROM spells WHERE ${w} ORDER BY price`, a)).rows,
     mapUpgrade: { price: await mapUpgradePrice() } }; });
-/** Amélioration de carte (migration 32) : la carte du monde met en valeur la ressource choisie. Prix réglé en admin. */
+/** Carte des ressources (migrations 32, 38) : la carte du monde met en valeur la ressource choisie. Achetée à l'Hôtel de ville, elle
+ *  n'ouvre QUE le monde de cette capitale (`characters.map_worlds`) ; les autres mondes s'ouvrent par leur parchemin. Prix réglé en admin. */
 export const mapUpgradePrice = async () => Number(await cfgNum('map_upgrade_price', 500));
 def(market, 'post', '/shop/map-upgrade', z.object({ characterId: z.number() }), (c, b) => tx(async db => {
-  const me = await ownChar(db, c, b.characterId); await atCapital(db, me);
-  if (me.map_upgrade) fail(409, 'Carte déjà améliorée');
+  const me = await ownChar(db, c, b.characterId); await atCapital(db, me); const world = (await posOf(db, me.id)).map_id;
+  if ((me.map_worlds ?? []).includes(world)) fail(409, 'Vous avez déjà la carte des ressources de ce monde');
   const price = await mapUpgradePrice(); if (me.gold < price) fail(409, 'Or insuffisant');
-  await db.query('UPDATE characters SET gold=gold-$2, map_upgrade=TRUE WHERE id=$1', [me.id, price]); await log(db, me.id, `Achète l'amélioration de carte (${price} or)`); return { ok: true };
+  await db.query('UPDATE characters SET gold=gold-$2, map_worlds=array_append(map_worlds,$3) WHERE id=$1', [me.id, price, world]); await log(db, me.id, `Achète la carte des ressources du monde ${world} (${price} or)`); return { ok: true, world };
 }));
 def(market, 'post', '/shop/learn', z.object({ characterId: z.number(), spellId: z.number() }), (c, b) => tx(async db => {      // les sorts de base s'apprennent à la capitale
   const me = await ownChar(db, c, b.characterId); await atCapital(db, me); const { rows: [sp] } = await db.query(`SELECT * FROM spells WHERE id=$2 AND ${FOR_RACE}`, [me.race, b.spellId]); if (!sp) fail(404, 'Sort introuvable');

@@ -49,10 +49,21 @@ describe.skipIf(!process.env.DATABASE_URL)('Équipement et carte des ressources'
     await nearCapital();
     await pool.query('UPDATE characters SET gold=100 WHERE id=$1', [T.c]);
     const r = await call('/shop/map-upgrade', { characterId: T.c }, T.tk); expect(r.status, JSON.stringify(r.j)).toBe(200);
-    expect((await call(`/characters/${T.c}`, undefined, T.tk)).j).toMatchObject({ map_upgrade: true, gold: 60 });
+    const world = (await pool.query('SELECT map_id FROM positions WHERE character_id=$1', [T.c])).rows[0].map_id;
+    expect((await call(`/characters/${T.c}`, undefined, T.tk)).j).toMatchObject({ map_worlds: [world], gold: 60 });   // seulement le monde de cette capitale
     expect((await call('/shop/map-upgrade', { characterId: T.c }, T.tk)).status).toBe(409);   // déjà acquise
-    expect((await call(`/admin/players/${T.c}`, { map_upgrade: false }, T.adm, 'PUT')).status).toBe(200);
-    expect((await call(`/admin/players/${T.c}`, undefined, T.adm)).j.character.map_upgrade).toBe(false);
+    expect((await call(`/admin/players/${T.c}`, { map_worlds: [] }, T.adm, 'PUT')).status).toBe(200);
+    expect((await call(`/admin/players/${T.c}`, undefined, T.adm)).j.character.map_worlds).toEqual([]);
+  });
+  test('parchemin de carte des ressources : un par monde (migration 38), ouvre son monde à l’usage, consommé, pas deux fois', async () => {
+    const scrolls = (await pool.query("SELECT id, (data->>'map_id')::int map_id FROM items WHERE data->>'kind'='resource_map' ORDER BY 2")).rows;
+    expect(scrolls.map((r: any) => r.map_id)).toEqual((await pool.query('SELECT id FROM maps ORDER BY id')).rows.map((r: any) => r.id));
+    const dead = scrolls.find((r: any) => r.map_id === 3).id;
+    expect((await call(`/admin/players/${T.c}/items`, { itemId: dead, qty: 2 }, T.adm)).status).toBe(200);
+    const r = await call('/inventory/use', { characterId: T.c, itemId: dead }, T.tk); expect(r.status, JSON.stringify(r.j)).toBe(200); expect(r.j.world).toBe(3);
+    expect((await call(`/characters/${T.c}`, undefined, T.tk)).j.map_worlds).toContain(3);
+    expect((await call('/inventory/use', { characterId: T.c, itemId: dead }, T.tk)).status).toBe(409);   // monde déjà ouvert : le 2e reste au sac
+    expect((await pool.query('SELECT qty FROM character_items WHERE character_id=$1 AND item_id=$2', [T.c, dead])).rows[0].qty).toBe(1);
     await call('/admin/content/map-upgrade', { price: 500 }, T.adm, 'PUT');
   });
   test('Royaume des Morts : ses ressources sont au catalogue admin (gisements, conditions)', async () => {

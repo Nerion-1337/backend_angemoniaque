@@ -2,7 +2,7 @@
 title: Boutique par race et parchemins de fabrication (objet, sort, bâtiment)
 slug: craft-shop
 status: done
-updated: 2026-11-25
+updated: 2026-11-26
 files:
   - src/routes/craft.ts
   - src/routes/admin/recipes.ts
@@ -34,7 +34,7 @@ ressources de sa recette donnent un objet, un sort appris ou un bâtiment (copie
 - Ordre : contrôles, énergie (payée par le personnage), ressources retirées, parchemin retiré s'il est consommé, puis résultat ; tout dans une transaction (un refus final annule tout).
 - Objet : ajouté au sac (empilé), sac plein → 409. Sort : appris (déjà connu → 409, parchemin conservé). Bâtiment : copie complète du modèle (caractéristiques et sorts liés, `copyBuilding`), appartenant au joueur, sur une case ADJACENTE libre, jamais eau ni lave (400 sans case, 409 sinon).
 - Un nouveau parchemin créé depuis l'admin est un objet `slot = scroll`, hors boutique.
-- Amélioration de carte (`POST /shop/map-upgrade`, à la capitale) : prix `game_config.map_upgrade_price` (défaut 500, réglé en admin Ressources), 409 si déjà acquise ou or insuffisant ; `characters.map_upgrade` ; `GET /shop` renvoie `mapUpgrade.price`.
+- Carte des ressources (`POST /shop/map-upgrade`, à la capitale) : prix `game_config.map_upgrade_price` (défaut 500, réglé en admin Ressources) ; n'ouvre QUE le monde de la capitale où elle est achetée (ajouté à `characters.map_worlds`, migration 38) ; 409 si ce monde est déjà ouvert ou or insuffisant.
 - Sac et coffre (`game/bag.ts`, migration 33) : les ressources (`characters.resources` = sac, `chest_resources` = coffre) occupent des emplacements par piles de `stack_max` (défaut 20) ; place libre du sac = `bag_size` − (objets non équipés hors coffre + piles) ; tout ajout d'objet au sac passe par `bagRoom` (achat, retrait du coffre, fabrication, déséquipement de monture, invocation d'objet).
 - `POST /chest/resource` (à la capitale) : déplace une ressource (tout ou `qty`) sac ⇄ coffre, place vérifiée en piles côté destination (409 « Coffre plein » / « Sac plein ») ; `GET /chest` renvoie `used` et les piles `resources`.
 - Coffre réglé par capitale (`chestLimits`, buildings.data.chestStart / chestMax ; défaut 10 / sans limite) : taille de départ donnée à la création du personnage ; `/chest/expand` refusé (409) à la capacité maximale ; `GET /chest` renvoie `max`.

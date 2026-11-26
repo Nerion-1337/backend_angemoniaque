@@ -2,7 +2,7 @@
 title: Procedural map & terrain: resources, movement rules, spawn, map/action routes
 slug: map-terrain-gather
 status: done
-updated: 2026-11-25
+updated: 2026-11-26
 files:
   - src/game/terrain.ts
   - src/game/humanMap.ts
@@ -68,6 +68,7 @@ et API des cartes (`/map/*`) et actions (`/actions/*`). Le front en garde un mir
 - `/map/{id}/cell?characterId=` (personnage du joueur) : `harvestMissing` = null (récolte libre), [] (rien ne manque) ou une ligne par option de ce qui manque (objets équipés comptés).
 - Vision et portée du héros (`actor`) : +1 par niveau de HAUTEUR (`game/levels.ts`, miroir de `front/lib/levels.js`) — sol de la case (jamais négatif, sommet = +5) + taille de la monture terrestre / aquatique (1 à 3) ; monture volante = +6 quel que soit le sol ; + capacités PASSIVES des sorts du type de la monture (stats see / range) ; + bâtiment occupé. Les anciens `bonus_see` / `bonus_range` des montures ne comptent plus. `actor().extra` détaille ces apports (fiche, survol).
 
+- `GET /map/{id}/area` renvoie aussi `rank` (palier de rang du personnage) et `building_race` (race d'une capitale) : allure 3D selon le rang et Hôtel de ville selon la race.
 ## Gotchas
 - Terrain dupliqué back ⇄ front (fichiers générés : modifier les scripts `tools/gen_*`, jamais les fichiers générés).
 - Le coût 99 de l'eau profonde n'est qu'affiché : ne jamais additionner `t.cost` pour un trajet, passer par `stepCost`.

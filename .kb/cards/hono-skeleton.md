@@ -2,7 +2,7 @@
 title: Hono + Zod OpenAPI skeleton: entry, router, auth, realtime WS
 slug: hono-skeleton
 status: done
-updated: 2026-11-24
+updated: 2026-11-26
 files:
   - src/index.ts
   - src/app.ts
@@ -13,6 +13,8 @@ files:
   - src/realtime/ws.ts
   - src/db/pool.ts
   - src/routes/auth.ts
+  - src/routes/google.ts
+  - src/routes/forum.ts
 symbols:
   - src/index.ts:upgradeWebSocket
   - src/app.ts:app
@@ -41,6 +43,7 @@ passerelle WebSocket diffusée par Redis, horloge du monde. Documentation de tou
 - L'horloge du monde est démarrée par `startClock()` (card `races-spawn-clock`) ; jamais de `setInterval` d'une heure.
 - L'historique d'un personnage est plafonné à 100 lignes (`trimLog`).
 
+- Middleware d'authentification : `/auth/login|register|google/*`, `/ws`, `/openapi` publics ; `/forum*` et `/legal*` à jeton FACULTATIF (visiteur anonyme si absent ou invalide) ; le reste exige un jeton valide.
 ## Gotchas
 - Nouvel endpoint public : l'ajouter à la regex de `auth`, sinon 401.
 - `/ws` est hors JWT volontairement : rejoindre une carte est la seule barrière temps réel.

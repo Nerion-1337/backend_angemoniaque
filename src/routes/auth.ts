@@ -3,16 +3,19 @@ import { def, router, z } from '../lib/route.js'; import { pool, fail } from '..
 export const authRoutes = router();
 const hash = (p: string) => { const s = randomBytes(16).toString('hex'); return `${s}:${scryptSync(p, s, 32).toString('hex')}`; };
 const check = (p: string, h: string) => { const [s, k] = h.split(':'); return timingSafeEqual(Buffer.from(k, 'hex'), scryptSync(p, s, 32)); };
-const Reg = z.object({ email: z.string().email('adresse email invalide').max(120), password: z.string().min(8, '8 caractères minimum').max(100) });
+const Reg = z.object({ email: z.string().email('adresse email invalide').max(120), password: z.string().min(8, '8 caractères minimum').max(100), acceptTos: z.boolean().optional() });
 const Log = z.object({ email: z.string().email('adresse email invalide'), password: z.string().min(1, 'mot de passe requis') });
 def(authRoutes, 'post', '/auth/register', Reg, async (_c, b) => {
   const email = b.email.trim().toLowerCase();
-  const { rows } = await pool.query('INSERT INTO accounts(email,password_hash,role) VALUES ($1,$2,$3) ON CONFLICT (email) DO NOTHING RETURNING id,role', [email, hash(b.password), email === env.adminEmail.toLowerCase() ? 'admin' : 'player']);
+ // CGU acceptées à l'inscription (case du formulaire) : version en vigueur enregistrée (migration 40)
+  const { rows } = await pool.query(`INSERT INTO accounts(email,password_hash,role,tos_version,tos_accepted_at) VALUES ($1,$2,$3,
+    CASE WHEN $4 THEN (SELECT version FROM legal_pages WHERE key='cgu') END, CASE WHEN $4 THEN now() END) ON CONFLICT (email) DO NOTHING RETURNING id,role`, [email, hash(b.password), email === env.adminEmail.toLowerCase() ? 'admin' : 'player', !!b.acceptTos]);
   if (!rows[0]) fail(409, 'Cet email est déjà utilisé');
   return { token: await signToken(rows[0].id, rows[0].role), admin: rows[0].role === 'admin', role: rows[0].role };   // connexion automatique après inscription
 });
 def(authRoutes, 'post', '/auth/login', Log, async (_c, b) => {
   const { rows: [a] } = await pool.query('SELECT * FROM accounts WHERE email=$1', [b.email.trim().toLowerCase()]);
+  if (a && !a.password_hash) fail(401, 'Ce compte se connecte avec Google');   // compte créé par Google (migration 39)
   if (!a || !check(b.password, a.password_hash)) fail(401, 'Email ou mot de passe incorrect');
   const role = a.role ?? (a.is_admin ? 'admin' : 'player');
   return { token: await signToken(a.id, role), admin: role === 'admin', role };

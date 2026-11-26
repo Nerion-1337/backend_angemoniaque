@@ -2,7 +2,7 @@
 title: Caractéristiques offertes par les objets ; armure magique partout
 slug: item-stats
 status: done
-updated: 2026-11-25
+updated: 2026-11-26
 files:
   - src/game/stats.ts
   - src/game/combatlib.ts
@@ -41,6 +41,7 @@ pour toutes les cibles (personnages, monstres, invocations), y compris les dég�
 - Amélioration de `hp_max` / `energy_max` / `divine_energy_max` : +1 aussi sur la réserve actuelle (`hp_current`, `energy_current`, `divine_energy_current`) ; les autres stats ne touchent aucune réserve.
 - Objets : `reach` (portée de l'arme, 1 à 20, défaut 1), `full_power_at` (case de pleine puissance, 1 ≤ X ≤ portée, null = 100 % partout ; 400 sinon, vérifié aussi à la modification), `power_start` / `power_end` (0 à 100 %, puissance à la case 1 et à la dernière case) — distincts du bonus « Portée » des caractéristiques offertes.
 
+- `/inventory/use` : parchemin de carte des ressources (`data = { kind: 'resource_map', map_id }`, un par monde, migration 38) → ajoute le monde à `characters.map_worlds`, consommé ; monde déjà ouvert → 409 (parchemin gardé) ; monde inconnu → 400.
 ## Gotchas
 - Ne jamais additionner `items.bonuses` dans `gearStats` : ces valeurs sont DÉJÀ sur la fiche (double comptage).
 - Un passage de rang relève les caractéristiques au niveau du rang en comptant les bonus portés (`GREATEST`) : au retrait de l'objet, le bonus est soustrait du nouveau total.

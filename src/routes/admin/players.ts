@@ -71,13 +71,14 @@ def(playerRoutes, 'get', '/admin/players/{id}', null, async c => {
     divine: await q('SELECT di.id, di.kind, i.name FROM divine_items di LEFT JOIN items i ON i.id=di.item_id WHERE di.holder_character_id=$1 ORDER BY di.kind, di.id'),
   };
 });
-const Edit = z.object(Object.fromEntries(EDITABLE.map(k => [k, z.number().int().min(0).optional()]))).extend({ specialization_id: z.number().int().optional(), map_upgrade: z.boolean().optional() });
+const Edit = z.object(Object.fromEntries(EDITABLE.map(k => [k, z.number().int().min(0).optional()]))).extend({ specialization_id: z.number().int().optional(), map_worlds: z.array(z.number().int().min(1)).max(20).optional() });
 def(playerRoutes, 'put', '/admin/players/{id}', Edit, async (c, b) => {
   const id = P(c, 'id');
   const { rows: [before] } = await pool.query('SELECT * FROM characters WHERE id=$1', [id]);
   if (!before) fail(404, 'Joueur inconnu');
   if (b.specialization_id !== undefined && !(await pool.query('SELECT 1 FROM specializations WHERE id=$1 AND race=$2', [b.specialization_id, before.race])).rowCount) fail(400, 'Rang inconnu pour cette race');
-  const cols = [...EDITABLE, 'specialization_id', 'map_upgrade'].filter(k => (b as any)[k] !== undefined);
+  if (b.map_worlds) b.map_worlds = [...new Set<number>(b.map_worlds as number[])].sort((x, y) => x - y);   // cartes des ressources par monde (migration 38)
+  const cols = [...EDITABLE, 'specialization_id', 'map_worlds'].filter(k => (b as any)[k] !== undefined);
   if (!cols.length) fail(400, 'Aucun champ à modifier');
   const { rows: [row] } = await pool.query(`UPDATE characters SET ${cols.map((k, i) => `${k}=$${i + 2}`).join(',')} WHERE id=$1 RETURNING *`, [id, ...cols.map(k => (b as any)[k])]);
   await audit(c, 'player.update', 'player', id, Object.fromEntries(cols.map(k => [k, before[k]])), b);
