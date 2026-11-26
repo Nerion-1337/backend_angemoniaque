@@ -8,14 +8,19 @@ export const SPEC_STATS = ['hp_max', 'recovery', 'see', 'strength', 'agility', '
  * Change le rang d'un personnage (montée OU descente) : chaque caractéristique de palier reçoit la DIFFÉRENCE entre la base du
  * nouveau rang et celle de l'ancien ; les points achetés par le joueur sont donc conservés (jamais sous 0). `keep` : colonnes
  * laissées telles quelles (valeurs saisies par l'admin dans la même modification). Sans rang d'origine : relevé au niveau du rang.
- * Réserves (PV, énergie, énergie divine) ramenées sous les nouveaux maximums.
+ * Réserves (PV, énergie, énergie divine actuels) : reçoivent le même écart que leur maximum (180/210 → 330/360 et retour),
+ * puis bornées : PV entre 1 et le max, énergies entre 0 et le max.
  */
+const RESERVE: Record<string, string> = { hp_max: 'hp_current', energy_max: 'energy_current', divine_energy_max: 'divine_energy_current' };
 export async function applySpec(db: any, charId: number, specId: number, keep: readonly string[] = []) {
-  const set = SPEC_STATS.filter(k => !keep.includes(k)).map(k => `, ${k}=GREATEST(0, c.${k} + s.${k} - COALESCE(o.${k}, LEAST(c.${k}, s.${k})))`).join('');
+  const val = (k: string) => `GREATEST(0, c.${k} + s.${k} - COALESCE(o.${k}, LEAST(c.${k}, s.${k})))`;   // nouvelle valeur de la caractéristique k
+  const cols = SPEC_STATS.filter(k => !keep.includes(k));
+  const set = [...cols.map(k => `, ${k}=${val(k)}`),
+    ...cols.filter(k => RESERVE[k] && !keep.includes(RESERVE[k])).map(k => `, ${RESERVE[k]}=c.${RESERVE[k]} + ${val(k)} - c.${k}`)].join('');
   await db.query(`UPDATE characters c SET specialization_id=s.id${set}
     FROM specializations s LEFT JOIN specializations o ON o.id=(SELECT specialization_id FROM characters WHERE id=$1) WHERE s.id=$2 AND c.id=$1`, [charId, specId]);
-  await db.query(`UPDATE characters SET hp_current=LEAST(hp_current,hp_max), energy_current=LEAST(energy_current,energy_max),
-    divine_energy_current=LEAST(divine_energy_current,divine_energy_max) WHERE id=$1`, [charId]);
+  await db.query(`UPDATE characters SET hp_current=LEAST(hp_max, GREATEST(1, hp_current)), energy_current=LEAST(energy_max, GREATEST(0, energy_current)),
+    divine_energy_current=LEAST(divine_energy_max, GREATEST(0, divine_energy_current)) WHERE id=$1`, [charId]);
 }
 /** Surcharge divine : plus d'objets que requis => rang supérieur gratuit, quota ignoré. */
 export async function refreshSurcharge(db: any, charId: number) {

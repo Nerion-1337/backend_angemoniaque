@@ -1,41 +1,46 @@
 # Graph Report - back  (2026-11-26)
 
 ## Corpus Check
-- 145 files · ~94,906 words
+- 145 files · ~95,022 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 4 file(s) not represented in the graph (top: (none) 4)
 
 ## Summary
-- 726 nodes · 2197 edges · 21 communities (20 shown, 1 thin omitted)
+- 727 nodes · 2198 edges · 26 communities (25 shown, 1 thin omitted)
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS · INFERRED: 6 edges (avg confidence: 0.85)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `d1ff236a`
+- Built from commit: `a0ccbcca`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
 ## Community Hubs (Navigation)
-- pool
 - combat.ts
-- app.ts
-- fail
-- route.ts
 - routes/auth.ts
-- with
+- app.ts
 - tick.ts
-- package.json
-- admin/deposits.ts
-- world2.ts
+- with
+- market.ts
 - terrain.ts
+- package.json
+- world2.ts
+- items.ts
+- admin.ts
 - forum.ts
-- map.ts
-- rules.test.ts
-- game/divine.ts
+- route.ts
+- characters.ts
 - movement.ts
+- fail
+- pool
+- rules.test.ts
+- tileTypes.ts
+- guilds.ts
 - terrain
 - compilerOptions
+- admin/entity.ts
 - AGENTS.md — ia_agent / back
+- game/entity.ts
 
 ## God Nodes (most connected - your core abstractions)
 1. `fail()` - 92 edges
@@ -64,87 +69,107 @@
 ## Import Cycles
 - None detected.
 
-## Communities (21 total, 1 thin omitted)
+## Communities (26 total, 1 thin omitted)
 
-### Community 0 - "pool"
-Cohesion: 0.05
-Nodes (60): pool, bumpContent(), cfgAll(), cfgNum(), divineCap(), audit(), adminRoutes, bestiaryRoutes (+52 more)
-
-### Community 1 - "combat.ts"
+### Community 0 - "combat.ts"
 Cohesion: 0.08
-Nodes (54): ATTACK_LABEL, attackAllowed(), AttackKind, checkOccupantAttack(), occupiableAt(), applyDamage(), loadTarget(), Target (+46 more)
+Nodes (57): ATTACK_LABEL, attackAllowed(), AttackKind, checkOccupantAttack(), occupiableAt(), applyDamage(), loadTarget(), monsterDeath() (+49 more)
+
+### Community 1 - "routes/auth.ts"
+Cohesion: 0.06
+Nodes (49): hono, app, env, WEAK, { injectWebSocket, upgradeWebSocket }, b64(), botCheck(), clientIp() (+41 more)
 
 ### Community 2 - "app.ts"
-Cohesion: 0.07
-Nodes (20): hono, vitest, HttpError, admin(), auth(), bearer(), dbRole(), mod() (+12 more)
+Cohesion: 0.08
+Nodes (14): vitest, catchUp(), hoursDue(), MAX_CATCHUP_H, startClock(), HttpError, buildings, faiths (+6 more)
 
-### Community 3 - "fail"
-Cohesion: 0.05
-Nodes (49): checkActivation(), applySpec(), assertCap(), checkEntityCost(), monsterOnMap(), bagOf(), checkReq(), Cond (+41 more)
+### Community 3 - "tick.ts"
+Cohesion: 0.08
+Nodes (32): cfgNum(), divineCap(), applySpec(), die(), grantDivine(), held(), KIND, refreshSurcharge() (+24 more)
 
-### Community 4 - "route.ts"
-Cohesion: 0.13
-Nodes (37): @hono/zod-openapi, bagRoom(), bagState(), chestState(), DEFAULT_STACK, extraSlots(), resSlots(), resStacks() (+29 more)
-
-### Community 5 - "routes/auth.ts"
-Cohesion: 0.07
-Nodes (43): app, env, WEAK, { injectWebSocket, upgradeWebSocket }, b64(), botCheck(), clientIp(), COMMON (+35 more)
-
-### Community 6 - "with"
+### Community 4 - "with"
 Cohesion: 0.05
 Nodes (45): DATABASE_URL, PGPASSWORD, POSTGRES_DB, POSTGRES_PASSWORD, POSTGRES_USER, REDIS_URL, jobs, publish (+37 more)
 
-### Community 7 - "tick.ts"
-Cohesion: 0.09
-Nodes (24): catchUp(), hoursDue(), MAX_CATCHUP_H, startClock(), scheduleRespawn(), regenDeposits(), revertTempRanks(), attachDivine() (+16 more)
+### Community 5 - "market.ts"
+Cohesion: 0.11
+Nodes (33): activate(), describeActivation(), Group, groupMissing(), GroupT, hasActivation(), bagRoom(), bagState() (+25 more)
 
-### Community 8 - "package.json"
+### Community 6 - "terrain.ts"
+Cohesion: 0.08
+Nodes (30): BURN_HOURS, CODES, FEATURES, H, ROWS, W, RARE3, RES3_BY_ID (+22 more)
+
+### Community 7 - "package.json"
 Cohesion: 0.08
 Nodes (31): dependencies, hono@^4, @hono/node-server@^1, @hono/node-ws@^1, @hono/zod-openapi@^0.16, ioredis@^5, pg@^8, zod@^3 (+23 more)
 
-### Community 9 - "admin/deposits.ts"
-Cohesion: 0.14
-Nodes (26): activate(), Activation, describeActivation(), Group, groupMissing(), GroupT, hasActivation(), cellRoll() (+18 more)
-
-### Community 10 - "world2.ts"
+### Community 8 - "world2.ts"
 Cohesion: 0.11
-Nodes (27): FEATURES2, H2, ROWS2, W2, RES2_BY_ID, RESOURCES2, SIDES, ZONES2 (+19 more)
+Nodes (26): FEATURES2, H2, ROWS2, W2, RES2_BY_ID, RESOURCES2, SIDES, ZONES2 (+18 more)
 
-### Community 11 - "terrain.ts"
+### Community 9 - "items.ts"
+Cohesion: 0.11
+Nodes (24): Activation, Building, buildingRoutes, colsOf(), extras(), jsonable(), RARITIES, requireRow() (+16 more)
+
+### Community 10 - "admin.ts"
 Cohesion: 0.09
-Nodes (24): CODES, FEATURES, H, ROWS, W, GROUPS, RES_BY_ID, RESOURCES (+16 more)
+Nodes (23): audit(), adminRoutes, bestiaryRoutes, coreRoutes, RESCATALOG, checkSummon(), LINK_TBL, monsterDetailRoutes (+15 more)
 
-### Community 12 - "forum.ts"
-Cohesion: 0.14
-Nodes (19): ANON, Cat, isStaff(), postDenied(), readDenied(), Viewer, Body, CAT_COLS (+11 more)
+### Community 11 - "forum.ts"
+Cohesion: 0.12
+Nodes (21): ANON, Cat, isStaff(), postDenied(), readDenied(), Viewer, Body, CAT_COLS (+13 more)
 
-### Community 13 - "map.ts"
-Cohesion: 0.20
-Nodes (16): getPublicHealthState(), KIND_COST, KIND_LABEL, applyTileSpells(), invalidateTiles(), key(), loadTiles(), setTilesForTest() (+8 more)
+### Community 12 - "route.ts"
+Cohesion: 0.22
+Nodes (16): @hono/zod-openapi, ownChar(), tx(), def(), P(), router(), Tile, CHOICES (+8 more)
 
-### Community 14 - "rules.test.ts"
+### Community 13 - "characters.ts"
+Cohesion: 0.11
+Nodes (22): bagOf(), Cond, CondT, hasReq(), missingFor(), Mode, MODES, nextRank() (+14 more)
+
+### Community 14 - "movement.ts"
+Cohesion: 0.16
+Nodes (18): BLOCKING, ignite(), actor(), blockedMsg(), isWater(), mountPassives(), onLand(), pathCost() (+10 more)
+
+### Community 15 - "fail"
+Cohesion: 0.16
+Nodes (16): checkActivation(), checkReq(), checkKit(), resourceExists(), fail(), check(), depositRoutes, KIND_FR (+8 more)
+
+### Community 16 - "pool"
 Cohesion: 0.18
-Nodes (13): RARE3, RES3_BY_ID, RESOURCES3, canUseDivineEnergy(), computeCharacterDamage(), computeHitChance(), computePactStatTransfer(), pathEnergy() (+5 more)
+Nodes (9): pool, bumpContent(), cfgAll(), Place, checkSpawn(), Race, raceRoutes, RankDiff (+1 more)
 
-### Community 15 - "game/divine.ts"
-Cohesion: 0.24
-Nodes (11): monsterDeath(), die(), grantDivine(), held(), KIND, refreshSurcharge(), required(), SPEC_STATS (+3 more)
+### Community 17 - "rules.test.ts"
+Cohesion: 0.20
+Nodes (13): canUseDivineEnergy(), computeCharacterDamage(), computeHitChance(), computePactStatTransfer(), effectiveRank(), getPublicHealthState(), pathEnergy(), routeEnergy() (+5 more)
 
-### Community 16 - "movement.ts"
-Cohesion: 0.24
-Nodes (11): BLOCKING, BURN_HOURS, ignite(), blockedMsg(), isWater(), mountPassives(), onLand(), pathCost() (+3 more)
+### Community 18 - "tileTypes.ts"
+Cohesion: 0.25
+Nodes (12): KIND_COST, KIND_LABEL, applyTileSpells(), invalidateTiles(), key(), loadTiles(), setTilesForTest(), TILE_KINDS (+4 more)
 
-### Community 17 - "terrain"
+### Community 19 - "guilds.ts"
+Cohesion: 0.13
+Nodes (11): ALL, checkPerms(), DEFAULT_RANKS, guilds, joinRank(), lowestRank(), member(), need() (+3 more)
+
+### Community 20 - "terrain"
 Cohesion: 0.36
 Nodes (9): FLY_LEVEL, heightParts(), levelAt(), memo, ring(), ROCK, terrain(), find() (+1 more)
 
-### Community 18 - "compilerOptions"
+### Community 21 - "compilerOptions"
 Cohesion: 0.18
 Nodes (10): compilerOptions, esModuleInterop, module, moduleResolution, noImplicitAny, outDir, skipLibCheck, strict (+2 more)
 
-### Community 19 - "AGENTS.md — ia_agent / back"
+### Community 22 - "admin/entity.ts"
+Cohesion: 0.29
+Nodes (6): kindOf(), TABLE, Cap, Cost, entityRoutes, Mod
+
+### Community 23 - "AGENTS.md — ia_agent / back"
 Cohesion: 0.33
 Nodes (5): AGENTS.md — ia_agent / back, Conventions de code et architecture des routes, Rôle de ce dépôt, Stack et commandes, Travail dans ce dépôt
+
+### Community 24 - "game/entity.ts"
+Cohesion: 0.53
+Nodes (3): assertCap(), checkEntityCost(), monsterOnMap()
 
 ## Knowledge Gaps
 - **1 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
@@ -152,17 +177,17 @@ Nodes (5): AGENTS.md — ia_agent / back, Conventions de code et architecture de
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `fail()` connect `fail` to `pool`, `combat.ts`, `app.ts`, `route.ts`, `routes/auth.ts`, `tick.ts`, `admin/deposits.ts`, `forum.ts`, `game/divine.ts`, `movement.ts`?**
+- **Why does `fail()` connect `fail` to `combat.ts`, `routes/auth.ts`, `app.ts`, `tick.ts`, `market.ts`, `items.ts`, `admin.ts`, `forum.ts`, `route.ts`, `characters.ts`, `movement.ts`, `pool`, `guilds.ts`, `admin/entity.ts`, `game/entity.ts`?**
   _High betweenness centrality (0.122) - this node is a cross-community bridge._
-- **Should `pool` be split into smaller, more focused modules?**
-  _Cohesion score 0.05387861084063616 - nodes in this community are weakly interconnected._
-- **Why does `vitest` connect `app.ts` to `pool`, `combat.ts`, `fail`, `routes/auth.ts`, `tick.ts`, `package.json`, `admin/deposits.ts`, `world2.ts`, `terrain.ts`, `forum.ts`, `map.ts`, `rules.test.ts`, `game/divine.ts`, `movement.ts`, `terrain`?**
-  _High betweenness centrality (0.086) - this node is a cross-community bridge._
 - **Should `combat.ts` be split into smaller, more focused modules?**
-  _Cohesion score 0.07887323943661972 - nodes in this community are weakly interconnected._
-- **Why does `terrain()` connect `terrain` to `combat.ts`, `app.ts`, `route.ts`, `tick.ts`, `admin/deposits.ts`, `world2.ts`, `terrain.ts`, `map.ts`, `rules.test.ts`, `game/divine.ts`, `movement.ts`?**
+  _Cohesion score 0.07960014809329878 - nodes in this community are weakly interconnected._
+- **Why does `vitest` connect `app.ts` to `combat.ts`, `routes/auth.ts`, `tick.ts`, `market.ts`, `terrain.ts`, `package.json`, `world2.ts`, `forum.ts`, `movement.ts`, `pool`, `rules.test.ts`, `tileTypes.ts`, `terrain`, `game/entity.ts`?**
+  _High betweenness centrality (0.086) - this node is a cross-community bridge._
+- **Should `routes/auth.ts` be split into smaller, more focused modules?**
+  _Cohesion score 0.061072261072261075 - nodes in this community are weakly interconnected._
+- **Why does `terrain()` connect `terrain` to `combat.ts`, `app.ts`, `tick.ts`, `market.ts`, `terrain.ts`, `world2.ts`, `route.ts`, `movement.ts`, `pool`, `rules.test.ts`, `tileTypes.ts`?**
   _High betweenness centrality (0.027) - this node is a cross-community bridge._
 - **Should `app.ts` be split into smaller, more focused modules?**
-  _Cohesion score 0.06646825396825397 - nodes in this community are weakly interconnected._
-- **Should `fail` be split into smaller, more focused modules?**
-  _Cohesion score 0.051203277009728626 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.07706766917293233 - nodes in this community are weakly interconnected._
+- **Should `tick.ts` be split into smaller, more focused modules?**
+  _Cohesion score 0.08244680851063829 - nodes in this community are weakly interconnected._

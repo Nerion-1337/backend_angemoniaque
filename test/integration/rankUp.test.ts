@@ -58,10 +58,12 @@ describe.skipIf(!process.env.DATABASE_URL)('Passage de rang par conditions', () 
   });
 
   test('changement de rang par l’admin : base du palier retirée / ajoutée, points achetés conservés, saisie explicite prioritaire', async () => {
-    await pool.query('UPDATE characters SET strength=strength+3, hp_current=hp_max WHERE id=$1', [T.c]);   // 3 points achetés : 13
+    await pool.query('UPDATE characters SET strength=strength+3, hp_current=180, hp_max=210 WHERE id=$1', [T.c]);   // 3 points de force, 10 PV achetés ; 180/210
     let r = await call(`/admin/players/${T.c}`, { specialization_id: T.r[1] }, T.adm, 'PUT'); expect(r.status, JSON.stringify(r.j)).toBe(200);
-    let c = await ch(); expect(c).toMatchObject({ rank_name: 'Recrue', strength: 8, hp_max: 100, hp_current: 100 });
+    let c = await ch(); expect(c).toMatchObject({ rank_name: 'Recrue', strength: 8, hp_max: 110, hp_current: 80 });   // −100 au max ET aux PV actuels
+    r = await call(`/admin/players/${T.c}`, { specialization_id: T.r[2] }, T.adm, 'PUT');
+    c = await ch(); expect(c).toMatchObject({ rank_name: 'Vétéran', strength: 13, hp_max: 210, hp_current: 180 });   // et retour
     r = await call(`/admin/players/${T.c}`, { specialization_id: T.r[3], strength: 50 }, T.adm, 'PUT'); expect(r.status).toBe(200);
-    c = await ch(); expect(c).toMatchObject({ rank_name: 'Champion', strength: 50, hp_max: 400 });
+    c = await ch(); expect(c).toMatchObject({ rank_name: 'Champion', strength: 50, hp_max: 410, hp_current: 380 });
   });
 });
