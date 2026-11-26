@@ -42,6 +42,7 @@ tests:
   - test/integration/bagResources.test.ts
   - test/levels.test.ts
   - test/integration/heightVision.test.ts
+  - test/integration/appearance.test.ts
 ---
 ## Purpose
 Modèle du monde : Monde des Hommes (carte 1, grille 200×200 dessinée), autres mondes générés ; chaque case a un type (9),
@@ -69,6 +70,7 @@ et API des cartes (`/map/*`) et actions (`/actions/*`). Le front en garde un mir
 - Vision et portée du héros (`actor`) : +1 par niveau de HAUTEUR (`game/levels.ts`, miroir de `front/lib/levels.js`) — sol de la case (jamais négatif, sommet = +5) + taille de la monture terrestre / aquatique (1 à 3) ; monture volante = +6 quel que soit le sol ; + capacités PASSIVES des sorts du type de la monture (stats see / range) ; + bâtiment occupé. Les anciens `bonus_see` / `bonus_range` des montures ne comptent plus. `actor().extra` détaille ces apports (fiche, survol).
 
 - `GET /map/{id}/area` renvoie aussi `rank` (palier de rang du personnage) et `building_race` (race d'une capitale) : allure 3D selon le rang et Hôtel de ville selon la race.
+- `GET /map/{id}/area` : `model`, `icon`, `locomotion`, `size` des monstres (repli sur le prototype) et invocations ; `mount_model`, `mount_icon`, `mount_loco`, `mount_size` de la monture d'un personnage.
 ## Gotchas
 - Terrain dupliqué back ⇄ front (fichiers générés : modifier les scripts `tools/gen_*`, jamais les fichiers générés).
 - Le coût 99 de l'eau profonde n'est qu'affiché : ne jamais additionner `t.cost` pour un trajet, passer par `stepCost`.

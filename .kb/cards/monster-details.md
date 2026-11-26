@@ -2,7 +2,7 @@
 title: Détails de monstre (phase 3) : compétences/sorts, équipement par slot, auras, placement spontané & réincarnation
 slug: monster-details
 status: done
-updated: 2026-11-25
+updated: 2026-11-26
 files:
   - src/routes/mounts.ts
   - src/game/xp.ts
@@ -27,6 +27,7 @@ tests:
   - test/monsterDetails.test.ts
   - test/integration/monsterDetails.test.ts
   - test/integration/monsterRespawn.test.ts
+  - test/integration/appearance.test.ts
 ---
 ## Purpose
 Fiche détaillée d'un type de monstre (phase 3) : capacités actives/passives, équipement par partie du corps, placement
@@ -53,6 +54,7 @@ catalogue global des sorts (rareté, qui peut l'apprendre).
 -   - les sauvages (règles d'apparition) disparaissent toujours à leur mort ; un exemplaire divin non transmis redevient libre.
 - XP (migration 35, `game/xp.ts`) : monstre tué → `xp_reward` au tueur (ponctuel ; remplace l'XP/h) ; coup porté par le héros → somme des `xp_use` de ses armes équipées ; sort lancé → `spells.xp_use` ; parchemin utilisé → `items.xp_use`. Face à une cible, pondéré par l'écart de rang (rang cible − rang personnage ; monstre : `monsters.rank`) selon `game_config.xp_rank_diff` (ligne la plus proche, égalité : la plus basse ; sans cible 100 %).
 
+- `model` / `icon` (migration 41) : clés [a-z0-9_]{1,40} ou null (automatique), validées par Zod ; recopiées sur le monstre posé (`/admin/bestiary/place`) et apparu (spawn).
 ## Gotchas
 - La garde `hp_current <= 0` en tête de `monsterDeath` est obligatoire (sinon double butin et or dupliqué).
 - Les capacités passives sont une donnée : aucun moteur ne les applique encore en combat.

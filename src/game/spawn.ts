@@ -52,11 +52,11 @@ export async function hourlySpawns(db: any) {
     let n = instances.length + 1, name = `${proto.name} #${n}`;
     while ((await db.query('SELECT 1 FROM monsters WHERE name=$1', [name])).rowCount) name = `${proto.name} #${++n}`;
     const { rows: [ins] } = await db.query(
-      `INSERT INTO monsters(name,hp_max,hp_current,recovery,see,strength,agility,energy_max,energy_current,range,armor,magic_armor,gold_current,guards_item,data,xp_reward,rank)
-       VALUES ($1,$2,$2,$3,$4,$5,$6,$7,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING id`,
+      `INSERT INTO monsters(name,hp_max,hp_current,recovery,see,strength,agility,energy_max,energy_current,range,armor,magic_armor,gold_current,guards_item,data,xp_reward,rank,model,icon)
+       VALUES ($1,$2,$2,$3,$4,$5,$6,$7,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING id`,
       [name, proto.hp_max, proto.recovery, proto.see, proto.strength, proto.agility, proto.energy_max,
        proto.range, proto.armor, proto.magic_armor ?? 0, proto.gold_current ?? 0, proto.guards_item,
-       JSON.stringify({ spawned: true, prototype: proto.id, behavior: proto.data?.behavior ?? 'passif' }), proto.xp_reward ?? 0, proto.rank ?? 1]);
+       JSON.stringify({ spawned: true, prototype: proto.id, behavior: proto.data?.behavior ?? 'passif' }), proto.xp_reward ?? 0, proto.rank ?? 1, proto.model ?? null, proto.icon ?? null]);
     await db.query('INSERT INTO positions(map_id,coord_x,coord_y,monsters_id) VALUES ($1,$2,$3,$4)', [r.map_id, cell.x, cell.y, ins.id]);
     await db.query('UPDATE spawn_rules SET last_spawned_at=now() WHERE id=$1', [r.id]);
   }

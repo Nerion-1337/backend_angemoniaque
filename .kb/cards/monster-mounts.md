@@ -2,18 +2,20 @@
 title: Monstres servant de monture (fusion monstres / montures, déplacement combinable)
 slug: monster-mounts
 status: done
-updated: 2026-11-25
+updated: 2026-11-26
 files:
   - src/routes/admin/monsters.ts
   - src/game/movement.ts
   - src/routes/admin/core.ts
   - src/routes/admin.ts
+  - src/routes/characters.ts
 symbols:
   - src/game/movement.ts:stepCost
 tests:
   - test/integration/monsterMount.test.ts
   - test/rules.test.ts
   - test/integration/heightVision.test.ts
+  - test/integration/appearance.test.ts
 ---
 ## Purpose
 Les montures ne sont plus une section à part : un TYPE de monstre peut servir de monture. Il porte une rareté, un déplacement
@@ -28,6 +30,7 @@ combinable (terrestre / aérien / aquatique) et des bonus de monture ; la table 
 - Plus de CRUD `/admin/content/mounts` : il contournerait la projection ; les montures se gèrent dans Monstres.
 - Taille du monstre `size` (1 à 3, migration 34) : montée, élève son cavalier de `size` niveaux (+1 vision / portée par niveau) ; volante : +6. Ses bonus de vue / portée ne s'appliquent plus (seule une capacité passive de ses sorts compte). `GET /mounts` expose `size`.
 
+- Monture : `model`, `icon`, `locomotion` de son type renvoyés par `/mounts/{characterId}` et sur la monture montée (`activeMount`, HUD) ; invocation contrôlée : ceux de son type (`summons.monster_id`).
 ## Gotchas
 - `locomotion` est un `TEXT[]` : la route le convertit en littéral Postgres (`pgArr`), car `safeInsert`/`safeUpdate` transforment les tableaux en JSON.
 - `terrestrial` absent (ligne simulée dans un test) = historique `!aquatic` (un aquatique ne quitte pas l'eau).

@@ -20,7 +20,9 @@ const Monster = z.object({
   size: z.number().int().min(1).max(3).optional(),
   /** Migration 35 : XP donnée au tueur (ponctuelle), rang (écart de rang → bonus / malus d'XP), objet divin porté (famille). */
   xp_reward: z.number().int().min(0).max(1e9).optional(), rank: z.number().int().min(1).max(50).optional(),
-  divine_family: z.string().max(30).nullable().optional()
+  divine_family: z.string().max(30).nullable().optional(),
+  /** Migration 41 : design 3D (catalogue du front) et icône ; null = automatique. */
+  model: z.string().regex(/^[a-z0-9_]{1,40}$/, 'design inconnu').nullable().optional(), icon: z.string().regex(/^[a-z0-9_]{1,40}$/, 'icône inconnue').nullable().optional()
 });
 /** Famille divine portée : doit exister ; le monstre vivant reçoit aussitôt son exemplaire (ou libère l'ancien). */
 async function syncDivine(_id: number, b: any) {

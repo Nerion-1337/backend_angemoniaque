@@ -1,6 +1,6 @@
 import { heightParts } from './levels.js'; import { walk } from './rules.js'; import { ignite } from './burn.js'; import { terrain } from './terrain.js'; import { tileCost, loadTiles } from './tileTypes.js'; import { BLOCKING, occupiableAt } from './buildingCell.js'; import { fail, posOf } from '../lib/db.js';
 const MOUNT_SQL = `SELECT cm.*, m.name, m.hp_max, m.armor, m.strength, m.agility, m.energy_max, m.flying, m.aquatic, m.terrestrial, m.recovery, m.special_attack_name, m.special_attack_damage, m.special_attack_energy,
-    m.monster_id, COALESCE(t.size, 1) size
+    m.monster_id, COALESCE(t.size, 1) size, t.model, t.icon, t.locomotion
   FROM character_mounts cm JOIN mounts m ON m.id=cm.mount_id LEFT JOIN monsters t ON t.id=m.monster_id WHERE cm.character_id=$1 AND cm.active`;
 export const activeMount = async (db: any, id: number) => (await db.query(MOUNT_SQL, [id])).rows[0];
 export const isWater = (kind: string) => kind === 'shallow' || kind === 'deep';

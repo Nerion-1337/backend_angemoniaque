@@ -54,12 +54,12 @@ def(bestiaryRoutes, 'post', '/admin/bestiary/place', Place, async (c, b) => {
   // Réapparition et objet divin porté : propres à CE monstre posé (migration 35), initialisés depuis le type puis réglés sur la carte.
   const { rows: [ins] } = await pool.query(
     `INSERT INTO monsters(name,hp_max,hp_current,recovery,see,strength,agility,energy_max,energy_current,range,armor,magic_armor,gold_current,guards_item,reincarnate_delay_h,data,
-       respawn,respawn_limits,divine_family,xp_reward,rank,size,rarity)
-     VALUES ($1,$2,$2,$3,$4,$5,$6,$7,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21) RETURNING id`,
+       respawn,respawn_limits,divine_family,xp_reward,rank,size,rarity,model,icon)
+     VALUES ($1,$2,$2,$3,$4,$5,$6,$7,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23) RETURNING id`,
     [name, proto.hp_max, proto.recovery, proto.see, proto.strength, proto.agility, proto.energy_max,
      proto.range, proto.armor, proto.magic_armor ?? 0, b.gold ?? proto.gold_current ?? 0, proto.guards_item, recH,
      JSON.stringify({ placed: true, prototype: proto.id, behavior: proto.data?.behavior ?? 'passif' }),
-     proto.respawn ?? true, JSON.stringify(proto.respawn_limits ?? []), proto.divine_family ?? null, proto.xp_reward ?? 0, proto.rank ?? 1, proto.size ?? 1, proto.rarity ?? 'commun']);
+     proto.respawn ?? true, JSON.stringify(proto.respawn_limits ?? []), proto.divine_family ?? null, proto.xp_reward ?? 0, proto.rank ?? 1, proto.size ?? 1, proto.rarity ?? 'commun', proto.model ?? null, proto.icon ?? null]);
   if (proto.divine_family) await attachDivine(pool, { id: ins.id, divine_family: proto.divine_family });
   // Drops de mort : entrées du butin du prototype, filtrées par les choix (objets/ressources/divins).
   const { rows: loots } = await pool.query('SELECT * FROM monster_loot WHERE monster_id=$1', [proto.id]);

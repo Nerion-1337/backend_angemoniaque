@@ -58,12 +58,14 @@ def(characters, 'post', '/characters/{id}/rank-up', null, (c) => tx(async db => 
   if (!(MODES as readonly string[]).includes(mode)) fail(400, 'mode : permanent ou temporary');
   return rankUp(db, await ownChar(db, c, P(c, 'id')), mode);
 }));
+/** Allure d'une invocation (migration 41) : design, icône et déplacement de son type de monstre. */
+const summonLook = async (db: any, sm: any) => (sm.monster_id ? (await db.query('SELECT model, icon, locomotion FROM monsters WHERE id=$1', [sm.monster_id])).rows[0] : null) ?? {};
 def(characters, 'get', '/characters/{id}', null, (c) => tx(async db => {
   const ch = await ownChar(db, c, P(c, 'id')), a = await actor(db, ch), st = await gearStats(db, ch), mount = await activeMount(db, ch.id);
   const { rows: [s] } = await db.query('SELECT name rank_name,current_rank FROM specializations WHERE id=$1', [ch.specialization_id]);
   const { rows: [m] } = await db.query('SELECT width,height FROM maps WHERE id=$1', [a.mp.map_id]); const { rows: [hp] } = await db.query('SELECT * FROM positions WHERE character_id=$1', [ch.id]);
   const summons = (await db.query('SELECT s.*,p.coord_x x,p.coord_y y FROM summons s LEFT JOIN positions p ON p.summon_id=s.id WHERE s.owner_id=$1 ORDER BY s.id', [ch.id])).rows, sm = a.sm;
-  const act = sm ? { kind: 'summon', id: sm.id, name: sm.name, hp_current: sm.hp_current, hp_max: sm.hp_max, energy_current: sm.energy_current, energy_max: sm.energy_max, recovery: sm.recovery, see: sm.see, agility: sm.agility, strength: sm.strength, damage: sm.damage, armor: sm.armor, magic_armor: sm.magic_armor ?? 0, loco: a.loco ?? null }
+  const act = sm ? { kind: 'summon', id: sm.id, name: sm.name, hp_current: sm.hp_current, hp_max: sm.hp_max, energy_current: sm.energy_current, energy_max: sm.energy_max, recovery: sm.recovery, see: sm.see, agility: sm.agility, strength: sm.strength, damage: sm.damage, armor: sm.armor, magic_armor: sm.magic_armor ?? 0, loco: a.loco ?? null, ...(await summonLook(db, sm)) }
     : { kind: 'hero', name: ch.pseudo, hp_current: ch.hp_current, hp_max: ch.hp_max, energy_current: ch.energy_current, energy_max: ch.energy_max, recovery: ch.recovery, see: a.see, agility: st.agility, strength: st.strength, damage: st.damage, armor: st.armor, magic_armor: st.magicArmor };
   const scrolls = Object.fromEntries((await db.query("SELECT i.data->>'kind' k, count(*)::int n FROM character_items ci JOIN items i ON i.id=ci.item_id WHERE ci.character_id=$1 AND i.slot='scroll' AND NOT ci.in_chest GROUP BY 1", [ch.id])).rows.map((r: any) => [r.k, r.n]));
   return { ...ch, scrolls, rank: s, pos: { map_id: hp.map_id, x: hp.coord_x, y: hp.coord_y, ...m }, mount: mount ?? null, stats: st, hasDivine: canUseDivineEnergy(ch.race, s.rank_name), summons, maxSummons: await maxSummons(db, ch),
