@@ -18,10 +18,10 @@ describe.skipIf(!process.env.DATABASE_URL)('Race libre et équipement de départ
     if (T.human) await call(`/admin/content/races/${T.human.id}/start-kit`, T.human.start_kit, T.adm, 'PUT');
   });
 
-  test('kit historique repris par la migration : 150 or, 6 objets au sac, le Destrier', async () => {
+  test('kit historique repris par la migration : 150 or, 6 objets au sac, plus de monture (migration 43)', async () => {
     const k = T.human.start_kit;
     expect(k.gold).toBe(150); expect(k.items).toHaveLength(6); expect(k.items.every((i: any) => i.place === 'bag')).toBe(true);
-    expect(k.mounts).toHaveLength(1);
+    expect(k.mounts).toBeUndefined();
   });
 
   test('une race créée en admin, avec un rang, est jouable par un joueur', async () => {
@@ -36,14 +36,13 @@ describe.skipIf(!process.env.DATABASE_URL)('Race libre et équipement de départ
     expect(ch).toMatchObject({ name: 'Grunt', hp_max: 120, gold: 0 });   // kit vide : premier palier, 0 or
   });
 
-  test('kit réglé en admin : rang, or, XP, ressources, objets sac/coffre, sort, monture active', async () => {
-    const it = T.cat.items[0].id, it2 = T.cat.items[1].id, sp = T.cat.spells[0].id, mo = T.cat.mounts[0].id, res = T.cat.resources[0].id;
+  test('kit réglé en admin : rang, or, XP, ressources, objets sac/coffre, sort', async () => {
+    const it = T.cat.items[0].id, it2 = T.cat.items[1].id, sp = T.cat.spells[0].id, res = T.cat.resources[0].id;
     const bad = [
       { rank: 9 }, { items: [{ itemId: 999999 }] }, { resources: { inexistante: 2 } },
-      { mounts: [{ mountId: mo, active: true }, { mountId: mo, active: true }] },
     ];
     for (const b of bad) expect((await call(`/admin/content/races/${T.race.id}/start-kit`, b, T.adm, 'PUT')).status, JSON.stringify(b)).toBeGreaterThanOrEqual(400);
-    const kit = { rank: 2, gold: 500, xp: 42, resources: { [res]: 3 }, items: [{ itemId: it, qty: 2, place: 'bag' }, { itemId: it2, qty: 1, place: 'chest' }], spells: [sp], mounts: [{ mountId: mo, active: true }] };
+    const kit = { rank: 2, gold: 500, xp: 42, resources: { [res]: 3 }, items: [{ itemId: it, qty: 2, place: 'bag' }, { itemId: it2, qty: 1, place: 'chest' }], spells: [sp], mounts: [{ mountId: 1, active: true }] };   // ancienne clé : ignorée
     const up = await call(`/admin/content/races/${T.race.id}/start-kit`, kit, T.adm, 'PUT');
     expect(up.status, JSON.stringify(up.j)).toBe(200); expect(up.j.start_kit).toMatchObject({ rank: 2, gold: 500 });
     const tk = await login(`orc2${s}@x.fr`);
@@ -54,6 +53,6 @@ describe.skipIf(!process.env.DATABASE_URL)('Race libre et équipement de départ
     expect(p.items.find((i: any) => i.item_id === it && i.place === 'bag').qty).toBe(2);
     expect(p.items.some((i: any) => i.item_id === it2 && i.place === 'chest')).toBe(true);
     expect(p.spells.map((x: any) => x.spell_id)).toContain(sp);
-    expect(p.mounts).toEqual([expect.objectContaining({ mount_id: mo, active: true })]);
+    expect(p.mounts).toBeUndefined(); expect(up.j.start_kit.mounts).toBeUndefined();
   });
 });

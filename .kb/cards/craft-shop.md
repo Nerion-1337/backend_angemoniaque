@@ -40,7 +40,7 @@ ressources de sa recette donnent un objet, un sort appris ou un bâtiment (copie
 - Coffre réglé par capitale (`chestLimits`, buildings.data.chestStart / chestMax ; défaut 10 / sans limite) : taille de départ donnée à la création du personnage ; `/chest/expand` refusé (409) à la capacité maximale ; `GET /chest` renvoie `max`.
 
 ## Gotchas
-- Les anciens parchemins de construction (`data.kind` wall/tower/factory/totem/ship) gardent leur propre route `/buildings/place`.
+- Les anciens parchemins de construction (`data.kind` wall/tower/factory/totem) gardent leur propre route `/buildings/place` ; le parchemin de navire est supprimé (migration 43, card `summon-ride`).
 - Un test qui crée un sort doit le supprimer (`features.test.ts` compte les sorts de la boutique) ; garder des prix élevés et un stock > 0 pour un objet de test en boutique.
 
 ## Tests

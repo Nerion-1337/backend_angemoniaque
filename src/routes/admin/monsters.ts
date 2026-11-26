@@ -12,11 +12,11 @@ const Monster = z.object({
   /** Réapparition (migration 24) : recréé ou non, délai (h), conditions sur les éléments limités chez les joueurs. */
   respawn: z.boolean().optional(), reincarnate_delay_h: z.number().int().min(0).max(8760).optional(),
   respawn_limits: z.array(RespawnLimit).max(20).optional(),
-  /** Fusion monstres / montures (migration 25) : rareté, déplacement (combinaison), monture et ses bonus. */
+  /** Rareté, déplacement (combinaison) ; `mountable` : invoqué, son propriétaire peut monter dessus (migration 43) ;
+   *  `resummon_delay_h` : délai (h) avant de relancer le sort qui l'a invoqué quand l'invocation meurt. */
   rarity: z.enum(RARITIES).optional(), locomotion: z.array(z.enum(['land', 'air', 'water'])).min(1).max(3).optional(),
-  mountable: z.boolean().optional(), bonus_see: z.number().int().min(-50).max(50).optional(), bonus_range: z.number().int().min(-50).max(50).optional(),
-  speed: z.number().min(0).max(100).optional(), carry: z.number().int().min(0).max(1e6).optional(),
-  /** Taille 1 à 3 (migration 34) : montée, élève le cavalier de `size` niveaux (+1 vision / portée par niveau). */
+  mountable: z.boolean().optional(), resummon_delay_h: z.number().min(0).max(8760).optional(),
+  /** Taille 1 à 3 (migration 34) : monté, terrestre ou aquatique, élève le cavalier de `size` niveaux (+1 vision / portée par niveau). */
   size: z.number().int().min(1).max(3).optional(),
   /** Migration 35 : XP donnée au tueur (ponctuelle), rang (écart de rang → bonus / malus d'XP), objet divin porté (famille). */
   xp_reward: z.number().int().min(0).max(1e9).optional(), rank: z.number().int().min(1).max(50).optional(),
@@ -45,8 +45,7 @@ def(monsterRoutes, 'post', '/admin/content/monsters', Monster, async (c, b) => {
 });
 def(monsterRoutes, 'get', '/admin/content/monsters/{id}', null, async c => {
   const id = P(c, 'id');
-  const mount = (await pool.query('SELECT id FROM mounts WHERE monster_id=$1', [id])).rows[0];   // monture projetée (sorts de monture)
-  return { ...(await requireRow('monsters', id)), ...(await extras('monster', id)), mount_id: mount?.id ?? null };
+  return { ...(await requireRow('monsters', id)), ...(await extras('monster', id)) };
 });
 def(monsterRoutes, 'put', '/admin/content/monsters/{id}', Monster.partial(), async (c, b) => {
   await syncDivine(P(c, 'id'), b);
@@ -60,7 +59,6 @@ def(monsterRoutes, 'delete', '/admin/content/monsters/{id}', null, async c => {
   if ((await pool.query('SELECT 1 FROM positions WHERE monsters_id=$1', [id])).rowCount) fail(409, 'Ce monstre est placé sur une carte');
   if ((await pool.query('SELECT 1 FROM character_monster WHERE monster_id=$1', [id])).rowCount) fail(409, 'Des joueurs ont invoqué ce monstre');
   if ((await pool.query('SELECT 1 FROM divine_items WHERE guardian_monster_id=$1', [id])).rowCount) fail(409, 'Ce monstre est gardien d\'objets divins');
-  if ((await pool.query('SELECT 1 FROM character_mounts cm JOIN mounts mo ON mo.id=cm.mount_id WHERE mo.monster_id=$1', [id])).rowCount) fail(409, 'Des joueurs possèdent ce monstre comme monture');
   await pool.query('DELETE FROM monsters WHERE id=$1', [id]);
   await bumpContent(); await audit(c, 'monster.delete', 'monster', id, null, null);
   return { ok: true };

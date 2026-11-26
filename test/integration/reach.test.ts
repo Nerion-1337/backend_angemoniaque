@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeAll } from 'vitest';
+import { describe, test, expect, beforeAll } from 'vitest'; import { summonAndRide } from './_ride';
 // Portée des armes et hauteur (migration 36) : un cavalier (hauteur 1) collé n'est pas touché par une arme de portée 1,
 // l'est avec une arme de portée 2 ; arme à distance : pleine puissance jusqu'à N cases (aperçu) ; réglages validés en admin.
 describe.skipIf(!process.env.DATABASE_URL)('Portée des armes et hauteur', () => {
@@ -26,12 +26,9 @@ describe.skipIf(!process.env.DATABASE_URL)('Portée des armes et hauteur', () =>
     await pool.query('UPDATE positions SET map_id=1, coord_x=$2, coord_y=$3 WHERE character_id=$1', [T.a, T.xy[0], T.xy[1]]);
     await pool.query('UPDATE positions SET map_id=1, coord_x=$2, coord_y=$3 WHERE character_id=$1', [T.b, T.xy[0] + 1, T.xy[1]]);
     await pool.query('UPDATE characters SET energy_current=1000, energy_max=1000, hp_current=100000, hp_max=100000 WHERE id=ANY($1)', [[T.a, T.b]]);
-    // B monte une monture terrestre de taille 1 (hauteur 1).
-    const type = (await call('/admin/content/monsters', { name: `Cheval${s}`, hp_max: 50, energy_max: 50, mountable: true, locomotion: ['land'], size: 1 }, T.adm)).j.id;
-    const mid = (await call(`/admin/content/monsters/${type}`, undefined, T.adm)).j.mount_id;
-    await call(`/admin/players/${T.b}/grant`, { kind: 'mount', refId: mid }, T.adm);
-    const cm = (await call(`/mounts/${T.b}`, undefined, T.tkb)).j.find((x: any) => x.name === `Cheval${s}`);
-    expect((await call('/mounts/summon', { characterId: T.b, cmId: cm.cm_id }, T.tkb)).status).toBe(200);
+    // B invoque un monstre terrestre montable de taille 1 et monte dessus (hauteur 1).
+    const r = await summonAndRide(call, T.adm, T.b, T.tkb, { name: `Cheval${s}`, size: 1 });
+    expect(r.summon.ridden).toBe(true);
   });
 
   test('cavalier collé : arme de portée 1 → hors d\'atteinte ; portée 2 → attaque possible', async () => {

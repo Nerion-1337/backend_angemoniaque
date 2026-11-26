@@ -4,7 +4,6 @@ slug: monster-details
 status: done
 updated: 2026-11-26
 files:
-  - src/routes/mounts.ts
   - src/game/xp.ts
   - src/routes/admin/monsterDetails.ts
   - src/routes/admin/bestiary.ts
@@ -42,9 +41,9 @@ catalogue global des sorts (rareté, qui peut l'apprendre).
 - Réattaquer un corps mort rafraîchit l'échéance sans nouveau butin.
 - Un monstre en attente de réincarnation ne régénère pas au tick.
 - Statut : chaque instance indique `linked` (lié à un personnage via `character_monster`, sinon « natif »).
-- Sorts : rareté ∈ {commun, rare, epique, legendaire, divin} (CHECK) ; `usable_by` ⊂ {humain, ange, demon, monstre, structure, monture}, vide = tout le monde ; `learners` = nombre de personnages qui le possèdent.
+- Sorts : rareté ∈ {commun, rare, epique, legendaire, divin} (CHECK) ; `usable_by` ⊂ {humain, ange, demon, monstre, structure}, vide = tout le monde ; `learners` = nombre de personnages qui le possèdent.
 - Sorts : `shop` (défaut vrai) et `shopRaces` (races autorisées, [] = toutes) règlent la boutique de l'hôtel de ville (card `craft-shop`).
-- Sorts : `effects` (moteur de sorts) et liens `/admin/content/spells/{id}/links` (monstre, objet, monture, bâtiment) — card `spell-engine`.
+- Sorts : `effects` (moteur de sorts) et liens `/admin/content/spells/{id}/links` (monstre, objet, bâtiment) — card `spell-engine`. Type `mountable`, `size`, `resummon_delay_h` : card `summon-ride`.
 - Équipement : mêmes emplacements qu'un personnage (`MONSTER_SLOTS` : weapon_main/off, head, chest, foot, amulet, ring_l/r, bracelet_l/r ; migration 35) ; une pièce par emplacement (deux armes identiques possibles), objet du bon type (`GROUP` de l'inventaire), arme à deux mains en main principale seulement ; suppression par emplacement (`DELETE …/equips/{slot}`). Les créatures possédées (`mount_equips`) suivent les mêmes règles.
 - Réapparition réglée sur CHAQUE monstre posé (colonnes de sa ligne : `respawn`, `reincarnate_delay_h`, `respawn_limits`, `divine_family` ; migration 35), initialisée depuis le type au placement :
 -   - `respawn` faux : le monstre posé tué est supprimé ; un type ancré tué est retiré de la carte (il reste au catalogue) ;

@@ -1,5 +1,5 @@
-import { describe, test, expect, beforeAll } from 'vitest';
-// Vision / portée selon la hauteur : plus de bonus de monture (sauf capacité passive d'un sort) ; taille de la monture ; volante +6.
+import { describe, test, expect, beforeAll } from 'vitest'; import { summonAndRide } from './_ride';
+// Vision / portée selon la hauteur : invocation montée terrestre ou aquatique = +taille ; volante = +6 (sans la taille) ; capacité passive d'un sort.
 // Coffre réglé par capitale ; coûts d'amélioration réglés en admin.
 describe.skipIf(!process.env.DATABASE_URL)('Hauteur, coffre, coûts d’amélioration', () => {
   let app: any, pool: any; const s = Date.now() % 1e7; const T: any = {};
@@ -9,13 +9,9 @@ describe.skipIf(!process.env.DATABASE_URL)('Hauteur, coffre, coûts d’amélior
   };
   const login = async (email: string) => { let r = await call('/auth/register', { email, password: 'Lune-Brisee-2026!' }); if (r.status !== 200) r = await call('/auth/login', { email, password: 'Lune-Brisee-2026!' }); return r.j.token; };
   const me = async () => (await call(`/characters/${T.c}`, undefined, T.tk)).j;
-  const ride = async (name: string, extra: any) => {
-    const type = (await call('/admin/content/monsters', { name: `${name}${s}`, hp_max: 50, energy_max: 50, mountable: true, ...extra }, T.adm)).j.id;
-    const mid = (await call(`/admin/content/monsters/${type}`, undefined, T.adm)).j.mount_id;
-    await call(`/admin/players/${T.c}/grant`, { kind: 'mount', refId: mid }, T.adm);
-    const cm = (await call(`/mounts/${T.c}`, undefined, T.tk)).j.find((x: any) => x.name === `${name}${s}`);
-    await call('/mounts/dismount', { characterId: T.c }, T.tk);
-    expect((await call('/mounts/summon', { characterId: T.c, cmId: cm.cm_id }, T.tk)).status).toBe(200); return type;
+  const ride = async (name: string, extra: any) => {   // descend, renvoie ses invocations, invoque le type et monte dessus
+    await call('/summons/dismount', { characterId: T.c }, T.tk); await pool.query('DELETE FROM summons WHERE owner_id=$1', [T.c]);
+    return (await summonAndRide(call, T.adm, T.c, T.tk, { name: `${name}${s}`, ...extra })).type;
   };
   beforeAll(async () => {
     app = (await import('../../src/app')).app; pool = (await import('../../src/lib/db')).pool;
@@ -28,20 +24,24 @@ describe.skipIf(!process.env.DATABASE_URL)('Hauteur, coffre, coûts d’amélior
     T.see = (await pool.query('SELECT see FROM characters WHERE id=$1', [T.c])).rows[0].see;
   });
 
-  test('à pied sur la plaine : vision de base ; monture taille 2 : +2 (ses anciens bonus de vue ne comptent plus)', async () => {
+  test('à pied sur la plaine : vision de base ; invocation montée taille 2 : +2', async () => {
     expect((await me()).see_eff).toBe(T.see);
-    await ride('Ours', { locomotion: ['land'], size: 2, bonus_see: 7, bonus_range: 7 });
+    await ride('Ours', { locomotion: ['land'], size: 2 });
     const m = await me(); expect(m.see_eff).toBe(T.see + 2);
     expect(m.breakdown.see.parts).toContainEqual({ label: `Sur Ours${s} (taille 2)`, value: 2, kind: 'mount' });
   });
-  test('capacité passive d’un sort de la monture : compte ; monture volante : +6', async () => {
+  test('capacité passive d’un sort de l’invocation montée : compte ; volante : +6 sans la taille ; aquatique : +taille', async () => {
     const sp = (await call('/admin/content/spells', { name: `Œil${s}`, shop: false, effects: { target: 'self', stats: [{ stat: 'see', value: 1 }] } }, T.adm)).j.id;
     const type = await ride('Lynx', { locomotion: ['land'], size: 1 });
     await call(`/admin/content/monsters/${type}/spells`, { spellId: sp, mode: 'passive' }, T.adm);
     expect((await me()).see_eff).toBe(T.see + 1 + 1);
     await ride('Roc', { locomotion: ['air'], size: 3 });
     const m = await me(); expect(m.see_eff).toBe(T.see + 6); expect(m.range_eff).toBe(m.range + 6);
-    await call('/mounts/dismount', { characterId: T.c }, T.tk);
+    await ride('Pegase', { locomotion: ['land', 'air'], size: 3 });   // vole ET marche : +6, la taille ne s'ajoute pas
+    expect((await me()).see_eff).toBe(T.see + 6);
+    await ride('Phoque', { locomotion: ['water'], size: 2 });          // aquatique (posé sur la plaine) : +taille
+    expect((await me()).see_eff).toBe(T.see + 2);
+    await call('/summons/dismount', { characterId: T.c }, T.tk);
     await call(`/admin/content/spells/${sp}`, undefined, T.adm, 'DELETE');
   });
   test('coffre : taille de départ et capacité max réglées sur la capitale', async () => {

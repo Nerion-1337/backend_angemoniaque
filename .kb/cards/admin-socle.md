@@ -2,7 +2,7 @@
 title: Socle admin (Étape 2 phase 1) : rôles, CRUD contenu, règles transverses, production, audit
 slug: admin-socle
 status: done
-updated: 2026-11-25
+updated: 2026-11-26
 files:
   - src/routes/admin.ts
   - src/routes/admin/core.ts
@@ -34,7 +34,7 @@ tests:
   - test/integration/heightVision.test.ts
 ---
 ## Purpose
-Socle du back-office (Étape 2) : rôles de compte, CRUD générique du contenu (races, rangs, monstres — dont les montures, card `monster-mounts` —, objets, bâtiments),
+Socle du back-office (Étape 2) : rôles de compte, CRUD générique du contenu (races, rangs, monstres — dont les types montables, card `summon-ride` —, objets, bâtiments),
 règles transverses (coûts, plafonds, modificateurs), cache de configuration, journal d'audit, production horaire des bâtiments.
 Les phases suivantes (bestiaire, cases, joueurs, divins, races) s'y branchent (cards dédiées).
 

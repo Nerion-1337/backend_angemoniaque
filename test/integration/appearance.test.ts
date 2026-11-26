@@ -1,6 +1,6 @@
-import { describe, test, expect, beforeAll } from 'vitest';
+import { describe, test, expect, beforeAll } from 'vitest'; import { summonAndRide } from './_ride';
 // Design 3D et icône d'un type de monstre (migration 41) : réglés en admin, recopiés au monstre posé, transmis à la carte,
-// à la liste des montures et à la monture montée (HUD).
+// à l'invocation et à l'invocation montée (HUD).
 describe.skipIf(!process.env.DATABASE_URL)('Apparence des monstres (design, icône)', () => {
   let app: any, pool: any; const s = Date.now() % 1e7; const T: any = {};
   const call = async (path: string, body?: any, tk?: string, method?: string) => {
@@ -21,12 +21,10 @@ describe.skipIf(!process.env.DATABASE_URL)('Apparence des monstres (design, icô
     expect((await call(`/admin/content/monsters/${id}`, { model: null, icon: null }, T.adm, 'PUT')).status).toBe(200);
     expect((await call(`/admin/content/monsters/${id}`, undefined, T.adm)).j).toMatchObject({ model: null, icon: null });
   });
-  test('monture : design et icône de son type dans la liste des montures et sur le personnage monté', async () => {
+  test('invocation montée : design et icône de son type dans la liste des invocations et sur le personnage monté', async () => {
     const tk = await login(`look${s}@x.fr`), ch = (await call('/characters', { pseudo: `look${s}`, race: 'human' }, tk)).j.id;
-    const type = (await call('/admin/content/monsters', { name: `Griffon${s}`, hp_max: 40, energy_max: 40, mountable: true, locomotion: ['land'], model: 'griffon', icon: 'griffin' }, T.adm)).j.id;
-    const mid = (await call(`/admin/content/monsters/${type}`, undefined, T.adm)).j.mount_id; await call(`/admin/players/${ch}/grant`, { kind: 'mount', refId: mid }, T.adm);
-    const cm = (await call(`/mounts/${ch}`, undefined, tk)).j.find((m: any) => m.name === `Griffon${s}`); expect(cm).toMatchObject({ model: 'griffon', icon: 'griffin' });
-    expect((await call('/mounts/summon', { characterId: ch, cmId: cm.cm_id }, tk)).status).toBe(200);
+    const r = await summonAndRide(call, T.adm, ch, tk, { name: `Griffon${s}`, hp_max: 40, energy_max: 40, model: 'griffon', icon: 'griffin' });
+    expect(r.summon).toMatchObject({ ridden: true, mountable: true });
     expect((await call(`/characters/${ch}`, undefined, tk)).j.mount).toMatchObject({ model: 'griffon', icon: 'griffin' });
   });
 });

@@ -30,7 +30,6 @@ describe.skipIf(!process.env.DATABASE_URL)('Admin phase 4 (rareté & acquisition
     if (cId) {
       await pool.query('DELETE FROM character_items WHERE character_id=$1', [cId]);
       await pool.query('DELETE FROM character_spells WHERE character_id=$1', [cId]);
-      await pool.query('DELETE FROM character_mounts WHERE character_id=$1', [cId]);
       await pool.query('DELETE FROM pacts WHERE ethereal_id=$1 OR human_id=$1', [cId, cId]).catch(() => {});
       // Autres FK potentielles sur characters (monde vide : le test échoue proprement sinon).
       await pool.query('DELETE FROM character_monster WHERE character_id=$1', [cId]).catch(() => {});

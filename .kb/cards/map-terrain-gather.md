@@ -51,9 +51,9 @@ et API des cartes (`/map/*`) et actions (`/actions/*`). Le front en garde un mir
 
 ## Business rules
 - Types de case : plain, forest, mountain, arid, snow, ether, volcano, shallow, deep. Coût d'un pas = coût du type DANS CE MONDE (admin « Cases », card `tile-types`), défaut `KIND_COST` (1, 2, 3, 2, 3, 3, 3, 4, 99).
-- Coût réel (`stepCost`) : volant (monture montée, ou créature contrôlée dont le type a la locomotion `air`, `summonLoco`) = 1 partout ; aquatique = 1 sur l'eau ; terre ferme impossible si la monture n'est pas terrestre (combinaisons, card `monster-mounts`) ; à pied / monture terrestre = coût de la case, eau profonde impossible.
+- Coût réel (`stepCost`) : volant (invocation montée, ou créature contrôlée dont le type a la locomotion `air`, `summonLoco`) = 1 partout ; aquatique = 1 sur l'eau ; terre ferme impossible si l'invocation montée n'est pas terrestre (combinaisons, card `summon-ride`) ; à pied / monture terrestre = coût de la case, eau profonde impossible.
 - Déplacement en ligne droite (8 directions, Chebyshev), sans contournement : une case occupée sur le trajet bloque tout le déplacement (409 « Chemin bloqué ») ; hors carte → 409.
-- Paiement : l'invocation contrôlée paie tout ; sinon la monture paie le trajet et le héros les actions ; énergie insuffisante → 409.
+- Paiement : l'invocation contrôlée paie tout ; sinon l'invocation montée paie le trajet et le héros les actions ; énergie insuffisante → 409.
 - Traverser une case de lave enflamme le HÉROS (pas les invocations) : `burn_until = now + 3 h`, 10 PV/h au tick, jamais mortel (PV min 1).
 - Récolte : 4 énergie, sur place ou à distance (trajet d'abord) ; eau profonde à pied → 409 « Rien à récolter ici » AVANT tout trajet ; stockée sous l'id STABLE du catalogue.
 - Zone sacrée : Chebyshev ≤ 10 de l'Hôtel de ville (carte 1) ; aucun combat joueur contre joueur si l'un des deux y est ; monstres exemptés.
@@ -62,15 +62,15 @@ et API des cartes (`/map/*`) et actions (`/actions/*`). Le front en garde un mir
 - Inventaire : verrou de 12 h au déséquipement, compatibilité slot/objet, arme à deux mains (`two_handed`, card `item-stats`) en main principale seulement et l'autre main libre, 5 emplacements spéciaux pour un humain (4 sinon), sac de 20.
 - Un bâtiment occupable ne bloque pas le trajet (`BLOCKING`) ; son occupant reçoit ses bonus de vue / portée (card `buildings-occupy`).
 - Récolte sur une case couverte par un gisement : sa ressource, son stock et son rendement priment (card `deposits`) ; `/map/{id}/cell` expose `deposit`.
-- `/map/{id}/area` et `/cell` : `flying` = monture volante du cavalier, ou monstre / invocation dont la locomotion comprend `air` (affichage au niveau du ciel côté front).
+- `/map/{id}/area` et `/cell` : `flying` = invocation montée volante du cavalier, ou monstre / invocation dont la locomotion comprend `air` (affichage au niveau du ciel côté front).
 - Créature contrôlée : sa locomotion vient de son type de monstre (`actor().loco`, exposée dans `actor.loco` de `/characters/{id}`) ; aquatique = 1 sur l'eau, terre ferme interdite sans `land` ; récolte en eau profonde possible si volante ou aquatique.
 - Royaume des Morts (carte 3, et tout monde généré) : AUCUNE ressource des autres mondes ; 3 ressources uniques (`resources3` : asphodèle spectrale / plaine, saule des Lamentations / forêt, âme cristallisée / massif) sur ≈ 0,5 % des cases de leur type (`RARE3`, hash fixe) ; les autres cases n'ont rien à récolter.
 - Récolte : refus 409 « Sac plein » AVANT tout trajet / toute dépense si la quantité récoltée demande un emplacement de plus que la place libre.
 - `/map/{id}/cell?characterId=` (personnage du joueur) : `harvestMissing` = null (récolte libre), [] (rien ne manque) ou une ligne par option de ce qui manque (objets équipés comptés).
-- Vision et portée du héros (`actor`) : +1 par niveau de HAUTEUR (`game/levels.ts`, miroir de `front/lib/levels.js`) — sol de la case (jamais négatif, sommet = +5) + taille de la monture terrestre / aquatique (1 à 3) ; monture volante = +6 quel que soit le sol ; + capacités PASSIVES des sorts du type de la monture (stats see / range) ; + bâtiment occupé. Les anciens `bonus_see` / `bonus_range` des montures ne comptent plus. `actor().extra` détaille ces apports (fiche, survol).
+- Vision et portée du héros (`actor`) : +1 par niveau de HAUTEUR (`game/levels.ts`, miroir de `front/lib/levels.js`) — sol de la case (jamais négatif, sommet = +5) + taille de l'invocation montée terrestre / aquatique (1 à 3) ; montée volante = +6 quel que soit le sol ; + capacités PASSIVES des sorts du type de la monture (stats see / range) ; + bâtiment occupé. Les anciens `bonus_see` / `bonus_range` des montures ne comptent plus. `actor().extra` détaille ces apports (fiche, survol).
 
 - `GET /map/{id}/area` renvoie aussi `rank` (palier de rang du personnage) et `building_race` (race d'une capitale) : allure 3D selon le rang et Hôtel de ville selon la race.
-- `GET /map/{id}/area` : `model`, `icon`, `locomotion`, `size` des monstres (repli sur le prototype) et invocations ; `mount_model`, `mount_icon`, `mount_loco`, `mount_size` de la monture d'un personnage.
+- `GET /map/{id}/area` : `model`, `icon`, `locomotion`, `size` des monstres (repli sur le prototype) et invocations ; `mount_model`, `mount_icon`, `mount_loco`, `mount_size` de l'invocation montée d'un personnage (`characters.riding_summon_id`).
 ## Gotchas
 - Terrain dupliqué back ⇄ front (fichiers générés : modifier les scripts `tools/gen_*`, jamais les fichiers générés).
 - Le coût 99 de l'eau profonde n'est qu'affiché : ne jamais additionner `t.cost` pour un trajet, passer par `stepCost`.

@@ -55,31 +55,30 @@ describe.skipIf(!process.env.DATABASE_URL)('Admin : familles divines et fiche jo
     expect(h.j.rows[0].rank_name).toBeTruthy(); expect(h.j.rows[0].map_id).toBe(1);
   });
 
-  test('fiche joueur : caractéristiques, XP, or, objets (sac / coffre), sorts, montures, divins', async () => {
+  test('fiche joueur : caractéristiques, XP, or, objets (sac / coffre), sorts, divins (plus de montures)', async () => {
     const id = T.cid, adm = T.adm;
     const up = await call(`/admin/players/${id}`, { xp: 1234, gold: 999, strength: 42 }, adm, 'PUT');
     expect(up.status, JSON.stringify(up.j)).toBe(200); expect(up.j).toMatchObject({ xp: 1234, gold: 999, strength: 42 });
     expect((await call(`/admin/players/${id}`, { xp: -1 }, adm, 'PUT')).status).toBe(400);
-    const items = (await call('/admin/catalog', undefined, adm)).j.items, spells = (await call('/admin/catalog', undefined, adm)).j.spells, mounts = (await call('/admin/catalog', undefined, adm)).j.mounts;
+    const items = (await call('/admin/catalog', undefined, adm)).j.items, spells = (await call('/admin/catalog', undefined, adm)).j.spells;
     const bag0 = (await call(`/admin/players/${id}`, undefined, adm)).j.items.find((i: any) => i.place === 'bag' && i.item_id === items[0].id)?.qty ?? 0;   // objets de départ
     expect((await call(`/admin/players/${id}/items`, { itemId: items[0].id, qty: 2, place: 'bag' }, adm)).status).toBe(200);
     expect((await call(`/admin/players/${id}/items`, { itemId: items[0].id, qty: 3, place: 'bag' }, adm)).status).toBe(200);   // empilé
     expect((await call(`/admin/players/${id}/items`, { itemId: items[0].id, place: 'chest' }, adm)).status).toBe(200);
     expect((await call(`/admin/players/${id}/grant`, { kind: 'spell', refId: spells[0].id }, adm)).status).toBe(200);
-    expect((await call(`/admin/players/${id}/grant`, { kind: 'mount', refId: mounts[0].id }, adm)).status).toBe(200);
+    expect((await call(`/admin/players/${id}/grant`, { kind: 'mount', refId: 1 }, adm)).status).toBe(400);   // montures supprimées (migration 43)
     expect((await call(`/admin/players/${id}/grant`, { kind: 'divine', refId: T.copies[0] }, adm)).status).toBe(200);
     let p = (await call(`/admin/players/${id}`, undefined, adm)).j;
     expect(p.character).toMatchObject({ xp: 1234, gold: 999 });
     expect(p.items.find((i: any) => i.place === 'bag' && i.item_id === items[0].id).qty).toBe(bag0 + 5);
     expect(p.items.some((i: any) => i.place === 'chest' && i.item_id === items[0].id)).toBe(true);
     expect(p.spells.some((x: any) => x.spell_id === spells[0].id)).toBe(true);
-    expect(p.mounts.some((x: any) => x.mount_id === mounts[0].id)).toBe(true);
+    expect(p.mounts).toBeUndefined();
     expect(p.divine.map((x: any) => x.id)).toContain(T.copies[0]);
     expect(p.ranks.length).toBeGreaterThan(0);
     expect((await call(`/admin/players/${id}/items/${items[0].id}?place=chest`, undefined, adm, 'DELETE')).status).toBe(200);
     expect((await call(`/admin/players/${id}/items/${items[0].id}?place=chest`, undefined, adm, 'DELETE')).status).toBe(404);
     expect((await call(`/admin/players/${id}/spells/${spells[0].id}`, undefined, adm, 'DELETE')).status).toBe(200);
-    expect((await call(`/admin/players/${id}/mounts/${mounts[0].id}`, undefined, adm, 'DELETE')).status).toBe(200);
     expect((await call(`/admin/content/divine/${T.copies[0]}`, undefined, adm, 'DELETE')).status).toBe(409);   // détenu
     expect((await call(`/admin/players/${id}/divine/${T.copies[0]}/release`, undefined, adm, 'POST')).status).toBe(200);
     p = (await call(`/admin/players/${id}`, undefined, adm)).j;

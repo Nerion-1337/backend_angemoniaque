@@ -2,7 +2,7 @@
 title: Races (apparition, limites, équipement de départ, races libres, admin sans limite) et horloge du monde persistante
 slug: races-spawn-clock
 status: done
-updated: 2026-11-25
+updated: 2026-11-26
 files:
   - src/game/clock.ts
   - src/routes/characters.ts
@@ -37,7 +37,7 @@ Horloge du monde persistante : le temps de jeu avance même serveur arrêté.
 - Le compte admin n'a aucune de ces limites et peut avoir toutes les races.
 - Toute race créée en admin est jouable dès qu'elle a un rang.
 - Apparition : zone de la race (monde, centre, rayon ; centre dans les bornes du monde) sinon capitale de la race (rayon 4).
-- Équipement de départ (`races.start_kit`) : palier (sinon le premier), or, XP, ressources (id du catalogue), objets au sac ou au coffre, sorts, montures (une seule active) ; chaque référence est vérifiée à l'enregistrement (400/404).
+- Équipement de départ (`races.start_kit`) : palier (sinon le premier), or, XP, ressources (id du catalogue), objets au sac ou au coffre, sorts (plus de montures, migration 43 : une ancienne clé `mounts` est ignorée) ; chaque référence est vérifiée à l'enregistrement (400/404).
 - Kit vide = premier palier, 0 or, rien d'autre ; la migration 18 a repris le kit historique (150 or, 6 objets au sac, Destrier) pour les races existantes.
 - Passage de rang par conditions (`/characters/{id}/rank-up`, conditions par rang) : card `rank-up` ; le tick rétablit les rangs temporaires échus.
 - Races & rangs : table « gain d'XP selon l'écart de rang » (`GET/PUT /admin/content/xp-rank`, `{ table: { "écart": % } }`, écarts entiers -99..99, % 0..1000, « +1 » normalisé en « 1 »).

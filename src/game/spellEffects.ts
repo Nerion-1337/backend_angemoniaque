@@ -24,7 +24,7 @@ export const Effects = z.object({
   stats: z.array(z.object({ stat: z.enum(STAT_KEYS), value: z.number().int().min(-1e6).max(1e6) })).max(12).default([]),
   durationH: z.number().int().min(0).max(8760).default(0),
   /** Invocation (lot D) : monstre (instance de combat), monture (type montable), objet (`qty` exemplaires), bâtiment (copie) ; durationH 0 = permanent. */
-  summon: z.object({ kind: z.enum(['monster', 'mount', 'item', 'building']), refId: z.number().int(), qty: z.number().int().min(1).max(99).default(1),
+  summon: z.object({ kind: z.enum(['monster', 'item', 'building']), refId: z.number().int(), qty: z.number().int().min(1).max(99).default(1),
     durationH: z.number().int().min(0).max(8760).default(0) }).nullable().optional()
 });
 export type EffectsT = z.infer<typeof Effects>;

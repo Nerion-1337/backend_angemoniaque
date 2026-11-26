@@ -1,8 +1,8 @@
 ---
-title: Moteur de sorts paramétrable (zone, cible, dégâts, durée, caractéristiques) et liens sort ↔ objet / monture / monstre
+title: Moteur de sorts paramétrable (zone, cible, dégâts, durée, caractéristiques) et liens sort ↔ objet / bâtiment / monstre
 slug: spell-engine
 status: done
-updated: 2026-11-25
+updated: 2026-11-26
 files:
   - src/game/spellEffects.ts
   - src/game/spellTick.ts
@@ -17,7 +17,7 @@ tests:
 ---
 ## Purpose
 Moteur de sorts paramétrable (`spells.effects`) : cible, portée, zone, camp visé, dégâts instantanés, soin, dégâts sur la durée,
-modifications de caractéristiques ; et liens d'un sort avec des objets, montures (et monstres) qui le rendent lançable ou passif.
+modifications de caractéristiques ; et liens d'un sort avec des objets, bâtiments (et monstres) qui le rendent lançable ou passif.
 
 ## Business rules
 - `effects = {}` → comportement historique selon `kind` (summon, summon_cap, buff, attack) ; sinon le moteur s'applique.
@@ -29,10 +29,10 @@ modifications de caractéristiques ; et liens d'un sort avec des objets, monture
 - Dégâts sur la durée : n PV par heure au tick pendant `hours`, jamais mortels (PV min 1) ; n réduit par l'armure magique de la cible au lancer (minimum 1 / h).
 - Réserves (`hp`, `energy`, `divine_energy`) : valeur actuelle rendue ou retirée, bornée à [0 (1 pour hp), max].
 - Capacités (`*_max`, force, agilité, armure, armure magique, vue, portée, récupération) : modifiées pour `durationH` heures (0 = permanent), puis rétablies au tick ; une capacité qui baisse ramène la réserve au nouveau max. Seuls les personnages ont des capacités modifiables.
-- Sorts lançables = appris ∪ liés en ACTIF à un objet ÉQUIPÉ ∪ liés en ACTIF à la monture ACTIVE ; la liste indique la provenance.
-- Sort lié en PASSIF à un objet équipé ou à la monture active : ses effets instantanés sur soi (soin, réserves ±) s'appliquent une fois par heure ; capacités et dégâts ignorés.
-- Cible « soi-même » : le lanceur, ou la créature qu'il contrôle quand il agit par elle ; capacités de monstre d'une monture montée ou d'une créature contrôlée : card `mount-call`.
-- Liens admin : monstre (table `monster_spells`), objet, monture, bâtiment (`entity_spells`) ; doublon → 409 ; élément ou sort inconnu → 404 ; modes « au coup porté » / « à l'attaque reçue » et invocation (`effects.summon`) : card `spell-summon`.
+- Sorts lançables = appris ∪ liés en ACTIF à un objet ÉQUIPÉ ∪ à un bâtiment à soi voisin ∪ capacités actives du type de l'invocation montée ou contrôlée ; la liste indique la provenance. Délai avant de relancer (`cooldown_h`) : card `summon-ride`.
+- Sort lié en PASSIF à un objet équipé : ses effets instantanés sur soi (soin, réserves ±) s'appliquent une fois par heure ; capacités et dégâts ignorés.
+- Cible « soi-même » : le lanceur, ou la créature qu'il contrôle quand il agit par elle ; capacités du type d'une invocation montée ou contrôlée : card `summon-ride`.
+- Liens admin : monstre (table `monster_spells`), objet, bâtiment (`entity_spells` ; « monture » → 400) ; doublon → 409 ; élément ou sort inconnu → 404 ; modes « au coup porté » / « à l'attaque reçue » et invocation (`effects.summon`) : card `spell-summon`.
 - Sorts liés aux bâtiments : actifs pour le propriétaire sur la case ou à côté, passifs chaque heure depuis la case (card `buildings-occupy`).
 - Lancer réussi : XP `spells.xp_use` une fois par lancer, pondérée par l'écart de rang avec la première cible autre que soi (sans cible : 100 %) ; la réponse renvoie `xp`.
 

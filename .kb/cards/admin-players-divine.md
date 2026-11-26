@@ -18,7 +18,7 @@ tests:
 ---
 ## Purpose
 Section admin « Joueurs » (liste paginée par race, fiche éditable : caractéristiques, XP, or, rang, objets équipés / sac / coffre,
-sorts, montures, bâtiments, divins) et objets divins gérés comme les autres objets, rattachés à des familles plafonnées.
+sorts, bâtiments, divins ; plus de montures) et objets divins gérés comme les autres objets, rattachés à des familles plafonnées.
 
 ## Business rules
 - Liste : 20 par page (max 100), filtre race et recherche pseudo/e-mail, effectifs par race.

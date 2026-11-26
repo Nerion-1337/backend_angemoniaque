@@ -22,9 +22,9 @@ describe.skipIf(!process.env.DATABASE_URL)('Invocations et sorts déclenchés pa
     T.steed = (await call('/admin/content/monsters', { name: `Coursier${s}`, hp_max: 50, energy_max: 40, mountable: true }, T.adm)).j.id;
   });
 
-  test('admin : élément à invoquer inconnu ou monture non montable → 404', async () => {
+  test('admin : élément à invoquer inconnu → 404 ; plus de genre « monture » → 400', async () => {
     expect((await call('/admin/content/spells', { name: `X${s}`, effects: { summon: { kind: 'item', refId: 999999 } } }, T.adm)).status).toBe(404);
-    expect((await call('/admin/content/spells', { name: `Y${s}`, effects: { summon: { kind: 'mount', refId: T.mon } } }, T.adm)).status).toBe(404);
+    expect((await call('/admin/content/spells', { name: `Y${s}`, effects: { summon: { kind: 'mount', refId: T.mon } } }, T.adm)).status).toBe(400);
   });
 
   test('objet temporaire ×2 : dans le sac, puis retiré à l\'échéance', async () => {
@@ -34,12 +34,18 @@ describe.skipIf(!process.env.DATABASE_URL)('Invocations et sorts déclenchés pa
     expect(await n()).toBe(2); await expire(); expect(await n()).toBe(0);
   });
 
-  test('monstre temporaire, monture et bâtiment permanents', async () => {
+  test('monstre temporaire, monstre montable (monté au lancer) et bâtiment permanents', async () => {
     expect((await learnCast(await spell('Appel', { target: 'self', summon: { kind: 'monster', refId: T.mon, durationH: 2 } }))).status).toBe(200);
     const sm = (await pool.query('SELECT s.id, p.id pos FROM summons s JOIN positions p ON p.summon_id=s.id WHERE s.owner_id=$1 AND s.name=$2', [T.c, `Feu${s}`])).rows;
     expect(sm).toHaveLength(1);
-    expect((await learnCast(await spell('Monte', { target: 'self', summon: { kind: 'mount', refId: T.steed } }))).status).toBe(200);
-    expect((await pool.query('SELECT 1 FROM character_mounts cm JOIN mounts mo ON mo.id=cm.mount_id WHERE cm.character_id=$1 AND mo.monster_id=$2', [T.c, T.steed])).rowCount).toBe(1);
+    await pool.query('UPDATE characters SET summon_cap=GREATEST(summon_cap, 5) WHERE id=$1', [T.c]);
+    const monte = await spell('Monte', { target: 'self', summon: { kind: 'monster', refId: T.steed } });
+    await call(`/admin/players/${T.c}/grant`, { kind: 'spell', refId: monte }, T.adm);
+    const rc = await call('/spells/cast', { characterId: T.c, spellId: monte, ride: true }, T.tk); expect(rc.status, JSON.stringify(rc.j)).toBe(200);
+    expect(rc.j.results[0].effect).toContain('monte dessus');
+    const { rows: [rider] } = await pool.query('SELECT s.monster_id, s.spell_id FROM characters c JOIN summons s ON s.id=c.riding_summon_id WHERE c.id=$1', [T.c]);
+    expect(rider).toMatchObject({ monster_id: T.steed, spell_id: monte });
+    await call('/summons/dismount', { characterId: T.c }, T.tk);
     expect((await learnCast(await spell('Bâtir', { target: 'self', summon: { kind: 'building', refId: T.bld } }))).status).toBe(200);
     expect((await pool.query('SELECT 1 FROM buildings b JOIN positions p ON p.building_id=b.id WHERE b.owner_id=$1 AND b.name=$2', [T.c, `Autel${s}`])).rowCount).toBe(1);
     await expire();

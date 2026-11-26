@@ -1,7 +1,7 @@
 import { OpenAPIHono } from '@hono/zod-openapi'; import { def, router, z, P } from '../lib/route.js'; import { tx, ownChar, posOf, fail, log, dist } from '../lib/db.js';
 import { cfgNum } from '../game/content.js'; import { bagRoom, bagState, chestState, resStacks, extraSlots } from '../game/bag.js'; import { resName } from '../game/deposits.js';
 export const market = router();
-const TBL: Record<string, [string, string]> = { item: ['character_items', 'item_id'], spell: ['character_spells', 'spell_id'], mount: ['character_mounts', 'mount_id'] };
+const TBL: Record<string, [string, string]> = { item: ['character_items', 'item_id'], spell: ['character_spells', 'spell_id'] };
 /** Coffre réglé par capitale (admin Bâtiments, data.chestStart / chestMax) : taille de départ (10) et capacité max (aucune). */
 export async function chestLimits(db: any, race: string) {
   const { rows: [b] } = await db.query("SELECT data FROM buildings WHERE kind='capital' AND data->>'race'=$1 LIMIT 1", [race]);
@@ -40,14 +40,14 @@ def(market, 'post', '/shop/buy', z.object({ characterId: z.number(), itemId: z.n
   if (it.shop_stock <= 0) fail(409, 'Réserve de la faction épuisée'); if (me.gold < it.price) fail(409, 'Or insuffisant'); if (await bagRoom(db, me.id) <= 0) fail(409, 'Inventaire plein');
   await db.query('UPDATE items SET shop_stock=shop_stock-1 WHERE id=$1', [it.id]); await db.query('UPDATE characters SET gold=gold-$2 WHERE id=$1', [me.id, it.price]); await db.query('INSERT INTO character_items(character_id,item_id) VALUES ($1,$2)', [me.id, it.id]); return { ok: true };
 }));
-def(market, 'post', '/market/list', z.object({ characterId: z.number(), kind: z.enum(['item', 'spell', 'mount']), refId: z.number(), price: z.number().int().positive() }), (c, b) => tx(async db => {
+def(market, 'post', '/market/list', z.object({ characterId: z.number(), kind: z.enum(['item', 'spell']), refId: z.number(), price: z.number().int().positive() }), (c, b) => tx(async db => {
   const me = await ownChar(db, c, b.characterId); await atCapital(db, me); const [t, col] = TBL[b.kind];
   const r = await db.query(`DELETE FROM ${t} WHERE ctid=(SELECT ctid FROM ${t} WHERE character_id=$1 AND ${col}=$2 ${b.kind === 'item' ? 'AND equipped_slot IS NULL' : ''} LIMIT 1)`, [me.id, b.refId]);
   if (!r.rowCount) fail(404, 'Objet non possédé (ou équipé)');
   await db.query('INSERT INTO market_listings(seller_id,race,kind,ref_id,price) VALUES ($1,$2,$3,$4,$5)', [me.id, me.race, b.kind, b.refId, b.price]); return { ok: true };
 }));
 def(market, 'get', '/market/{characterId}', null, c => tx(async db => { const me = await ownChar(db, c, P(c, 'characterId')); await atCapital(db, me);
-  return (await db.query(`SELECT l.*, COALESCE(i.name,s.name,m.name) name FROM market_listings l LEFT JOIN items i ON l.kind='item' AND i.id=l.ref_id LEFT JOIN spells s ON l.kind='spell' AND s.id=l.ref_id LEFT JOIN mounts m ON l.kind='mount' AND m.id=l.ref_id WHERE NOT l.sold AND l.race=$1`, [me.race])).rows; }));
+  return (await db.query(`SELECT l.*, COALESCE(i.name,s.name) name FROM market_listings l LEFT JOIN items i ON l.kind='item' AND i.id=l.ref_id LEFT JOIN spells s ON l.kind='spell' AND s.id=l.ref_id WHERE NOT l.sold AND l.race=$1`, [me.race])).rows; }));
 def(market, 'post', '/market/{id}/buy', z.object({ characterId: z.number() }), (c, b) => tx(async db => {
   const me = await ownChar(db, c, b.characterId); await atCapital(db, me);
   const { rows: [l] } = await db.query('SELECT * FROM market_listings WHERE id=$1 AND NOT sold AND race=$2 FOR UPDATE', [P(c, 'id'), me.race]); if (!l) fail(404, 'Annonce introuvable (même race uniquement)');

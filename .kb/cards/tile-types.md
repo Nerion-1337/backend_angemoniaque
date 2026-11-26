@@ -2,7 +2,7 @@
 title: Types de case éditables par monde (admin « Cases ») : coût, description, sort passif
 slug: tile-types
 status: done
-updated: 2026-11-24
+updated: 2026-11-26
 files:
   - src/game/tileTypes.ts
   - src/routes/admin/tiles.ts
@@ -21,7 +21,7 @@ aux personnages qui s'y tiennent. La géométrie des cartes reste générée dan
 
 ## Business rules
 - Un type de case par (monde, kind) ; sans ligne en base, les constantes du code s'appliquent (aucun changement de jeu à la migration).
-- Le coût d'un pas = coût du type de case DE CE MONDE (0 à 99) ; l'eau profonde reste interdite à pied quel que soit le coût ; monture volante = 1 partout.
+- Le coût d'un pas = coût du type de case DE CE MONDE (0 à 99) ; l'eau profonde reste interdite à pied quel que soit le coût ; invocation montée volante = 1 partout.
 - Sort passif : bonus = +|dégâts du sort| PV par heure, malus = −|dégâts| ; dégâts 0 ou mode absent = aucun effet ; PV bornés à [1, PV max] (jamais mortel).
 - L'effet s'applique au tick horaire, aux PERSONNAGES non bloqués seulement (pas aux monstres ni aux invocations).
 - Un sort exige un mode bonus/malus (400) et doit exister (404) ; kind inconnu → 400 ; type absent du monde → 404.

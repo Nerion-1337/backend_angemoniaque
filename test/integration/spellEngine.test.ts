@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeAll, afterAll } from 'vitest';
-// Lot 2 : moteur de sorts (zone, soin, dégâts, durée, caractéristiques) et liens sort ↔ objet / monture / monstre.
+// Lot 2 : moteur de sorts (zone, soin, dégâts, durée, caractéristiques) et liens sort ↔ objet / monstre / bâtiment.
 describe.skipIf(!process.env.DATABASE_URL)('Moteur de sorts et liens', () => {
   let app: any, pool: any, hourlyTick: any, hourlySpellEffects: any; const s = Date.now() % 1e7; const T: any = { spells: [], items: [], pos: [] };
   const call = async (path: string, body?: any, tk?: string, method?: string) => {
@@ -70,7 +70,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Moteur de sorts et liens', () => {
     await pool.query('DELETE FROM spell_dots WHERE target_id=$1', [T.b]);
   });
 
-  test('liens : sort lancé grâce à un objet ÉQUIPÉ ; sort passif d’une monture active au tick ; admin des liens', async () => {
+  test('liens : sort lancé grâce à un objet ÉQUIPÉ ; sort passif d’un objet porté au tick ; plus de lien monture ; admin des liens', async () => {
     const id = await spell('Éclat', { target: 'self', heal: 15 });
     const it = await call('/admin/content/items', { name: `Talisman ${s}`, rarity: 'rare', slot: 'collier' }, T.adm); T.items.push(it.j.id);
     const l = await call(`/admin/content/spells/${id}/links`, { kind: 'item', refId: it.j.id, mode: 'active' }, T.adm); expect(l.status).toBe(200);
@@ -82,15 +82,13 @@ describe.skipIf(!process.env.DATABASE_URL)('Moteur de sorts et liens', () => {
     await pool.query('UPDATE characters SET hp_current=10 WHERE id=$1', [T.a]);
     expect((await call('/spells/cast', { characterId: T.a, spellId: id }, T.tk)).status).toBe(200);
     expect((await ch(T.a)).hp_current).toBe(25);
-    // monture active + sort passif : +15 PV par heure
-    const mount = (await pool.query('SELECT mount_id FROM character_mounts WHERE character_id=$1 LIMIT 1', [T.a])).rows[0].mount_id;
-    await pool.query('UPDATE character_mounts SET active=true WHERE character_id=$1 AND mount_id=$2', [T.a, mount]);
-    const lp = await call(`/admin/content/spells/${id}/links`, { kind: 'mount', refId: mount, mode: 'passive' }, T.adm); expect(lp.status).toBe(200);
+    // objet porté + sort passif : +15 PV par heure ; plus de lien vers une monture (migration 43)
+    expect((await call(`/admin/content/spells/${id}/links`, { kind: 'mount', refId: 1, mode: 'passive' }, T.adm)).status).toBe(400);
+    const lp = await call(`/admin/content/spells/${id}/links`, { kind: 'item', refId: it.j.id, mode: 'passive' }, T.adm); expect(lp.status).toBe(200);
     await hourlySpellEffects();
     expect((await ch(T.a)).hp_current).toBe(40);
     const links = (await call(`/admin/content/spells/${id}/links`, undefined, T.adm)).j;
-    expect(links.map((x: any) => x.kind).sort()).toEqual(['item', 'mount']);
+    expect(links.map((x: any) => x.kind).sort()).toEqual(['item', 'item']);
     for (const x of links) expect((await call(`/admin/content/spells/${id}/links/${x.kind}/${x.id}`, undefined, T.adm, 'DELETE')).status).toBe(200);
-    await pool.query('UPDATE character_mounts SET active=false WHERE character_id=$1', [T.a]);
   });
 });

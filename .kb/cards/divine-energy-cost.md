@@ -23,12 +23,12 @@ Tout ce qui consomme de l'énergie et se règle dans l'admin peut aussi exiger d
 
 ## Business rules
 - Colonnes `divine_energy_cost` (spells, recipes, tile_types ; migration 42), entier ≥ 0, défaut 0 ; passage de rang : `divineEnergyCost` dans chaque voie de `specializations.requirements` (défaut 0).
-- L'énergie divine est TOUJOURS payée par le personnage (`spendDivine`), jamais par la monture ni l'invocation contrôlée, même quand c'est elles qui paient l'énergie.
+- L'énergie divine est TOUJOURS payée par le personnage (`spendDivine`), jamais par l'invocation montée ni l'invocation contrôlée, même quand c'est elles qui paient l'énergie.
 - Insuffisante → 409 « Énergie divine insuffisante (N requise) » ; tout est dans la transaction : un sort, une fabrication ou un trajet refusé ensuite ne débite rien.
 - Sort : débitée dès que le sort est trouvé, avant ses contrôles (annulée avec la transaction s'ils échouent).
 - Cases : somme des coûts divins des cases traversées (`travel`), débitée avant l'énergie du trajet ; carte de case du jeu : `tile.divineCost`.
 - Passage de rang : listée dans `missing` (« énergie divine N ») et toujours débitée comme l'énergie, consommation ou non des objets.
-- Les coûts fixes du code (attaque, construction, souffle de monture) n'ont pas de version divine (non réglés en admin).
+- Les coûts fixes du code (attaque, construction) n'ont pas de version divine (non réglés en admin).
 
 ## Gotchas
 - `spendDivine` lit `ch.divine_energy_current` : le personnage passé doit venir d'un `SELECT *` (ownChar).

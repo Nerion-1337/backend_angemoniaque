@@ -22,10 +22,9 @@ def(playerRoutes, 'post', '/admin/players/{id}/stat', z.object({ stat: z.string(
 });
 const GRANT: Record<string, string> = {
   item: 'INSERT INTO character_items(character_id,item_id) VALUES ($1,$2)',
-  spell: 'INSERT INTO character_spells(character_id,spell_id) VALUES ($1,$2)',
-  mount: 'INSERT INTO character_mounts(character_id,mount_id,energy_current,hp_current) SELECT $1,id,energy_max,hp_max FROM mounts WHERE id=$2'
+  spell: 'INSERT INTO character_spells(character_id,spell_id) VALUES ($1,$2)'
 };
-def(playerRoutes, 'post', '/admin/players/{id}/grant', z.object({ kind: z.enum(['item', 'spell', 'mount', 'divine']), refId: z.number() }), async (c, b) => {
+def(playerRoutes, 'post', '/admin/players/{id}/grant', z.object({ kind: z.enum(['item', 'spell', 'divine']), refId: z.number() }), async (c, b) => {
   const charId = P(c, 'id');
   if (b.kind === 'divine') {
     // Objet divin : transfert du détenteur (UPDATE, jamais d'insertion => aucune duplication), dans la limite des caps.
@@ -66,7 +65,6 @@ def(playerRoutes, 'get', '/admin/players/{id}', null, async c => {
       CASE WHEN ci.in_chest THEN 'chest' WHEN ci.equipped_slot IS NOT NULL THEN 'equipped' ELSE 'bag' END place
       FROM character_items ci JOIN items i ON i.id=ci.item_id WHERE ci.character_id=$1 ORDER BY place, i.name`),
     spells: await q('SELECT cs.spell_id, sp.name, sp.kind, sp.rarity FROM character_spells cs JOIN spells sp ON sp.id=cs.spell_id WHERE cs.character_id=$1 ORDER BY sp.name'),
-    mounts: await q('SELECT cm.mount_id, m.name, cm.active, cm.hp_current, m.hp_max, cm.energy_current, m.energy_max FROM character_mounts cm JOIN mounts m ON m.id=cm.mount_id WHERE cm.character_id=$1 ORDER BY m.name'),
     buildings: await q('SELECT b.id, b.name, b.kind, b.structure, p.map_id, p.coord_x x, p.coord_y y FROM buildings b LEFT JOIN positions p ON p.building_id=b.id WHERE b.owner_id=$1 ORDER BY b.id'),
     divine: await q('SELECT di.id, di.kind, i.name FROM divine_items di LEFT JOIN items i ON i.id=di.item_id WHERE di.holder_character_id=$1 ORDER BY di.kind, di.id'),
   };
@@ -111,12 +109,6 @@ def(playerRoutes, 'delete', '/admin/players/{id}/spells/{spellId}', null, async 
   const id = P(c, 'id'), r = await pool.query('DELETE FROM character_spells WHERE character_id=$1 AND spell_id=$2', [id, P(c, 'spellId')]);
   if (!r.rowCount) fail(404, 'Sort non possédé');
   await audit(c, 'player.spell.remove', 'player', id, { spellId: P(c, 'spellId') }, null);
-  return { ok: true };
-});
-def(playerRoutes, 'delete', '/admin/players/{id}/mounts/{mountId}', null, async c => {
-  const id = P(c, 'id'), r = await pool.query('DELETE FROM character_mounts WHERE ctid=(SELECT ctid FROM character_mounts WHERE character_id=$1 AND mount_id=$2 LIMIT 1)', [id, P(c, 'mountId')]);
-  if (!r.rowCount) fail(404, 'Monture non possédée');
-  await audit(c, 'player.mount.remove', 'player', id, { mountId: P(c, 'mountId') }, null);
   return { ok: true };
 });
 /** Supprime un bâtiment du joueur (et sa position sur la carte). */

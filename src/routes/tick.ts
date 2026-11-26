@@ -15,7 +15,6 @@ export async function hourlyTick() {
     energy_current=LEAST(c.energy_max,c.energy_current+c.recovery),
     divine_energy_current=LEAST(c.divine_energy_max,c.divine_energy_current+c.recovery)
     FROM specializations s WHERE s.id=c.specialization_id AND NOT c.blocked`, [xpRate]);
-  await pool.query("UPDATE character_mounts cm SET hp_current=LEAST(m.hp_max,cm.hp_current+m.recovery), energy_current=LEAST(m.energy_max,cm.energy_current+m.recovery) FROM mounts m WHERE m.id=cm.mount_id");
   await pool.query('UPDATE summons SET hp_current=LEAST(hp_max,hp_current+recovery), energy_current=LEAST(energy_max,energy_current+recovery)');
   // Les monstres en attente de réincarnation (mort + délai) ne régénèrent pas avant l'échéance.
   await pool.query('UPDATE monsters m SET hp_current=LEAST(m.hp_max,m.hp_current+m.recovery), energy_current=LEAST(m.energy_max,m.energy_current+m.recovery), divine_energy_current=LEAST(m.divine_energy_max,m.divine_energy_current+m.recovery) WHERE m.id NOT IN (SELECT monster_id FROM monster_respawns)');

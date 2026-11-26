@@ -1,7 +1,8 @@
 import { heightParts } from './levels.js'; import { walk } from './rules.js'; import { ignite } from './burn.js'; import { terrain } from './terrain.js'; import { tileCost, tileOf, loadTiles } from './tileTypes.js'; import { BLOCKING, occupiableAt } from './buildingCell.js'; import { fail, posOf } from '../lib/db.js';
-const MOUNT_SQL = `SELECT cm.*, m.name, m.hp_max, m.armor, m.strength, m.agility, m.energy_max, m.flying, m.aquatic, m.terrestrial, m.recovery, m.special_attack_name, m.special_attack_damage, m.special_attack_energy,
-    m.monster_id, COALESCE(t.size, 1) size, t.model, t.icon, t.locomotion
-  FROM character_mounts cm JOIN mounts m ON m.id=cm.mount_id LEFT JOIN monsters t ON t.id=m.monster_id WHERE cm.character_id=$1 AND cm.active`;
+/** Invocation MONTÉE (characters.riding_summon_id, migration 43) : profil de déplacement d'après son type de monstre. */
+const MOUNT_SQL = `SELECT s.*, s.id summon_id, COALESCE(t.size, 1) size, t.model, t.icon, t.locomotion,
+    'air' = ANY(COALESCE(t.locomotion, '{land}')) flying, 'water' = ANY(COALESCE(t.locomotion, '{land}')) aquatic, 'land' = ANY(COALESCE(t.locomotion, '{land}')) terrestrial
+  FROM characters c JOIN summons s ON s.id=c.riding_summon_id LEFT JOIN monsters t ON t.id=s.monster_id WHERE c.id=$1`;
 export const activeMount = async (db: any, id: number) => (await db.query(MOUNT_SQL, [id])).rows[0];
 export const isWater = (kind: string) => kind === 'shallow' || kind === 'deep';
 /** Acteur courant : l'invocation contrôlée, sinon le héros (monté ou non). */
@@ -46,11 +47,11 @@ export function stepCost(t: { kind: string; cost: number }, a: any): number {
   return t.kind === 'deep' ? Infinity : tileCost(a.mp?.map_id, t.kind, t.cost);
 }
 const blockedMsg = (kind: string, a: any) => (a.mount ?? a.loco) && !onLand(a.mount ?? a.loco) && !isWater(kind) ? 'Une monture aquatique ne quitte pas l’eau' : kind === 'deep' ? 'Eau profonde : un navire, une monture volante ou aquatique est requis' : 'Terrain infranchissable';
-/** Paiement d'énergie : 'move' = déplacement (monture si invoquée), 'mount' = capacité de la monture, 'action' = énergie du personnage. L'invocation contrôlée paie tout. */
+/** Paiement d'énergie : 'move' = déplacement (invocation montée), 'mount' = capacité de l'invocation montée, 'action' = énergie du personnage. L'invocation contrôlée paie tout. */
 export async function spend(db: any, ch: any, a: any, amount: number, kind: 'move' | 'action' | 'mount' = 'action') {
   if (!amount) return;
   if (a.sm) { if (a.sm.energy_current < amount) fail(409, `Énergie de l'invocation insuffisante (${amount})`); await db.query('UPDATE summons SET energy_current=energy_current-$2 WHERE id=$1', [a.sm.id, amount]); a.sm.energy_current -= amount; }
-  else if (a.mount && kind !== 'action') { if (a.mount.energy_current < amount) fail(409, `Énergie de la monture insuffisante (${amount})`); await db.query('UPDATE character_mounts SET energy_current=energy_current-$3 WHERE character_id=$1 AND mount_id=$2', [ch.id, a.mount.mount_id, amount]); a.mount.energy_current -= amount; }
+  else if (a.mount && kind !== 'action') { if (a.mount.energy_current < amount) fail(409, `Énergie de la monture insuffisante (${amount})`); await db.query('UPDATE summons SET energy_current=energy_current-$2 WHERE id=$1', [a.mount.summon_id, amount]); a.mount.energy_current -= amount; }
   else { if (ch.energy_current < amount) fail(409, `Énergie insuffisante (${amount} requis)`); await db.query('UPDATE characters SET energy_current=energy_current-$2 WHERE id=$1', [ch.id, amount]); ch.energy_current -= amount; }
 }
 /** Énergie divine (coût réglé en admin à côté de l'énergie, 0 par défaut) : toujours payée par le personnage lui-même. */

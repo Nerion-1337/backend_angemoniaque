@@ -12,9 +12,7 @@ export async function hourlySpellEffects() {
   await pool.query('DELETE FROM spell_dots WHERE until <= now()');
   const { rows: passives } = await pool.query(`
     SELECT ci.character_id, s.id spell_id, s.effects FROM entity_spells es JOIN character_items ci ON ci.item_id=es.ref_id JOIN spells s ON s.id=es.spell_id
-      WHERE es.kind='item' AND es.mode='passive' AND ci.equipped_slot IS NOT NULL
-    UNION ALL SELECT cm.character_id, s.id, s.effects FROM entity_spells es JOIN character_mounts cm ON cm.mount_id=es.ref_id JOIN spells s ON s.id=es.spell_id
-      WHERE es.kind='mount' AND es.mode='passive' AND cm.active`);
+      WHERE es.kind='item' AND es.mode='passive' AND ci.equipped_slot IS NOT NULL`);
   for (const p of passives) {
     const e = Effects.safeParse(p.effects ?? {}); if (!e.success) continue;
     const self = { ...e.data, damage: 0, dot: null, durationH: 0, stats: e.data.stats.filter(s => POOLS[s.stat]) };
