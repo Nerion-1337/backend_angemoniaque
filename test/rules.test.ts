@@ -30,10 +30,9 @@ test('nouvelles cases du Monde des Hommes : coûts (aride 2, neige/éther/volcan
   for (const k of ['plain', 'forest', 'mountain', 'shallow', 'deep']) expect(seen[k].burn, k).toBe(0);
   expect(seen['arid'].cost).toBe(2); expect(seen['volcano'].resourceId).toBe('verre_dragon');
 });
-import { computeCharacterDamage, getPublicHealthState, computePactStatTransfer, canUseDivineEnergy, computeHitChance } from '../src/game/rules';
+import { computeCharacterDamage, getPublicHealthState, canUseDivineEnergy, computeHitChance } from '../src/game/rules';
 test('dégâts = arme × (Force − Force requise), 1 à mains nues', () => { expect(computeCharacterDamage(10, 3, 3)).toBe(21); expect(computeCharacterDamage(10, 3, null)).toBe(1); expect(computeCharacterDamage(2, 5, 3)).toBe(1); });
 test('état de forme public (jamais les PV exacts)', () => { expect(getPublicHealthState(100, 100)).toBe('En pleine forme'); expect(getPublicHealthState(60, 100)).toBe('Bon état'); expect(getPublicHealthState(30, 100)).toBe('Blessé'); expect(getPublicHealthState(10, 100)).toBe('Souffrant'); });
-test('transfert de pacte du dépôt', () => { const t = computePactStatTransfer(24, 16); expect(t.humanStrengthBonus).toBe(12); expect(t.etherealStrengthPenalty).toBe(6); });
 test('énergie divine selon race / rang', () => { expect(canUseDivineEnergy('nephilim', 'Soldat')).toBe(true); expect(canUseDivineEnergy('human', 'Demi-Dieu')).toBe(true); expect(canUseDivineEnergy('human', 'Mortel')).toBe(false); });
 test('chance de toucher (agilité)', () => { expect(computeHitChance(10, 10)).toBe(50); expect(computeHitChance(40, 5)).toBeGreaterThan(computeHitChance(5, 40)); expect(computeHitChance(200, 1)).toBe(95); });
 
@@ -57,3 +56,10 @@ test('dégâts : exemples du cahier des charges', () => {
   expect(computeCharacterDamage(10, 2 + 5, 5)).toBe(15);    // + armure demandant 5 Force : 5 × (10 − 7) = 15
 });
 test('l\'armure réduit directement les dégâts (minimum 1)', () => { expect(applyArmor(40, 10)).toBe(30); expect(applyArmor(15, 20)).toBe(1); expect(applyArmor(45, 0)).toBe(45); });
+import { blessingCost, pactAmount, godIncome, defaultMaxPacts } from '../src/game/faithPact.js';
+test('foi / pactes : coût proportionnel arrondi au supérieur, % arrondi au supérieur, gains par tranche, pactes par défaut', () => {
+  expect(blessingCost({ max: 5, maxH: 10, cost: 10 }, 5, 10)).toBe(10); expect(blessingCost({ max: 5, maxH: 10, cost: 10 }, 3, 4)).toBe(3); expect(blessingCost({ max: 4, maxH: 4, cost: 8 }, 1, 1)).toBe(1);
+  expect(pactAmount(21, 50)).toBe(11); expect(pactAmount(10, 30)).toBe(3); expect(pactAmount(7, 10)).toBe(1); expect(pactAmount(0, 50)).toBe(0);
+  expect(godIncome(7, { followersStep: 3, xpHour: 2, goldHour: 5 })).toEqual({ xp: 4, gold: 10 });
+  expect([defaultMaxPacts('human', 6), defaultMaxPacts('angel', 1), defaultMaxPacts('demon', 4), defaultMaxPacts('nephilim', 4)]).toEqual([1, 3, 5, 0]);
+});

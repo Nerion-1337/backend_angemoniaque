@@ -17,7 +17,7 @@ export async function dbRole(c: any): Promise<string> {
 }
 export const auth = async (c: any, next: any) => {
   if (/^\/(auth\/(login|register|challenge|logout|admin-asset|google\/)|ws|openapi)/.test(c.req.path)) return next();
-  if (/^\/(forum|legal)(\/|$)/.test(c.req.path)) {   // annonces, forum, pages légales : lecture publique, jeton facultatif (les écritures l'exigent)
+  if (/^\/(forum|legal|ranking)(\/|$)/.test(c.req.path)) {   // annonces, forum, pages légales, classement : lecture publique, jeton facultatif (les écritures l'exigent)
     try { c.set('acc', await bearer(c)); } catch { /* visiteur */ }
     return next();
   }

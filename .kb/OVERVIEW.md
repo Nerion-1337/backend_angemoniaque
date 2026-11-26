@@ -15,7 +15,7 @@ _Généré par `kb overview` — ne pas éditer ici ; notes manuelles dans `.kb/
 - Docker test target : `npm run typecheck && npm test` (utilisé par le hook pre-commit et CI)
 - kb : backend d'embedding `hash` (offline) dans `.kb/config.json`
 
-## Features (30)
+## Features (31)
 - **admin-players-divine** [done] (.kb/cards/admin-players-divine.md) Admin « Joueurs » (liste paginée + fiche éditable) et objets divins à familles libres — Section admin « Joueurs » (liste paginée par race, fiche éditable : caractéristiques, XP, or, rang, objets équipés / sac / coffre, sorts, bâtiments, divins ; plus de montures) et objets divins gérés c — files: src/routes/admin/players.ts, src/routes/admin/items.ts, src/game/content.ts
 - **admin-socle** [done] (.kb/cards/admin-socle.md) Socle admin (Étape 2 phase 1) : rôles, CRUD contenu, règles transverses, production, audit — Socle du back-office (Étape 2) : rôles de compte, CRUD générique du contenu (races, rangs, monstres — dont les types montables, card `summon-ride` —, objets, bâtiments), règles transverses (coûts, pla — files: src/routes/admin.ts, src/routes/admin/core.ts, src/routes/admin/races.ts, src/routes/admin/monsters.ts (+11)
 - **bestiaire** [done] (.kb/cards/bestiaire.md) Bestiaire (phase 2): loot roll, hourly spawns, combat death, admin routes & status — Boucle du bestiaire (phase 2) : un monstre tué donne son butin (or + entrées pondérées de `monster_loot` : objets, ressources, exemplaires divins), des instances sauvages apparaissent au tick horaire  — files: src/game/loot.ts, src/game/combatlib.ts, src/routes/admin/bestiary.ts, src/routes/admin/monsters.ts (+2)
@@ -25,6 +25,7 @@ _Généré par `kb overview` — ne pas éditer ici ; notes manuelles dans `.kb/
 - **craft-shop** [done] (.kb/cards/craft-shop.md) Boutique par race et parchemins de fabrication (objet, sort, bâtiment) — Boutique de l'hôtel de ville filtrée par race (objets et sorts) et fabrication par parchemin : un parchemin dans le sac + les ressources de sa recette donnent un objet, un sort appris ou un bâtiment ( — files: src/routes/craft.ts, src/routes/admin/recipes.ts, src/routes/market.ts, src/game/bag.ts
 - **deposits** [done] (.kb/cards/deposits.md) Secteurs de ressources (parts %, type de case, stock) et conditions de récolte (objets / sort) — Secteurs de ressources placés en admin : une zone d'un monde qui contient une ou plusieurs ressources du catalogue, chacune avec sa part de cases, un type de case éventuel et son propre stock (vidé à  — files: src/game/deposits.ts, src/routes/admin/deposits.ts, src/routes/actions.ts, src/game/harvest.ts (+1)
 - **divine-energy-cost** [done] (.kb/cards/divine-energy-cost.md) Coût en énergie divine réglable (sorts, recettes, cases, passage de rang) — Tout ce qui consomme de l'énergie et se règle dans l'admin peut aussi exiger de l'énergie divine : sorts (dont capacités de monstre), recettes de parchemin, déplacement par type de case, chaque voie d — files: src/game/movement.ts, src/routes/spells.ts, src/routes/craft.ts, src/game/rankUp.ts (+4)
+- **faith-pact** [done] (.kb/cards/faith-pact.md) Foi et Pactes réglés en admin (gains, prières, bénédictions, compositions de pacte, pactes par rang) ; classement public — Foi et Pactes entièrement réglés en admin (migration 44) et classement public des joueurs. — files: src/game/faithPact.ts, src/routes/faiths.ts, src/routes/pacts.ts, src/routes/ranking.ts (+3)
 - **forum-public** [done] (.kb/cards/forum-public.md) Annonces, forum public, pages légales et modération — Annonces et forum public lisibles depuis l'écran d'accueil (sans compte), pages légales (CGU, confidentialité, mentions légales, règlement, cookies) avec acceptation versionnée des CGU, signalements e — files: src/routes/forum.ts, src/game/forumAccess.ts, src/middleware/auth.ts
 - **google-login** [done] (.kb/cards/google-login.md) Connexion avec Google (OAuth, mode simulé) — Connexion avec Google (OAuth 2.0 / OpenID Connect, flux « authorization code » côté serveur, sans dépendance) ; mode simulé tant qu'aucune clé n'est réglée (migration 39). — files: src/routes/google.ts, src/routes/auth.ts, src/middleware/auth.ts
 - **guild-default-rank** [done] (.kb/cards/guild-default-rank.md) Guilde : rang par défaut des nouveaux arrivants (option unique default_rank_id) — Le Chef choisit UN rang par défaut attribué aux nouveaux membres (candidature acceptée ou invitation acceptée) ; sans choix, le nouveau membre reçoit le rang non-Chef le plus bas (comportement histori — files: src/routes/guilds.ts, test/integration/guild-default-rank.test.ts
@@ -48,9 +49,4 @@ _Généré par `kb overview` — ne pas éditer ici ; notes manuelles dans `.kb/
 - **world2-angel-demon** [done] (.kb/cards/world2-angel-demon.md) Monde Anges & Démons (carte 2, 300x300) : zones, ressources, logique partagée — Monde 2 (Anges & Démons) : grille de zones 300×300 — démons à l'ouest, anges à l'est, bande neutre du Voile au centre. — files: src/game/world2.ts, src/game/resources2.ts, src/game/angelDemonMap.ts, src/game/terrain.ts (+1)
 
 ## File map
-- `graphify-out/.graphify_build_state.json`
-- `graphify-out/.graphify_labels.json`
-- `graphify-out/.graphify_labels.pending.json`
-- `graphify-out/.graphify_partition_cache.json`
-- `graphify-out/cache/ast/v0.9.118-s53-gd93bdf18e146/35c2688b100024aa7009fd2be0e35506a92a777caa543a8a773f8cbd60b89bba.json`
-- … 148 autres fichiers (utiliser `kb search`)
+- … 157 autres fichiers (utiliser `kb search`)

@@ -34,11 +34,6 @@ export function getPublicHealthState(hp: number, hpMax: number): string {
   const r = hpMax > 0 ? (hp / hpMax) * 100 : 100;
   return r >= 75 ? 'En pleine forme' : r >= 50 ? 'Bon état' : r >= 25 ? 'Blessé' : 'Souffrant';
 }
-/** Pacte : l'Humain gagne 50 % des stats de l'être éthéré ; celui-ci perd moitié moins que le gain de l'Humain. */
-export function computePactStatTransfer(etherealStrength: number, etherealAgility: number) {
-  const humanStrengthBonus = Math.floor(etherealStrength * 0.5), humanAgilityBonus = Math.floor(etherealAgility * 0.5);
-  return { humanStrengthBonus, humanAgilityBonus, etherealStrengthPenalty: Math.floor(humanStrengthBonus * 0.5), etherealAgilityPenalty: Math.floor(humanAgilityBonus * 0.5) };
-}
 export function canUseDivineEnergy(race: string, rank: string): boolean {
   if (race === 'nephilim') return true;
   return ['divin', 'dieu', 'demi-dieu', 'seraphin', 'séraphin', 'titan'].includes((rank || '').toLowerCase());

@@ -1,5 +1,5 @@
 import { pool } from '../db/pool.js'; import { BURN_DAMAGE } from '../game/terrain.js'; import { cfgNum } from '../game/content.js'; import { hourlySpawns, reincarnateDue } from '../game/spawn.js'; import { applyTileSpells } from '../game/tileTypes.js';
-import { CAPS, POOLS } from '../game/spellEffects.js'; import { expireSummons } from '../game/spellSummon.js'; import { hourlySpellEffects } from '../game/spellTick.js'; import { revertTempRanks } from '../game/rankUp.js'; import { regenDeposits } from '../game/deposits.js';
+import { CAPS, POOLS } from '../game/spellEffects.js'; import { expireSummons } from '../game/spellSummon.js'; import { hourlySpellEffects } from '../game/spellTick.js'; import { revertTempRanks } from '../game/rankUp.js'; import { regenDeposits } from '../game/deposits.js'; import { faithCfg } from '../game/faithPact.js';
 const REVERT: readonly string[] = CAPS;   // toute capacité modifiée temporairement (buff de sort, pacte) est rétablie à l'expiration
 /** Tick horaire : XP/or (× multiplicateur global), régénération PV/énergie, production des bâtiments, expiration des buffs. */
 export async function hourlyTick() {
@@ -7,14 +7,16 @@ export async function hourlyTick() {
   // Une seule statistique de régénération (recovery) restaure Vie, Énergie ET Énergie divine : héros, montures, invocations, monstres.
   // Le bonus pactes/fidèles est une sous-requête corrélée dans le SET (un LATERAL ne peut pas référencer la table cible :
   // la version précédente échouait silencieusement — le tick horaire était en échec permanent).
-  const bonus = `(SELECT (SELECT count(*) FROM pacts p WHERE p.active AND p.ethereal_id=c.id)*5 + (SELECT count(*) FROM faiths f WHERE f.god_id=c.id AND f.status='accepted')*2)`;
+  // Gains réglés en admin (migration 44) : composition de chaque pacte actif (Ange / Démon) ; dieu : par tranche de fidèles.
+  const fc = await faithCfg(), tranche = `floor((SELECT count(*) FROM faiths f WHERE f.god_id=c.id AND f.status='accepted') / $2::numeric)`;
+  const pact = (col: string) => `(SELECT COALESCE(sum(t.${col}),0) FROM pacts p JOIN pact_tiers t ON t.id=p.tier_id WHERE p.active AND p.ethereal_id=c.id)`;
   await pool.query(`UPDATE characters c SET
-    xp=c.xp+ROUND((s.gain_xp_hour+${bonus})*$1),
-    gold=c.gold+s.gain_xp_hour+${bonus},
+    xp=c.xp+ROUND((s.gain_xp_hour+${pact('xp_hour')}+${tranche}*$3)*$1),
+    gold=c.gold+s.gain_xp_hour+${pact('gold_hour')}+${tranche}*$4,
     hp_current=LEAST(c.hp_max,c.hp_current+c.recovery),
     energy_current=LEAST(c.energy_max,c.energy_current+c.recovery),
     divine_energy_current=LEAST(c.divine_energy_max,c.divine_energy_current+c.recovery)
-    FROM specializations s WHERE s.id=c.specialization_id AND NOT c.blocked`, [xpRate]);
+    FROM specializations s WHERE s.id=c.specialization_id AND NOT c.blocked`, [xpRate, fc.followersStep, fc.xpHour, fc.goldHour]);
   await pool.query('UPDATE summons SET hp_current=LEAST(hp_max,hp_current+recovery), energy_current=LEAST(energy_max,energy_current+recovery)');
   // Les monstres en attente de réincarnation (mort + délai) ne régénèrent pas avant l'échéance.
   await pool.query('UPDATE monsters m SET hp_current=LEAST(m.hp_max,m.hp_current+m.recovery), energy_current=LEAST(m.energy_max,m.energy_current+m.recovery), divine_energy_current=LEAST(m.divine_energy_max,m.divine_energy_current+m.recovery) WHERE m.id NOT IN (SELECT monster_id FROM monster_respawns)');
