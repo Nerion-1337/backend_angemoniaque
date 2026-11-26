@@ -2,10 +2,20 @@ import { effectiveRank } from './rules.js'; import { fail } from '../lib/db.js';
 export const KIND: Record<string, string> = { human: 'artefact', demon: 'arcane', angel: 'relique' };
 export const required = (targetRank: number) => targetRank - 1;   // hypothèse : rang visé N exige N-1 objets
 export const held = async (db: any, id: number, kind: string) => (await db.query('SELECT count(*)::int n FROM divine_items WHERE holder_character_id=$1 AND kind=$2', [id, kind])).rows[0].n;
-export async function applySpec(db: any, charId: number, specId: number) {
-  await db.query(`UPDATE characters c SET specialization_id=s.id, hp_max=GREATEST(c.hp_max,s.hp_max), recovery=GREATEST(c.recovery,s.recovery), see=GREATEST(c.see,s.see),
-    strength=GREATEST(c.strength,s.strength), agility=GREATEST(c.agility,s.agility), energy_max=GREATEST(c.energy_max,s.energy_max),
-    divine_energy_max=GREATEST(c.divine_energy_max,s.divine_energy_max) FROM specializations s WHERE s.id=$2 AND c.id=$1`, [charId, specId]);
+/** Caractéristiques de palier (base d'un rang) reportées sur la fiche au changement de rang. */
+export const SPEC_STATS = ['hp_max', 'recovery', 'see', 'strength', 'agility', 'energy_max', 'divine_energy_max'] as const;
+/**
+ * Change le rang d'un personnage (montée OU descente) : chaque caractéristique de palier reçoit la DIFFÉRENCE entre la base du
+ * nouveau rang et celle de l'ancien ; les points achetés par le joueur sont donc conservés (jamais sous 0). `keep` : colonnes
+ * laissées telles quelles (valeurs saisies par l'admin dans la même modification). Sans rang d'origine : relevé au niveau du rang.
+ * Réserves (PV, énergie, énergie divine) ramenées sous les nouveaux maximums.
+ */
+export async function applySpec(db: any, charId: number, specId: number, keep: readonly string[] = []) {
+  const set = SPEC_STATS.filter(k => !keep.includes(k)).map(k => `, ${k}=GREATEST(0, c.${k} + s.${k} - COALESCE(o.${k}, LEAST(c.${k}, s.${k})))`).join('');
+  await db.query(`UPDATE characters c SET specialization_id=s.id${set}
+    FROM specializations s LEFT JOIN specializations o ON o.id=(SELECT specialization_id FROM characters WHERE id=$1) WHERE s.id=$2 AND c.id=$1`, [charId, specId]);
+  await db.query(`UPDATE characters SET hp_current=LEAST(hp_current,hp_max), energy_current=LEAST(energy_current,energy_max),
+    divine_energy_current=LEAST(divine_energy_current,divine_energy_max) WHERE id=$1`, [charId]);
 }
 /** Surcharge divine : plus d'objets que requis => rang supérieur gratuit, quota ignoré. */
 export async function refreshSurcharge(db: any, charId: number) {

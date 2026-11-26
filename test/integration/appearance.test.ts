@@ -13,7 +13,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Apparence des monstres (design, icô
     expect((await call('/admin/content/monsters', { name: `Bad${s}`, hp_max: 10, model: 'Pas Bon!' }, T.adm)).status).toBe(400);
     const id = (await call('/admin/content/monsters', { name: `Look${s}`, hp_max: 10, model: 'kraken', icon: 'kraken', locomotion: ['water'] }, T.adm)).j.id;
     expect((await call(`/admin/content/monsters/${id}`, undefined, T.adm)).j).toMatchObject({ model: 'kraken', icon: 'kraken' });
-    const x = 30 + (s % 100), y = 30 + ((s >> 3) % 100);
+    const x = 20 + (s % 60), y = 20 + ((s >> 3) % 60);   // reste dans le Monde des Morts (100 × 100)
     const pl = await call('/admin/bestiary/place', { monsterId: id, mapId: 3, x, y }, T.adm); expect(pl.status, JSON.stringify(pl.j)).toBe(200);
     const area = (await call(`/map/3/area?x=${x}&y=${y}&r=1`, undefined, T.adm)).j, e = area.find((a: any) => a.kind === 'monster' && a.x === x && a.y === y);
     expect(e).toMatchObject({ model: 'kraken', icon: 'kraken' });

@@ -56,4 +56,12 @@ describe.skipIf(!process.env.DATABASE_URL)('Passage de rang par conditions', () 
     await revertTempRanks(pool);
     c = await ch(); expect(c).toMatchObject({ rank_name: 'Vétéran', hp_max: 200, strength: 10, temp_rank: null }); expect(c.hp_current).toBeLessThanOrEqual(200);
   });
+
+  test('changement de rang par l’admin : base du palier retirée / ajoutée, points achetés conservés, saisie explicite prioritaire', async () => {
+    await pool.query('UPDATE characters SET strength=strength+3, hp_current=hp_max WHERE id=$1', [T.c]);   // 3 points achetés : 13
+    let r = await call(`/admin/players/${T.c}`, { specialization_id: T.r[1] }, T.adm, 'PUT'); expect(r.status, JSON.stringify(r.j)).toBe(200);
+    let c = await ch(); expect(c).toMatchObject({ rank_name: 'Recrue', strength: 8, hp_max: 100, hp_current: 100 });
+    r = await call(`/admin/players/${T.c}`, { specialization_id: T.r[3], strength: 50 }, T.adm, 'PUT'); expect(r.status).toBe(200);
+    c = await ch(); expect(c).toMatchObject({ rank_name: 'Champion', strength: 50, hp_max: 400 });
+  });
 });

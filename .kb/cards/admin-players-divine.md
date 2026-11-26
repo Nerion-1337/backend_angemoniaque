@@ -22,7 +22,7 @@ sorts, montures, bâtiments, divins) et objets divins gérés comme les autres o
 
 ## Business rules
 - Liste : 20 par page (max 100), filtre race et recherche pseudo/e-mail, effectifs par race.
-- Fiche : caractéristiques modifiées en valeur ABSOLUE, entiers ≥ 0 (négatif → 400) ; le rang doit appartenir à la race du joueur (400).
+- Fiche : caractéristiques modifiées en valeur ABSOLUE, entiers ≥ 0 (négatif → 400) ; le rang doit appartenir à la race du joueur (400) ; changer de rang applique l'écart de base entre paliers (`applySpec`, card `rank-up`), sauf aux caractéristiques saisies dans la même requête (valeur saisie prioritaire).
 - Ajout d'objet : au sac ou au coffre, empilé sur la ligne existante du même emplacement (jamais sur une pièce équipée) ; retrait d'une ligne par emplacement (404 si absent).
 - Supprimer un bâtiment du joueur supprime aussi sa position sur la carte.
 - Libérer un exemplaire divin le rend libre, sans gardien.

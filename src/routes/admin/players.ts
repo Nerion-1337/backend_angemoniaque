@@ -1,5 +1,5 @@
 import { def, router, z, P } from '../../lib/route.js'; import { pool, tx, fail } from '../../lib/db.js';
-import { audit } from '../../lib/audit.js'; import { freeCell } from '../../game/spawn.js';
+import { audit } from '../../lib/audit.js'; import { freeCell } from '../../game/spawn.js'; import { applySpec } from '../../game/divine.js';
 /** Endpoints hérités de l'admin historique — complétés en phase 4 (modération, rôles mod). */
 export const playerRoutes = router();
 const STATS = ['hp_max', 'energy_max', 'divine_energy_max', 'recovery', 'see', 'strength', 'agility', 'armor', 'magic_armor', 'range', 'xp', 'gold'];
@@ -78,10 +78,15 @@ def(playerRoutes, 'put', '/admin/players/{id}', Edit, async (c, b) => {
   if (!before) fail(404, 'Joueur inconnu');
   if (b.specialization_id !== undefined && !(await pool.query('SELECT 1 FROM specializations WHERE id=$1 AND race=$2', [b.specialization_id, before.race])).rowCount) fail(400, 'Rang inconnu pour cette race');
   if (b.map_worlds) b.map_worlds = [...new Set<number>(b.map_worlds as number[])].sort((x, y) => x - y);   // cartes des ressources par monde (migration 38)
-  const cols = [...EDITABLE, 'specialization_id', 'map_worlds'].filter(k => (b as any)[k] !== undefined);
-  if (!cols.length) fail(400, 'Aucun champ à modifier');
-  const { rows: [row] } = await pool.query(`UPDATE characters SET ${cols.map((k, i) => `${k}=$${i + 2}`).join(',')} WHERE id=$1 RETURNING *`, [id, ...cols.map(k => (b as any)[k])]);
-  await audit(c, 'player.update', 'player', id, Object.fromEntries(cols.map(k => [k, before[k]])), b);
+  const cols = [...EDITABLE, 'map_worlds'].filter(k => (b as any)[k] !== undefined), spec = b.specialization_id;
+  if (!cols.length && spec === undefined) fail(400, 'Aucun champ à modifier');
+  // changement de rang = même règle qu'un passage de rang (base du palier ajoutée ou retirée) ; les valeurs saisies dans la même modification priment
+  const row = await tx(async db => {
+    if (spec !== undefined && spec !== before.specialization_id) await applySpec(db, id, spec, cols);
+    const q = cols.length ? `UPDATE characters SET ${cols.map((k, i) => `${k}=$${i + 2}`).join(',')} WHERE id=$1 RETURNING *` : 'SELECT * FROM characters WHERE id=$1';
+    return (await db.query(q, [id, ...cols.map(k => (b as any)[k])])).rows[0];
+  });
+  await audit(c, 'player.update', 'player', id, Object.fromEntries([...cols, 'specialization_id'].map(k => [k, before[k]])), b);
   return row;
 });
 /** Ajoute un objet dans le sac ou le coffre (empilé si déjà présent au même endroit, hors équipement). */

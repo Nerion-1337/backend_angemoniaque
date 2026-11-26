@@ -80,17 +80,14 @@ export async function rankUp(db: any, ch: any, mode: Mode = 'permanent') {
   await log(db, ch.id, `Devient ${next.name}${mode === 'temporary' ? ` pour ${req!.durationH} h` : ''}`);
   return { ok: true, rank: next.name, temporary: mode === 'temporary', hours: mode === 'temporary' ? req!.durationH : null };
 }
-/** Tick : rétablit le rang et les caractéristiques d'avant pour les rangs temporaires échus (réserves ramenées au max). */
-/** Valeur numérique sûre à injecter dans le SQL (sinon la colonne elle-même). */
-const num = (v: any, col: string) => (Number.isFinite(Number(v)) && v !== null ? String(Math.trunc(Number(v))) : col);
+/** Tick : rang temporaire échu → retour au rang d'avant, comme toute descente (base du palier retirée, points achetés pendant
+ *  le rang temporaire conservés, réserves ramenées sous les maximums). */
 export async function revertTempRanks(db: any) {
   const { rows } = await db.query("SELECT id, temp_rank FROM characters WHERE temp_rank IS NOT NULL AND (temp_rank->>'until')::timestamptz <= now()");
   for (const r of rows) {
-    const s = r.temp_rank.stats ?? {};
-    const cols = SNAP.filter(k => s[k] !== undefined && s[k] !== null);
-    await db.query(`UPDATE characters SET ${cols.map((k, i) => `${k}=$${i + 2}`).join(',')}${cols.length ? ',' : ''} temp_rank=NULL,
-      hp_current=LEAST(hp_current, ${num(s.hp_max, 'hp_max')}), energy_current=LEAST(energy_current, ${num(s.energy_max, 'energy_max')}),
-      divine_energy_current=LEAST(divine_energy_current, ${num(s.divine_energy_max, 'divine_energy_max')}) WHERE id=$1`, [r.id, ...cols.map(k => s[k])]);
+    const prev = Number(r.temp_rank.stats?.specialization_id);
+    if (Number.isInteger(prev) && prev > 0) await applySpec(db, r.id, prev);
+    await db.query('UPDATE characters SET temp_rank=NULL WHERE id=$1', [r.id]);
     await log(db, r.id, 'Fin du rang temporaire');
   }
   return rows.length;
