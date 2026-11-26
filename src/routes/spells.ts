@@ -1,5 +1,5 @@
 import { def, router, z, P } from '../lib/route.js'; import { tx, ownChar, fail, log, dist } from '../lib/db.js'; import { castSummon } from '../game/spellSummon.js';
-import { actor, spend } from '../game/movement.js'; import { maxSummons } from '../game/stats.js'; import { terrain, inSafeZone } from '../game/terrain.js'; import { targetAt, applyDamage } from '../game/combatlib.js'; import { applyArmor } from '../game/rules.js'; import { broadcast } from '../realtime/ws.js'; import { combatEvent } from '../lib/events.js'; import { Effects, hasEffects, pickTargets, checkSafe, applyEffects } from '../game/spellEffects.js'; import { loadTarget } from '../game/combatlib.js'; import { checkOccupantAttack, occupiableAt, attackAllowed } from '../game/buildingCell.js'; import { isHarmful } from '../game/spellEffects.js'; import { gainXp } from '../game/xp.js';
+import { actor, spend, spendDivine } from '../game/movement.js'; import { maxSummons } from '../game/stats.js'; import { terrain, inSafeZone } from '../game/terrain.js'; import { targetAt, applyDamage } from '../game/combatlib.js'; import { applyArmor } from '../game/rules.js'; import { broadcast } from '../realtime/ws.js'; import { combatEvent } from '../lib/events.js'; import { Effects, hasEffects, pickTargets, checkSafe, applyEffects } from '../game/spellEffects.js'; import { loadTarget } from '../game/combatlib.js'; import { checkOccupantAttack, occupiableAt, attackAllowed } from '../game/buildingCell.js'; import { isHarmful } from '../game/spellEffects.js'; import { gainXp } from '../game/xp.js';
 /** Sorts lançables : appris, liés (mode actif) à un objet ÉQUIPÉ, à la monture ACTIVE ou à un bâtiment à soi (entity_spells), et
  *  capacités actives du type de monstre de la monture montée ou de la créature contrôlée (monster_spells, payées par elle). */
 const CASTABLE = `SELECT s.*, src.source FROM spells s JOIN (
@@ -24,6 +24,7 @@ def(spells, 'post', '/spells/cast', z.object({ characterId: z.number(), spellId:
   const { rows: [sp] } = await db.query(`${CASTABLE} WHERE s.id=$2 ORDER BY (src.source LIKE 'capacité%') DESC LIMIT 1`, [me.id, b.spellId]); if (!sp) fail(404, 'Sort inconnu');
   // Capacité de la monture montée : payée par la monture ; créature contrôlée : elle paie déjà tout (spend).
   const payer = String(sp.source).startsWith('capacité') && a.mount && !a.sm ? 'mount' : 'action';
+  await spendDivine(db, me, sp.divine_energy_cost ?? 0);   // énergie divine (admin, 0 par défaut) : toujours le personnage ; annulée avec la transaction si le sort échoue
   if (hasEffects(sp.effects)) {   // moteur paramétrable (spells.effects) : cible, portée, zone, camp, dégâts, soin, durée, caractéristiques
     const e = Effects.parse(sp.effects), from = { x: a.mp.coord_x, y: a.mp.coord_y };
     if (e.summon && !e.damage && !e.heal && !e.dot && !e.stats.length) {   // invocation seule : aucune cible à choisir

@@ -13,8 +13,9 @@ describe.skipIf(!process.env.DATABASE_URL)('Apparence des monstres (design, icô
     expect((await call('/admin/content/monsters', { name: `Bad${s}`, hp_max: 10, model: 'Pas Bon!' }, T.adm)).status).toBe(400);
     const id = (await call('/admin/content/monsters', { name: `Look${s}`, hp_max: 10, model: 'kraken', icon: 'kraken', locomotion: ['water'] }, T.adm)).j.id;
     expect((await call(`/admin/content/monsters/${id}`, undefined, T.adm)).j).toMatchObject({ model: 'kraken', icon: 'kraken' });
-    const x = 20 + (s % 60), y = 20 + ((s >> 3) % 60);   // reste dans le Monde des Morts (100 × 100)
-    const pl = await call('/admin/bestiary/place', { monsterId: id, mapId: 3, x, y }, T.adm); expect(pl.status, JSON.stringify(pl.j)).toBe(200);
+    let x = 0, y = 0, pl: any;   // première case posable (ni eau, ni volcan, ni occupée) dans le Monde des Morts (100 × 100)
+    for (let i = 0; i < 40 && pl?.status !== 200; i++) { x = 10 + ((s + i * 37) % 80); y = 10 + (((s >> 3) + i * 53) % 80); pl = await call('/admin/bestiary/place', { monsterId: id, mapId: 3, x, y }, T.adm); }
+    expect(pl.status, JSON.stringify(pl.j)).toBe(200);
     const area = (await call(`/map/3/area?x=${x}&y=${y}&r=1`, undefined, T.adm)).j, e = area.find((a: any) => a.kind === 'monster' && a.x === x && a.y === y);
     expect(e).toMatchObject({ model: 'kraken', icon: 'kraken' });
     expect((await call(`/admin/content/monsters/${id}`, { model: null, icon: null }, T.adm, 'PUT')).status).toBe(200);

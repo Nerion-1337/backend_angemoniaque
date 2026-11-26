@@ -31,7 +31,7 @@ def(mounts, 'get', '/mounts/{characterId}', null, c => tx(async db => {
       (SELECT id FROM summons WHERE char_mount_id=cm.id) summon_id,
       COALESCE((SELECT json_agg(slot ORDER BY slot) FROM monster_slots WHERE monster_id=m.monster_id), '[]') slots,
       COALESCE((SELECT json_agg(json_build_object('slot', me.slot, 'item_id', me.item_id, 'name', i.name) ORDER BY me.slot) FROM mount_equips me JOIN items i ON i.id=me.item_id WHERE me.char_mount_id=cm.id), '[]') equips,
-      COALESCE((SELECT json_agg(json_build_object('id', s.id, 'name', s.name, 'energy_cost', s.energy_cost, 'effects', s.effects)) FROM monster_spells ms JOIN spells s ON s.id=ms.spell_id WHERE ms.monster_id=m.monster_id AND ms.mode='active'), '[]') capacities
+      COALESCE((SELECT json_agg(json_build_object('id', s.id, 'name', s.name, 'energy_cost', s.energy_cost, 'divine_energy_cost', s.divine_energy_cost, 'effects', s.effects)) FROM monster_spells ms JOIN spells s ON s.id=ms.spell_id WHERE ms.monster_id=m.monster_id AND ms.mode='active'), '[]') capacities
     FROM character_mounts cm JOIN mounts m ON m.id=cm.mount_id LEFT JOIN monsters t ON t.id=m.monster_id WHERE cm.character_id=$1 ORDER BY cm.id`, [me.id]);
   for (const r of rows) r.stats = await mountStats(db, r.cm_id);
   return rows;

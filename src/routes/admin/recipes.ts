@@ -14,7 +14,8 @@ const Recipe = z.object({
   resources: z.record(z.number().int().min(1).max(1e6)).default({}),
   consumeScroll: z.boolean().default(true),
   atCapital: z.boolean().default(false),
-  energyCost: z.number().int().min(0).max(1000).default(0)
+  energyCost: z.number().int().min(0).max(1000).default(0),
+  divineEnergyCost: z.number().int().min(0).max(1000).default(0)
 });
 const check = async (b: any) => {
   if (!(await pool.query(`SELECT 1 FROM ${TABLE[b.targetKind]} WHERE id=$1`, [b.targetId])).rowCount) fail(404, 'Cible inconnue');
@@ -39,9 +40,9 @@ def(recipeRoutes, 'post', '/admin/content/recipes', Recipe, async (c, b) => {
   await check(b);
   const scroll = await scrollOf(b);
   const { rows: [row] } = await pool.query(
-    `INSERT INTO recipes(scroll_item_id,target_kind,target_id,qty_out,resources,consume_scroll,at_capital,energy_cost)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT (scroll_item_id) DO NOTHING RETURNING *`,
-    [scroll, b.targetKind, b.targetId, b.qtyOut, JSON.stringify(b.resources), b.consumeScroll, b.atCapital, b.energyCost]);
+    `INSERT INTO recipes(scroll_item_id,target_kind,target_id,qty_out,resources,consume_scroll,at_capital,energy_cost,divine_energy_cost)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT (scroll_item_id) DO NOTHING RETURNING *`,
+    [scroll, b.targetKind, b.targetId, b.qtyOut, JSON.stringify(b.resources), b.consumeScroll, b.atCapital, b.energyCost, b.divineEnergyCost]);
   if (!row) fail(409, 'Ce parchemin a déjà une recette');
   await bumpContent(); await audit(c, 'recipe.create', 'recipe', row.id, null, b);
   return row;
@@ -52,8 +53,8 @@ def(recipeRoutes, 'put', '/admin/content/recipes/{id}', Recipe, async (c, b) => 
   if (!before) fail(404, 'Recette inconnue');
   const scroll = b.scrollItemId ?? before.scroll_item_id;
   const { rows: [row] } = await pool.query(
-    `UPDATE recipes SET scroll_item_id=$2,target_kind=$3,target_id=$4,qty_out=$5,resources=$6,consume_scroll=$7,at_capital=$8,energy_cost=$9 WHERE id=$1 RETURNING *`,
-    [P(c, 'id'), scroll, b.targetKind, b.targetId, b.qtyOut, JSON.stringify(b.resources), b.consumeScroll, b.atCapital, b.energyCost]);
+    `UPDATE recipes SET scroll_item_id=$2,target_kind=$3,target_id=$4,qty_out=$5,resources=$6,consume_scroll=$7,at_capital=$8,energy_cost=$9,divine_energy_cost=$10 WHERE id=$1 RETURNING *`,
+    [P(c, 'id'), scroll, b.targetKind, b.targetId, b.qtyOut, JSON.stringify(b.resources), b.consumeScroll, b.atCapital, b.energyCost, b.divineEnergyCost]);
   await bumpContent(); await audit(c, 'recipe.update', 'recipe', P(c, 'id'), before, row);
   return row;
 });

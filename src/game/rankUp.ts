@@ -11,6 +11,7 @@ const Cond = z.object({
   items: z.array(z.object({ itemId: z.number().int(), qty: z.number().int().min(1).max(9999).default(1) })).max(20).default([]),
   resources: z.record(z.number().int().min(1).max(1e6)).default({}),
   energyCost: z.number().int().min(0).max(1000).default(0),
+  divineEnergyCost: z.number().int().min(0).max(1000).default(0),
   consume: z.boolean().default(true)
 });
 export const Requirements = z.object({
@@ -29,6 +30,7 @@ export function missingFor(req: CondT, ch: any, bag: Record<number, number>, pre
   for (const it of req.items) if ((bag[it.itemId] ?? 0) < it.qty) out.push(`objet n°${it.itemId} ×${it.qty - (bag[it.itemId] ?? 0)}`);
   for (const [k, q] of Object.entries(req.resources)) if ((ch.resources?.[k] ?? 0) < q) out.push(`${k} ×${q - (ch.resources?.[k] ?? 0)}`);
   if (req.energyCost > (ch.energy_current ?? 0)) out.push(`énergie ${req.energyCost}`);
+  if (req.divineEnergyCost > (ch.divine_energy_current ?? 0)) out.push(`énergie divine ${req.divineEnergyCost}`);
   if (prereqXp != null && (ch.xp ?? 0) < prereqXp) out.push(`${prereqXp} XP`);
   return out;
 }
@@ -66,7 +68,7 @@ export async function rankUp(db: any, ch: any, mode: Mode = 'permanent') {
   if (missing!.length) fail(409, `Conditions manquantes : ${missing!.join(', ')}`);
   const { rows: [q] } = await db.query('SELECT (SELECT count(*)::int FROM characters) total, (SELECT count(*)::int FROM characters WHERE specialization_id=$1) cur', [next.id]);
   if (q.cur + 1 > Math.ceil(next.max_population_percent / 100 * q.total)) fail(409, 'Quota de population atteint');
-  if (req!.energyCost) await db.query('UPDATE characters SET energy_current=energy_current-$2 WHERE id=$1', [ch.id, req!.energyCost]);
+  if (req!.energyCost || req!.divineEnergyCost) await db.query('UPDATE characters SET energy_current=energy_current-$2, divine_energy_current=divine_energy_current-$3 WHERE id=$1', [ch.id, req!.energyCost, req!.divineEnergyCost]);
   if (req!.consume) {
     for (const it of req!.items) await takeItems(db, ch.id, it.itemId, it.qty);
     for (const [k, v] of Object.entries(req!.resources))

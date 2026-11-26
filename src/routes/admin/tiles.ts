@@ -1,12 +1,13 @@
 import { def, router, z, P } from '../../lib/route.js'; import { pool, fail } from '../../lib/db.js';
 import { audit } from '../../lib/audit.js'; import { bumpContent } from '../../game/content.js';
 import { invalidateTiles, TILE_KINDS } from '../../game/tileTypes.js';
-/** Section admin « Cases » : types de case par monde (nom, description, coût d'énergie, sort passif bonus/malus). */
+/** Section admin « Cases » : types de case par monde (nom, description, coût d'énergie et d'énergie divine, sort passif bonus/malus). */
 export const tileRoutes = router();
 const Tile = z.object({
   name: z.string().trim().min(1).max(80),
   description: z.string().max(500).optional(),
   energyCost: z.number().int().min(0).max(99),
+  divineEnergyCost: z.number().int().min(0).max(99).default(0),
   spellId: z.number().int().positive().nullable().optional(),
   spellMode: z.enum(['bonus', 'malus']).nullable().optional()
 });
@@ -22,8 +23,8 @@ def(tileRoutes, 'put', '/admin/content/tiles/{mapId}/{kind}', Tile, async (c, b)
   const { rows: [before] } = await pool.query('SELECT * FROM tile_types WHERE map_id=$1 AND kind=$2', [mapId, kind]);
   if (!before) fail(404, 'Type de case inconnu pour ce monde');
   const { rows: [row] } = await pool.query(
-    'UPDATE tile_types SET name=$3, description=COALESCE($4, description), energy_cost=$5, spell_id=$6, spell_mode=$7 WHERE map_id=$1 AND kind=$2 RETURNING *',
-    [mapId, kind, b.name, b.description ?? null, b.energyCost, spellId, mode]);
+    'UPDATE tile_types SET name=$3, description=COALESCE($4, description), energy_cost=$5, spell_id=$6, spell_mode=$7, divine_energy_cost=$8 WHERE map_id=$1 AND kind=$2 RETURNING *',
+    [mapId, kind, b.name, b.description ?? null, b.energyCost, spellId, mode, b.divineEnergyCost]);
   invalidateTiles(); await bumpContent(); await audit(c, 'tile.update', 'tile', mapId, before, row);
   return row;
 });

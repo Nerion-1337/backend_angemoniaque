@@ -1,4 +1,4 @@
-import { heightParts } from './levels.js'; import { walk } from './rules.js'; import { ignite } from './burn.js'; import { terrain } from './terrain.js'; import { tileCost, loadTiles } from './tileTypes.js'; import { BLOCKING, occupiableAt } from './buildingCell.js'; import { fail, posOf } from '../lib/db.js';
+import { heightParts } from './levels.js'; import { walk } from './rules.js'; import { ignite } from './burn.js'; import { terrain } from './terrain.js'; import { tileCost, tileOf, loadTiles } from './tileTypes.js'; import { BLOCKING, occupiableAt } from './buildingCell.js'; import { fail, posOf } from '../lib/db.js';
 const MOUNT_SQL = `SELECT cm.*, m.name, m.hp_max, m.armor, m.strength, m.agility, m.energy_max, m.flying, m.aquatic, m.terrestrial, m.recovery, m.special_attack_name, m.special_attack_damage, m.special_attack_energy,
     m.monster_id, COALESCE(t.size, 1) size, t.model, t.icon, t.locomotion
   FROM character_mounts cm JOIN mounts m ON m.id=cm.mount_id LEFT JOIN monsters t ON t.id=m.monster_id WHERE cm.character_id=$1 AND cm.active`;
@@ -53,6 +53,12 @@ export async function spend(db: any, ch: any, a: any, amount: number, kind: 'mov
   else if (a.mount && kind !== 'action') { if (a.mount.energy_current < amount) fail(409, `Énergie de la monture insuffisante (${amount})`); await db.query('UPDATE character_mounts SET energy_current=energy_current-$3 WHERE character_id=$1 AND mount_id=$2', [ch.id, a.mount.mount_id, amount]); a.mount.energy_current -= amount; }
   else { if (ch.energy_current < amount) fail(409, `Énergie insuffisante (${amount} requis)`); await db.query('UPDATE characters SET energy_current=energy_current-$2 WHERE id=$1', [ch.id, amount]); ch.energy_current -= amount; }
 }
+/** Énergie divine (coût réglé en admin à côté de l'énergie, 0 par défaut) : toujours payée par le personnage lui-même. */
+export async function spendDivine(db: any, ch: any, amount: number) {
+  if (!amount) return;
+  if ((ch.divine_energy_current ?? 0) < amount) fail(409, `Énergie divine insuffisante (${amount} requise)`);
+  await db.query('UPDATE characters SET divine_energy_current=divine_energy_current-$2 WHERE id=$1', [ch.id, amount]); ch.divine_energy_current -= amount;
+}
 export const pathCost = (a: any, from: any, to: any, stopAt = 0) => {
   let cost = 0;
   for (const c of walk(from, to)) { const s = stepCost(terrain(c.x, c.y, a.mp?.map_id), a); if (!isFinite(s)) return Infinity; cost += s; if (Math.max(Math.abs(c.x - to.x), Math.abs(c.y - to.y)) <= stopAt) break; } return cost;
@@ -61,13 +67,14 @@ export const pathCost = (a: any, from: any, to: any, stopAt = 0) => {
 export async function travel(db: any, ch: any, a: any, target: { x: number; y: number }, stopAt: number, actionCost = 0) {
   const mp = a.mp, { rows: [m] } = await db.query('SELECT width w,height h FROM maps WHERE id=$1', [mp.map_id]);
   if (target.x < 0 || target.y < 0 || target.x >= m.w || target.y >= m.h) fail(409, 'Hors de la carte');
-  const cells: { x: number; y: number }[] = []; let cost = 0, lava = false;
-  for (const c of walk({ x: mp.coord_x, y: mp.coord_y }, target)) { const t = terrain(c.x, c.y, mp.map_id), s = stepCost(t, a); if (!isFinite(s)) fail(409, blockedMsg(t.kind, a)); cells.push(c); cost += s; if (t.burn) lava = true;
+  const cells: { x: number; y: number }[] = []; let cost = 0, divine = 0, lava = false;
+  for (const c of walk({ x: mp.coord_x, y: mp.coord_y }, target)) { const t = terrain(c.x, c.y, mp.map_id), s = stepCost(t, a); if (!isFinite(s)) fail(409, blockedMsg(t.kind, a)); cells.push(c); cost += s; divine += tileOf(mp.map_id, t.kind)?.divine_energy_cost ?? 0; if (t.burn) lava = true;
     if (Math.max(Math.abs(c.x - target.x), Math.abs(c.y - target.y)) <= stopAt) break; }
   if (cells.length && (await db.query(`SELECT 1 FROM positions WHERE map_id=$1 AND ${BLOCKING} AND (coord_x||','||coord_y)=ANY($2)`, [mp.map_id, cells.map(c => `${c.x},${c.y}`)])).rowCount) fail(409, 'Chemin bloqué');
+  await spendDivine(db, ch, divine);   // cases à coût divin (admin « Cases ») : vérifié avant tout débit
   await spend(db, ch, a, cost, 'move'); await spend(db, ch, a, actionCost, 'action');
   const last = cells[cells.length - 1];
   if (last) { await db.query(`UPDATE positions SET coord_x=$2, coord_y=$3 WHERE ${a.sm ? 'summon_id' : 'character_id'}=$1`, [a.sm ? a.sm.id : ch.id, last.x, last.y]); a.mp = { ...mp, coord_x: last.x, coord_y: last.y }; }
   if (lava && !a.sm) await ignite(db, ch.id);      // volcan : brûlure dès qu'on traverse une case
-  return { cost, pos: last ?? { x: mp.coord_x, y: mp.coord_y }, mapId: mp.map_id };
+  return { cost, divine, pos: last ?? { x: mp.coord_x, y: mp.coord_y }, mapId: mp.map_id };
 }

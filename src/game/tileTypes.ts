@@ -6,7 +6,7 @@ import { pool } from '../lib/db.js'; import { KIND_COST, KIND_LABEL, terrain } f
  * cette instance) ; sans ligne en base, on retombe sur les constantes du code (KIND_COST).
  */
 export const TILE_KINDS = Object.keys(KIND_COST);
-export type TileType = { map_id: number; kind: string; name: string; description: string; energy_cost: number; spell_id: number | null; spell_mode: 'bonus' | 'malus' | null; spell_name?: string | null; spell_damage?: number | null };
+export type TileType = { map_id: number; kind: string; name: string; description: string; energy_cost: number; divine_energy_cost?: number; spell_id: number | null; spell_mode: 'bonus' | 'malus' | null; spell_name?: string | null; spell_damage?: number | null };
 const TTL = 30_000;
 let cache: Map<string, TileType> | null = null, at = 0, warned = false;
 const key = (mapId: number, kind: string) => `${mapId}:${kind}`;
@@ -34,7 +34,7 @@ export const tileHpDelta = (mode: string | null | undefined, damage: number | nu
 /** Vue publique d'un type de case (carte de case du jeu). */
 export const tilePublic = (mapId: number, kind: string) => {
   const t = tileOf(mapId, kind);
-  return { kind, name: t?.name ?? KIND_LABEL[kind as keyof typeof KIND_LABEL] ?? kind, description: t?.description ?? '', cost: t?.energy_cost ?? KIND_COST[kind as keyof typeof KIND_COST],
+  return { kind, name: t?.name ?? KIND_LABEL[kind as keyof typeof KIND_LABEL] ?? kind, description: t?.description ?? '', cost: t?.energy_cost ?? KIND_COST[kind as keyof typeof KIND_COST], divineCost: t?.divine_energy_cost ?? 0,
     spell: t?.spell_id && t.spell_mode ? { name: t.spell_name ?? null, mode: t.spell_mode, hpPerHour: tileHpDelta(t.spell_mode, t.spell_damage) } : null };
 };
 /** Tick horaire : applique le sort passif de chaque type de case aux personnages qui s'y tiennent (PV bornés à [1, hp_max]). */

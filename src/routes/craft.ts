@@ -1,5 +1,5 @@
 import { def, router, z, P } from '../lib/route.js'; import { pool, tx, ownChar, fail, log } from '../lib/db.js'; import { copyBuilding } from '../game/spellSummon.js';
-import { actor, spend } from '../game/movement.js'; import { terrain } from '../game/terrain.js'; import { broadcast } from '../realtime/ws.js';
+import { actor, spend, spendDivine } from '../game/movement.js'; import { terrain } from '../game/terrain.js'; import { broadcast } from '../realtime/ws.js';
 import { atCapital } from './market.js'; import { bagRoom } from '../game/bag.js';
 /**
  * Fabrication : un parchemin (dans le SAC) + les ressources de sa recette → objet (au sac), sort appris, ou bâtiment
@@ -38,7 +38,7 @@ def(craft, 'post', '/craft', z.object({ characterId: z.number(), recipeId: z.num
     if (['shallow', 'deep', 'volcano'].includes(terrain(b.x, b.y, a.mp.map_id).kind) || (await db.query('SELECT 1 FROM positions WHERE map_id=$1 AND coord_x=$2 AND coord_y=$3 AND item_id IS NULL', [a.mp.map_id, b.x, b.y])).rowCount) fail(409, 'Case indisponible');
     place = { x: b.x, y: b.y };
   }
-  await spend(db, me, a, r.energy_cost, 'action');
+  await spendDivine(db, me, r.divine_energy_cost ?? 0); await spend(db, me, a, r.energy_cost, 'action');
   // Consommation : ressources, puis parchemin si la recette le prévoit
   for (const [k, q] of Object.entries(r.resources ?? {}))
     await db.query("UPDATE characters SET resources=jsonb_set(resources, ARRAY[$2::text], to_jsonb(COALESCE((resources->>$2)::int,0) - $3)) WHERE id=$1", [me.id, k, q]);
