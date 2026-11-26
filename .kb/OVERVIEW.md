@@ -15,7 +15,7 @@ _Généré par `kb overview` — ne pas éditer ici ; notes manuelles dans `.kb/
 - Docker test target : `npm run typecheck && npm test` (utilisé par le hook pre-commit et CI)
 - kb : backend d'embedding `hash` (offline) dans `.kb/config.json`
 
-## Features (29)
+## Features (30)
 - **admin-players-divine** [done] (.kb/cards/admin-players-divine.md) Admin « Joueurs » (liste paginée + fiche éditable) et objets divins à familles libres — Section admin « Joueurs » (liste paginée par race, fiche éditable : caractéristiques, XP, or, rang, objets équipés / sac / coffre, sorts, montures, bâtiments, divins) et objets divins gérés comme les  — files: src/routes/admin/players.ts, src/routes/admin/items.ts, src/game/content.ts
 - **admin-socle** [done] (.kb/cards/admin-socle.md) Socle admin (Étape 2 phase 1) : rôles, CRUD contenu, règles transverses, production, audit — Socle du back-office (Étape 2) : rôles de compte, CRUD générique du contenu (races, rangs, monstres — dont les montures, card `monster-mounts` —, objets, bâtiments), règles transverses (coûts, plafond — files: src/routes/admin.ts, src/routes/admin/core.ts, src/routes/admin/races.ts, src/routes/admin/monsters.ts (+11)
 - **bestiaire** [done] (.kb/cards/bestiaire.md) Bestiaire (phase 2): loot roll, hourly spawns, combat death, admin routes & status — Boucle du bestiaire (phase 2) : un monstre tué donne son butin (or + entrées pondérées de `monster_loot` : objets, ressources, exemplaires divins), des instances sauvages apparaissent au tick horaire  — files: src/game/loot.ts, src/game/combatlib.ts, src/routes/admin/bestiary.ts, src/routes/admin/monsters.ts (+2)
@@ -41,6 +41,7 @@ _Généré par `kb overview` — ne pas éditer ici ; notes manuelles dans `.kb/
 - **mount-call** [done] (.kb/cards/mount-call.md) Montures possédées : monter dessus ou invoquer à pied, capacités et équipement — Une monture possédée (issue d'un type de monstre) se MONTE ou s'INVOQUE à pied comme créature contrôlable ; dans les deux cas ses capacités sont utilisables et elle peut être équipée sur les parties d — files: src/routes/mounts.ts, src/routes/spells.ts, src/game/spellEffects.ts
 - **races-spawn-clock** [done] (.kb/cards/races-spawn-clock.md) Races (apparition, limites, équipement de départ, races libres, admin sans limite) et horloge du monde persistante — Races : zone d'apparition, limites de personnages, équipement de départ et races libres jouables ; compte admin sans limite. — files: src/game/clock.ts, src/routes/characters.ts, src/game/spawn.ts, src/routes/admin/races.ts (+2)
 - **rank-up** [done] (.kb/cards/rank-up.md) Passage de rang par conditions (voies définitive et temporaire, objets, ressources, énergie) — Passage au rang suivant par conditions réglées sur chaque rang : objets, ressources, énergie, XP prérequis, quota de population ; deux voies indépendantes (définitive, temporaire), proposables en même — files: src/game/rankUp.ts, src/routes/characters.ts, src/routes/admin/races.ts
+- **security** [done] (.kb/cards/security.md) Sécurité : anti-spam, anti-robot, mots de passe, accès admin — Protections contre le spam et les robots, politique de mot de passe, et contrôle d'accès admin réellement vérifié côté serveur. — files: src/lib/security.ts, src/middleware/auth.ts, src/routes/auth.ts, src/config/env.ts (+1)
 - **spell-engine** [done] (.kb/cards/spell-engine.md) Moteur de sorts paramétrable (zone, cible, dégâts, durée, caractéristiques) et liens sort ↔ objet / monture / monstre — Moteur de sorts paramétrable (`spells.effects`) : cible, portée, zone, camp visé, dégâts instantanés, soin, dégâts sur la durée, modifications de caractéristiques ; et liens d'un sort avec des objets, — files: src/game/spellEffects.ts, src/game/spellTick.ts, src/routes/spells.ts
 - **spell-summon** [done] (.kb/cards/spell-summon.md) Invocations par sort et sorts déclenchés par les objets portés — Un sort peut invoquer un élément (monstre, monture, objet, bâtiment), pour toujours ou pour une durée. — files: src/game/spellSummon.ts, src/routes/spells.ts, src/routes/combat.ts, src/routes/tick.ts (+1)
 - **tile-types** [done] (.kb/cards/tile-types.md) Types de case éditables par monde (admin « Cases ») : coût, description, sort passif — Types de case éditables par monde (admin « Cases ») : nom, description, coût d'énergie d'un pas et sort passif appliqué en continu aux personnages qui s'y tiennent. — files: src/game/tileTypes.ts, src/routes/admin/tiles.ts
@@ -48,10 +49,7 @@ _Généré par `kb overview` — ne pas éditer ici ; notes manuelles dans `.kb/
 
 ## File map
 - `package.json`
-- `src/app.ts` — app
-- `src/config/env.ts` — env
+- `src/app.ts` — CORS : le front appelle l'API sur la même origine (/api) ; seule PUBLIC_URL est admise en cross-origin (aucune — app
+- `src/config/env.ts` — Secret de signature des jetons : JWT_SECRET (≥ 16 caractères, pas une valeur d'exemple). Sinon, secret aléatoi — (header), WEAK, jwtSecret, env
 - `src/db/pool.ts` — (header), pool
-- `src/game/activation.ts` — Conditions d'activation d'un bâtiment (buildings.activation, migration 28) : des GROUPES alternatifs ; un grou — Group, Activation, GroupT, hasActivation, checkActivation, groupMissing, describeActivation, activate
-- `src/game/angelDemonMap.ts` — ⚠ GÉNÉRÉ par tools/gen_angel_demon_map.py — monde Anges & Démons : ne pas éditer à la main. — W2, ROWS2, FEATURES2
-- `src/game/bag.ts` — Sac et coffre (migration 33) : les objets prennent un emplacement chacun ; les ressources (characters.resource — (header), DEFAULT_STACK, stackOf, resSlots, resStacks, bagState, chestState, bagRoom, extraSlots
-- … 132 autres fichiers (utiliser `kb search`)
+- … 138 autres fichiers (utiliser `kb search`)

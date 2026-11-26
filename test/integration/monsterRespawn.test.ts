@@ -6,7 +6,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Monstres : parties du corps et réap
     const r = await app.request(path, { method: method ?? (body ? 'POST' : 'GET'), headers: { 'content-type': 'application/json', ...(tk ? { authorization: `Bearer ${tk}` } : {}) }, body: body ? JSON.stringify(body) : undefined });
     return { status: r.status, j: await r.json().catch(() => null) };
   };
-  const login = async (email: string) => { let r = await call('/auth/register', { email, password: 'password1' }); if (r.status !== 200) r = await call('/auth/login', { email, password: 'password1' }); return r.j.token; };
+  const login = async (email: string) => { let r = await call('/auth/register', { email, password: 'Lune-Brisee-2026!' }); if (r.status !== 200) r = await call('/auth/login', { email, password: 'Lune-Brisee-2026!' }); return r.j.token; };
   /** Pose une instance du type sur une case libre de la carte 3 (essais successifs). */
   const place = async (monsterId: number) => {
     for (let i = 0; i < 60; i++) {

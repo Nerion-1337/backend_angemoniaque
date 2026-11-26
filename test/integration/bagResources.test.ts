@@ -14,7 +14,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Sac, piles de ressources et parchemi
         await pool.query('UPDATE positions SET map_id=$2, coord_x=$3, coord_y=$4 WHERE character_id=$1', [T.c, cap.m, cap.x + dx, cap.y + dy]); return; }
     throw new Error('capitale encerclée');
   };
-  const login = async (email: string) => { let r = await call('/auth/register', { email, password: 'password1' }); if (r.status !== 200) r = await call('/auth/login', { email, password: 'password1' }); return r.j.token; };
+  const login = async (email: string) => { let r = await call('/auth/register', { email, password: 'Lune-Brisee-2026!' }); if (r.status !== 200) r = await call('/auth/login', { email, password: 'Lune-Brisee-2026!' }); return r.j.token; };
   const inv = async () => (await call(`/inventory/${T.c}`, undefined, T.tk)).j;
   beforeAll(async () => {
     app = (await import('../../src/app')).app; pool = (await import('../../src/lib/db')).pool;

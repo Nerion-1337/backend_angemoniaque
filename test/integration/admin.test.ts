@@ -9,7 +9,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Admin phase 1 (socle)', () => {
   };
   const mk = async (name: string, race: string, admin = false) => {
     const email = admin ? (process.env.ADMIN_EMAIL ?? 'admin@ange.local') : `${name}${s}@x.fr`;
-    let r = await call('/auth/register', { email, password: 'password1' }); if (r.status !== 200) r = await call('/auth/login', { email, password: 'password1' });
+    let r = await call('/auth/register', { email, password: 'Lune-Brisee-2026!' }); if (r.status !== 200) r = await call('/auth/login', { email, password: 'Lune-Brisee-2026!' });
     // 3 personnages max / compte admin partagé : on réutilise le 1er perso existant (idempotent à la relance).
     // POST /characters ne renvoie que l'id => le pseudo est calculé localement (repli = le pseudo lu côté base).
     const c0 = await call('/characters', undefined, r.j.token);

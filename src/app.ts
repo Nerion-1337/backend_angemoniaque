@@ -1,11 +1,13 @@
 import { OpenAPIHono } from '@hono/zod-openapi'; import { cors } from 'hono/cors';
-import { HttpError } from './lib/db.js'; import { router } from './lib/route.js'; import { auth, admin } from './middleware/auth.js';
+import { HttpError } from './lib/db.js'; import { router } from './lib/route.js'; import { auth, admin } from './middleware/auth.js'; import { rateLimit } from './lib/security.js';
 import { authRoutes } from './routes/auth.js'; import { googleRoutes } from './routes/google.js'; import { forum } from './routes/forum.js'; import { characters } from './routes/characters.js'; import { actions } from './routes/actions.js'; import { combat } from './routes/combat.js';
 import { divine } from './routes/divine.js'; import { mapRoutes } from './routes/map.js'; import { pacts } from './routes/pacts.js'; import { faiths } from './routes/faiths.js';
 import { guilds } from './routes/guilds.js'; import { messages } from './routes/messages.js'; import { buildings } from './routes/buildings.js'; import { market } from './routes/market.js';
 import { spells } from './routes/spells.js'; import { inventory } from './routes/inventory.js'; import { mounts } from './routes/mounts.js'; import { monsters } from './routes/monsters.js'; import { adminRoutes } from './routes/admin.js'; import { craft } from './routes/craft.js';
 export const app = router();
-app.use('*', cors()); app.use('*', auth); app.use('/admin/*', admin);
+// CORS : le front appelle l'API sur la même origine (/api) ; seule PUBLIC_URL est admise en cross-origin (aucune sinon).
+app.use('*', cors({ origin: o => (process.env.PUBLIC_URL && o === process.env.PUBLIC_URL.replace(/\/+$/, '') ? o : null) as any }));
+app.use('*', auth); app.use('*', rateLimit); app.use('/admin/*', admin);
 [authRoutes, googleRoutes, forum, spells, characters, actions, combat, divine, mapRoutes, pacts, faiths, guilds, messages, buildings, market, inventory, mounts, monsters, craft, adminRoutes].forEach(r => app.route('/', r));
 app.doc('/openapi.json', { openapi: '3.0.0', info: { title: 'Angemoniaque API', version: '0.2.0' } });
 app.onError((e: any, c) => {

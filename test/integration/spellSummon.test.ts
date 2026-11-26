@@ -6,7 +6,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Invocations et sorts déclenchés pa
     const r = await app.request(path, { method: method ?? (body ? 'POST' : 'GET'), headers: { 'content-type': 'application/json', ...(tk ? { authorization: `Bearer ${tk}` } : {}) }, body: body ? JSON.stringify(body) : undefined });
     return { status: r.status, j: await r.json().catch(() => null) };
   };
-  const login = async (email: string) => { let r = await call('/auth/register', { email, password: 'password1' }); if (r.status !== 200) r = await call('/auth/login', { email, password: 'password1' }); return r.j.token; };
+  const login = async (email: string) => { let r = await call('/auth/register', { email, password: 'Lune-Brisee-2026!' }); if (r.status !== 200) r = await call('/auth/login', { email, password: 'Lune-Brisee-2026!' }); return r.j.token; };
   const spell = async (name: string, effects: any) => { const r = await call('/admin/content/spells', { name: `${name}${s}`, energyCost: 1, shop: false, effects }, T.adm); expect(r.status, JSON.stringify(r.j)).toBe(200); return r.j.id; };
   const learnCast = async (id: number) => { await call(`/admin/players/${T.c}/grant`, { kind: 'spell', refId: id }, T.adm); return call('/spells/cast', { characterId: T.c, spellId: id }, T.tk); };
   const expire = async () => { await pool.query("UPDATE spell_summons SET until=now()-interval '1 minute' WHERE caster_id=$1", [T.c]); await expireSummons(pool); };

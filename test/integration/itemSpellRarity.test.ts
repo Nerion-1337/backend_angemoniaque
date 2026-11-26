@@ -14,13 +14,13 @@ describe.skipIf(!process.env.DATABASE_URL)('Admin phase 4 (rareté & acquisition
   const ub = (v: any): string[] => (typeof v === 'string' ? JSON.parse(v || '[]') : (v ?? []));
   beforeAll(async () => {
     const email = process.env.ADMIN_EMAIL ?? 'admin@ange.local';
-    let r = await call('/auth/register', { email, password: 'password1' });
-    if (r.status !== 200) r = await call('/auth/login', { email, password: 'password1' });
+    let r = await call('/auth/register', { email, password: 'Lune-Brisee-2026!' });
+    if (r.status !== 200) r = await call('/auth/login', { email, password: 'Lune-Brisee-2026!' });
     tk = r.j.token;
     // Personnage (compte unique) pour mesurer les décomptes détenteurs/apprenants.
     const pem = `r4_${s}@test.local`;
-    let p = await call('/auth/register', { email: pem, password: 'password1' });
-    if (p.status !== 200) p = await call('/auth/login', { email: pem, password: 'password1' });
+    let p = await call('/auth/register', { email: pem, password: 'Lune-Brisee-2026!' });
+    if (p.status !== 200) p = await call('/auth/login', { email: pem, password: 'Lune-Brisee-2026!' });
     ptk = p.j.token;
     cId = (await call('/characters', { pseudo: `R4${s}`, race: 'human' }, ptk)).j.id; // POST /characters renvoie { id }
   });

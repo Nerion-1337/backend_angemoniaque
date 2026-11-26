@@ -7,7 +7,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Réapparition par monstre, objet div
     const r = await app.request(path, { method: method ?? (body ? 'POST' : 'GET'), headers: { 'content-type': 'application/json', ...(tk ? { authorization: `Bearer ${tk}` } : {}) }, body: body ? JSON.stringify(body) : undefined });
     return { status: r.status, j: await r.json().catch(() => null) };
   };
-  const login = async (email: string) => { let r = await call('/auth/register', { email, password: 'password1' }); if (r.status !== 200) r = await call('/auth/login', { email, password: 'password1' }); return r.j.token; };
+  const login = async (email: string) => { let r = await call('/auth/register', { email, password: 'Lune-Brisee-2026!' }); if (r.status !== 200) r = await call('/auth/login', { email, password: 'Lune-Brisee-2026!' }); return r.j.token; };
   const place = async (monsterId: number) => {
     for (let i = 0; i < 80; i++) {
       const r = await call('/admin/bestiary/place', { monsterId, mapId: 3, x: 20 + ((s + i * 7) % 160), y: 20 + ((s * 3 + i * 11) % 160) }, T.adm);

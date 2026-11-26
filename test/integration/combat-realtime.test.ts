@@ -8,7 +8,7 @@ describe.skipIf(!process.env.DATABASE_URL || !process.env.REDIS_URL)('combat tem
     app.request(path, { method: body ? 'POST' : 'GET', headers: { 'content-type': 'application/json', ...(t ? { authorization: `Bearer ${t}` } : {}) }, body: body ? JSON.stringify(body) : undefined });
   const posOf = async (id: number) => (await (await call(`/characters/${id}`, undefined, tk)).json()).pos;
   test('un coup sur un joueur de la carte émet un événement « combat » public vers les spectateurs', async () => {
-    const reg = await (await call('/auth/register', { email: `${u}@x.fr`, password: 'password1' })).json(); tk = reg.token;
+    const reg = await (await call('/auth/register', { email: `${u}@x.fr`, password: 'Lune-Brisee-2026!' })).json(); tk = reg.token;
     attacker = (await (await call('/characters', { pseudo: `${u}a`, race: 'angel' }, tk)).json()).id;
     target = (await (await call('/characters', { pseudo: `${u}b`, race: 'angel' }, tk)).json()).id;
     const pa = await posOf(attacker), pb = await posOf(target); mapId = pa.map_id;

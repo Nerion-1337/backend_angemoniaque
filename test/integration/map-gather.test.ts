@@ -14,7 +14,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Carte & récolte intégration', () =
     // Base de dev partagée : les suites réexécutées saturent la base (3 personnages max/compte, aire d’apparition pleine) —
     // à 503 la création est annulée (rollback), on réessaie avec un autre compte.
     for (let k = 0; k < 3; k++) {
-      const reg = await call('/auth/register', { email: `${u}${k}@x.fr`, password: 'password1' });
+      const reg = await call('/auth/register', { email: `${u}${k}@x.fr`, password: 'Lune-Brisee-2026!' });
       expect(reg.status).toBe(200);
       tk = (await reg.json()).token;
       const cr = await call('/characters', { pseudo: `${u}${k}`, race: 'human' });
@@ -75,7 +75,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Carte & récolte intégration', () =
     expect((await resp.json()).error).toBe('Rien à récolter ici');
   });
   test('zone sacrée de l’Hôtel de ville : aucun combat entre joueurs (403)', async () => {
-    const t2 = (await (await call('/auth/register', { email: `${u}9@x.fr`, password: 'password1' }, '', 'POST')).json()).token;
+    const t2 = (await (await call('/auth/register', { email: `${u}9@x.fr`, password: 'Lune-Brisee-2026!' }, '', 'POST')).json()).token;
     let ok = false, id2: any, p: any;
     for (let k = 0; k < 3 && !ok; k++) { // même saturation possible pour le 2e personnage
       const cr = await call('/characters', { pseudo: `${u}9${k}`, race: 'human' }, t2);

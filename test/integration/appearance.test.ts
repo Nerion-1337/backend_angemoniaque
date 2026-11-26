@@ -7,7 +7,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Apparence des monstres (design, icô
     const r = await app.request(path, { method: method ?? (body ? 'POST' : 'GET'), headers: { 'content-type': 'application/json', ...(tk ? { authorization: `Bearer ${tk}` } : {}) }, body: body ? JSON.stringify(body) : undefined });
     return { status: r.status, j: await r.json().catch(() => null) };
   };
-  const login = async (email: string) => { let r = await call('/auth/register', { email, password: 'password1' }); if (r.status !== 200) r = await call('/auth/login', { email, password: 'password1' }); return r.j.token; };
+  const login = async (email: string) => { let r = await call('/auth/register', { email, password: 'Lune-Brisee-2026!' }); if (r.status !== 200) r = await call('/auth/login', { email, password: 'Lune-Brisee-2026!' }); return r.j.token; };
   beforeAll(async () => { app = (await import('../../src/app')).app; pool = (await import('../../src/lib/db')).pool; T.adm = await login(process.env.ADMIN_EMAIL ?? 'admin@ange.local'); });
   test('admin : design et icône validés, null = automatique ; recopiés au monstre posé et visibles sur la carte', async () => {
     expect((await call('/admin/content/monsters', { name: `Bad${s}`, hp_max: 10, model: 'Pas Bon!' }, T.adm)).status).toBe(400);

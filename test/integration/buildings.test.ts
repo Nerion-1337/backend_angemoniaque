@@ -6,7 +6,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Bâtiments paramétrables', () => {
     const r = await app.request(path, { method: method ?? (body ? 'POST' : 'GET'), headers: { 'content-type': 'application/json', ...(tk ? { authorization: `Bearer ${tk}` } : {}) }, body: body ? JSON.stringify(body) : undefined });
     return { status: r.status, j: await r.json().catch(() => null) };
   };
-  const login = async (email: string) => { let r = await call('/auth/register', { email, password: 'password1' }); if (r.status !== 200) r = await call('/auth/login', { email, password: 'password1' }); return r.j.token; };
+  const login = async (email: string) => { let r = await call('/auth/register', { email, password: 'Lune-Brisee-2026!' }); if (r.status !== 200) r = await call('/auth/login', { email, password: 'Lune-Brisee-2026!' }); return r.j.token; };
   const pos = async (id: number) => (await pool.query('SELECT coord_x x, coord_y y, map_id m FROM positions WHERE character_id=$1', [id])).rows[0];
   const free = async (m: number, x: number, y: number) => !['shallow', 'deep', 'volcano'].includes(terrain(x, y, m).kind) && !(await pool.query('SELECT 1 FROM positions WHERE map_id=$1 AND coord_x=$2 AND coord_y=$3', [m, x, y])).rowCount;
   const freeNear = async (m: number, x: number, y: number) => { for (const [dx, dy] of [[1, 0], [0, 1], [-1, 0], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]]) if (await free(m, x + dx, y + dy)) return { x: x + dx, y: y + dy }; throw new Error('aucune case libre'); };

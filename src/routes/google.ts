@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto'; import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
-import { def, router, z } from '../lib/route.js'; import { pool, fail } from '../lib/db.js'; import { signToken } from '../middleware/auth.js'; import { env } from '../config/env.js';
+import { def, router, z } from '../lib/route.js'; import { pool, fail } from '../lib/db.js'; import { signToken } from '../middleware/auth.js'; import { env } from '../config/env.js'; import { adminCookie, bootstrapRole } from './auth.js';
 /**
  * Connexion avec Google (migration 39) — flux « authorization code » côté serveur, sans dépendance :
  *  1. GET /auth/google/start : jeton anti-CSRF (`state`) en cookie HttpOnly 10 min, redirection vers Google ;
@@ -43,7 +43,7 @@ export async function googleAccount(sub: string, emailIn: string, mock = false) 
     if (byMail.google_sub) fail(409, 'Ce compte est déjà lié à un autre compte Google');
     await pool.query('UPDATE accounts SET google_sub=$2 WHERE id=$1', [byMail.id, sub]); return byMail;
   }
-  const { rows: [a] } = await pool.query('INSERT INTO accounts(email, password_hash, role, google_sub) VALUES ($1, NULL, $2, $3) RETURNING id, role', [email, isAdmin ? 'admin' : 'player', sub]);
+  const { rows: [a] } = await pool.query('INSERT INTO accounts(email, password_hash, role, google_sub) VALUES ($1, NULL, $2, $3) RETURNING id, role', [email, isAdmin ? await bootstrapRole(email) : 'player', sub]);
   return a;
 }
 const session = async (a: any) => ({ token: await signToken(a.id, a.role), admin: a.role === 'admin', role: a.role });
@@ -67,7 +67,7 @@ googleRoutes.get('/auth/google/callback', async c => {
     const tk: any = await tr.json(); if (!tr.ok || !tk.id_token) return back('google-error', 'Google a refusé la connexion');
     const info: any = await (await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(tk.id_token)}`)).json();
     const bad = checkClaims(info, g.id); if (bad) return back('google-error', bad);
-    const s = await session(await googleAccount(String(info.sub), String(info.email)));
+    const acc = await googleAccount(String(info.sub), String(info.email)), s = await session(acc); await adminCookie(c, acc);
     return back('google-token', s.token);
   } catch (e: any) { return back('google-error', e?.message && e.status ? e.message : 'Connexion Google impossible pour le moment'); }
 });

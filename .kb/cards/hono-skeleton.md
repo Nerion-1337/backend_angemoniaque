@@ -44,6 +44,7 @@ passerelle WebSocket diffusée par Redis, horloge du monde. Documentation de tou
 - L'historique d'un personnage est plafonné à 100 lignes (`trimLog`).
 
 - Middleware d'authentification : `/auth/login|register|google/*`, `/ws`, `/openapi` publics ; `/forum*` et `/legal*` à jeton FACULTATIF (visiteur anonyme si absent ou invalide) ; le reste exige un jeton valide.
+- Ordre des middlewares : CORS (PUBLIC_URL seulement) → authentification → limitation de débit → contrôle admin (rôle en base) sur /admin/*.
 ## Gotchas
 - Nouvel endpoint public : l'ajouter à la regex de `auth`, sinon 401.
 - `/ws` est hors JWT volontairement : rejoindre une carte est la seule barrière temps réel.

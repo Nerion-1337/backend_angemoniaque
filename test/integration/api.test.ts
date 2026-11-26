@@ -6,7 +6,7 @@ describe.skipIf(!process.env.DATABASE_URL)('API intégration', () => {
   const call = (path: string, body?: any, tk?: string) =>
     app.request(path, { method: body ? 'POST' : 'GET', headers: { 'content-type': 'application/json', ...(tk ? { authorization: `Bearer ${tk}` } : {}) }, body: body ? JSON.stringify(body) : undefined });
   test('inscription + création + déplacement', async () => {
-    token = (await (await call('/auth/register', { email: `${u}@x.fr`, password: 'password1' })).json()).token; expect(token).toBeTruthy();
+    token = (await (await call('/auth/register', { email: `${u}@x.fr`, password: 'Lune-Brisee-2026!' })).json()).token; expect(token).toBeTruthy();
     const r = await call('/characters', { pseudo: u, race: 'angel' }, token); expect(r.status).toBe(200); id = (await r.json()).id;
     const me = await (await call(`/characters/${id}`, undefined, token)).json(); expect(me.rank.rank_name).toBe('Soldat');
     const m = await call('/actions/move', { characterId: id, x: me.pos.x + 1, y: me.pos.y }, token); expect([200, 409]).toContain(m.status);

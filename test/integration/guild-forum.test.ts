@@ -6,7 +6,7 @@ describe.skipIf(!process.env.DATABASE_URL)('guilde : forum — ordre et réorgan
   let app: any; const u = `gf${Date.now()}`;
   beforeAll(async () => { app = (await import('../../src/app')).app; });
   const call = async (path: string, body?: any, tk?: string) => { const r = await app.request(path, { method: body ? 'POST' : 'GET', headers: { 'content-type': 'application/json', ...(tk ? { authorization: `Bearer ${tk}` } : {}) }, body: body ? JSON.stringify(body) : undefined }); return { status: r.status, j: await r.json().catch(() => null) }; };
-  const mk = async (n: string) => { const e = `${n}${u}@x.fr`, r = await call('/auth/register', { email: e, password: 'password1' }); const c = await call('/characters', { pseudo: `${n}${u}`, race: 'human' }, r.j.token); if (c.status !== 200) throw new Error(JSON.stringify(c.j)); return { tk: r.j.token, id: c.j.id, pseudo: `${n}${u}` }; };
+  const mk = async (n: string) => { const e = `${n}${u}@x.fr`, r = await call('/auth/register', { email: e, password: 'Lune-Brisee-2026!' }); const c = await call('/characters', { pseudo: `${n}${u}`, race: 'human' }, r.j.token); if (c.status !== 200) throw new Error(JSON.stringify(c.j)); return { tk: r.j.token, id: c.j.id, pseudo: `${n}${u}` }; };
   const st = async (id: number, tk: string) => (await call(`/guilds/${id}`, undefined, tk)).j;
   const names = (s: any, k: string) => s.folders.map((f: any) => f[k]);
   let a: any, b: any; const F: any[] = [], T: any[] = [];

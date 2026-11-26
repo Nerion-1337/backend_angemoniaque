@@ -6,7 +6,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Forum public et pages légales', () 
     const r = await app.request(path, { method: method ?? (body ? 'POST' : 'GET'), headers: { 'content-type': 'application/json', ...(tk ? { authorization: `Bearer ${tk}` } : {}) }, body: body ? JSON.stringify(body) : undefined });
     return { status: r.status, j: await r.json().catch(() => null) };
   };
-  const login = async (email: string, extra: any = {}) => { let r = await call('/auth/register', { email, password: 'password1', ...extra }); if (r.status !== 200) r = await call('/auth/login', { email, password: 'password1' }); return r.j.token; };
+  const login = async (email: string, extra: any = {}) => { let r = await call('/auth/register', { email, password: 'Lune-Brisee-2026!', ...extra }); if (r.status !== 200) r = await call('/auth/login', { email, password: 'Lune-Brisee-2026!' }); return r.j.token; };
   const cat = async (name: string, tk?: string) => (await call('/forum', undefined, tk)).j.categories.find((k: any) => k.name === name);
   beforeAll(async () => {
     app = (await import('../../src/app')).app; pool = (await import('../../src/lib/db')).pool;
@@ -84,7 +84,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Forum public et pages légales', () 
     const em = `goo${s}@gmail.com`, a = await call('/auth/google/mock', { email: em }); expect(a.status, JSON.stringify(a.j)).toBe(200);
     const me = (await call('/auth/me', undefined, a.j.token)).j; expect(me.email).toBe(em);
     expect((await call('/auth/me', undefined, (await call('/auth/google/mock', { email: em })).j.token)).j.id).toBe(me.id);
-    expect((await call('/auth/login', { email: em, password: 'password1' })).j.error).toMatch(/Google/);
+    expect((await call('/auth/login', { email: em, password: 'Lune-Brisee-2026!' })).j.error).toMatch(/Google/);
     expect((await call('/auth/google/mock', { email: `fo1${s}@x.fr` })).status).toBe(409);
     expect((await call('/auth/google/mock', { email: process.env.ADMIN_EMAIL ?? 'admin@ange.local' })).status).toBe(403);
   });

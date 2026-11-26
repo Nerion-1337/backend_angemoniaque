@@ -4,7 +4,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Gameplay intégration', () => {
   beforeAll(async () => { app = (await import('../../src/app')).app; });
   const call = async (path: string, body?: any, tk?: string, method?: string) => { const r = await app.request(path, { method: method ?? (body ? 'POST' : 'GET'), headers: { 'content-type': 'application/json', ...(tk ? { authorization: `Bearer ${tk}` } : {}) }, body: body ? JSON.stringify(body) : undefined }); return { status: r.status, j: await r.json().catch(() => null) }; };
   const mk = async (name: string, race: string, admin = false) => { const email = admin ? (process.env.ADMIN_EMAIL ?? 'admin@ange.local') : `${name}${s}@x.fr`;
-    let r = await call('/auth/register', { email, password: 'password1' }); if (r.status !== 200) r = await call('/auth/login', { email, password: 'password1' });
+    let r = await call('/auth/register', { email, password: 'Lune-Brisee-2026!' }); if (r.status !== 200) r = await call('/auth/login', { email, password: 'Lune-Brisee-2026!' });
     const c0 = await call('/characters', undefined, r.j.token);   // 3 persos max / compte admin partagé : on réutilise sinon
     if (c0.j?.[0]) return { tk: r.j.token, id: c0.j[0].id, pseudo: c0.j[0].pseudo };
     const pseudo = `${name}${s}`.slice(0, 20);

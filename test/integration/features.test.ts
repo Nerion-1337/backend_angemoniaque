@@ -3,7 +3,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Fonctionnalités du dépôt', () => 
   let app: any, pool: any; const s = Date.now(); const T: any = {};
   beforeAll(async () => { app = (await import('../../src/app')).app; pool = (await import('../../src/lib/db')).pool; });
   const call = async (path: string, body?: any, tk?: string, method?: string) => { const r = await app.request(path, { method: method ?? (body ? 'POST' : 'GET'), headers: { 'content-type': 'application/json', ...(tk ? { authorization: `Bearer ${tk}` } : {}) }, body: body ? JSON.stringify(body) : undefined }); return { status: r.status, j: await r.json().catch(() => null) }; };
-  const mk = async (n: string, race: string) => { const e = `${n}${s}@x.fr`, r = await call('/auth/register', { email: e, password: 'password1' }); const c = await call('/characters', { pseudo: `${n}${s}`.slice(0, 20), race }, r.j.token); if (c.status !== 200) throw new Error(JSON.stringify(c.j)); return { tk: r.j.token, id: c.j.id, pseudo: `${n}${s}`.slice(0, 20) }; };
+  const mk = async (n: string, race: string) => { const e = `${n}${s}@x.fr`, r = await call('/auth/register', { email: e, password: 'Lune-Brisee-2026!' }); const c = await call('/characters', { pseudo: `${n}${s}`.slice(0, 20), race }, r.j.token); if (c.status !== 200) throw new Error(JSON.stringify(c.j)); return { tk: r.j.token, id: c.j.id, pseudo: `${n}${s}`.slice(0, 20) }; };
   beforeAll(async () => { T.a = await mk('fa', 'human'); T.b = await mk('fb', 'angel'); });
   test('kit de départ + stats d\'équipement (armure, dégâts = arme × (Force − requis))', async () => {
     const me = (await call(`/characters/${T.a.id}`, undefined, T.a.tk)).j; expect(me.gold).toBe(150); expect(me.stats.damage).toBe(1);

@@ -1,5 +1,6 @@
 import { OpenAPIHono } from '@hono/zod-openapi'; import { def, router, z, P } from '../lib/route.js'; import { pool, tx, ownChar, posOf, fail } from '../lib/db.js';
 import { statUpgradeCost } from '../game/rules.js'; import { applySpec } from '../game/divine.js'; import { spawn } from '../game/spawn.js'; import { Kit, startRank, grantKit } from '../game/startKit.js'; import { nextRank, rankUp, MODES } from '../game/rankUp.js'; import { activeMount, actor } from '../game/movement.js'; import { gearStats, maxSummons, statBreakdown } from '../game/stats.js'; import { chestLimits } from './market.js'; import { canUseDivineEnergy } from '../game/rules.js';
+import { dbRole } from '../middleware/auth.js';
 export const characters = router();
 /**
  * Règles de création (vérifiées côté serveur) : race existante, active et dotée d'un premier rang ;
@@ -10,7 +11,7 @@ export async function checkCreation(db: any, acc: any, race: string) {
   const { rows: [r] } = await db.query('SELECT * FROM races WHERE key=$1', [race]);
   if (!r || !r.active) fail(400, 'Race indisponible');
   if (!(await db.query('SELECT 1 FROM specializations WHERE race=$1', [race])).rowCount) fail(409, 'Cette race n’a pas encore de rang');
-  if (acc?.role === 'admin') return r;
+  if (acc?.dbRole === 'admin') return r;   // rôle relu en base (jamais celui du jeton)
   const { rows: mine } = await db.query('SELECT race FROM characters WHERE account_id=$1', [acc.sub]);
   if (mine.some((m: any) => m.race !== race)) fail(400, 'Tous vos personnages partagent la même race');
   if (r.max_per_account != null && mine.length >= r.max_per_account) fail(409, `${r.max_per_account} personnage(s) ${r.name} maximum par compte`);
@@ -19,7 +20,7 @@ export async function checkCreation(db: any, acc: any, race: string) {
 }
 /** Races jouables pour CE compte : places restantes et raison d'un refus (écran de création). */
 def(characters, 'get', '/characters/races', null, async c => {
-  const acc = c.get('acc'), admin = acc?.role === 'admin';
+  const acc = c.get('acc'), admin = (await dbRole(c)) === 'admin';
   const { rows: mine } = await pool.query('SELECT race FROM characters WHERE account_id=$1', [acc.sub]);
   const locked = admin ? null : mine[0]?.race ?? null;
   const { rows } = await pool.query(`SELECT r.key, r.name, r.color, r.max_per_account, r.max_total,
@@ -36,7 +37,7 @@ def(characters, 'get', '/characters/races', null, async c => {
 });
 def(characters, 'get', '/characters', null, async c => (await pool.query('SELECT c.id,c.pseudo,c.race,p.map_id,p.coord_x x,p.coord_y y FROM characters c LEFT JOIN positions p ON p.character_id=c.id WHERE c.account_id=$1 ORDER BY c.id', [c.get('acc').sub])).rows);
 def(characters, 'post', '/characters', z.object({ pseudo: z.string().min(3, '3 caractères minimum').max(20, '20 caractères maximum').regex(/^[\p{L}0-9_-]+$/u, 'lettres, chiffres, _ et - uniquement'), race: z.string().max(40) }), (c, b) => tx(async db => {
-  const race = await checkCreation(db, c.get('acc'), b.race);
+  const race = await checkCreation(db, { ...c.get('acc'), dbRole: await dbRole(c) }, b.race);
   // Équipement de départ de la race (races.start_kit, réglé en admin) : rang, or, XP, ressources, objets, sorts, montures.
   const kit = Kit.safeParse(race.start_kit ?? {}).success ? Kit.parse(race.start_kit ?? {}) : {};
   const s = await startRank(db, b.race, kit);

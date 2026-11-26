@@ -28,6 +28,7 @@ Connexion avec Google (OAuth 2.0 / OpenID Connect, flux « authorization code »
 - Mode simulé (`POST /auth/google/mock { email }`, 404 hors mode mock) : crée ou rouvre seulement un compte Google (`google_sub = mock:<email>`) ; jamais un compte à mot de passe existant (409) ni l'admin (403).
 - Connexion par mot de passe d'un compte sans mot de passe → 401 « Ce compte se connecte avec Google ».
 
+- Compte créé par Google avec l'email admin : admin seulement si aucun admin n'existe (amorçage) ; cookie des fichiers admin posé au retour de Google pour un admin.
 ## Gotchas
 - Les routes /auth/google/* sont publiques dans le middleware ; ne pas y ajouter de route qui suppose un compte.
 - L'échange réel avec Google n'est pas testé (pas de réseau en test) : seuls la redirection, le cookie, le refus d'un état faux et les revendications le sont.

@@ -11,8 +11,8 @@ describe.skipIf(!process.env.DATABASE_URL)('Admin phase 3 (détails de monstre)'
   let tk = '';
   beforeAll(async () => {
     const email = process.env.ADMIN_EMAIL ?? 'admin@ange.local';
-    let r = await call('/auth/register', { email, password: 'password1' });
-    if (r.status !== 200) r = await call('/auth/login', { email, password: 'password1' });
+    let r = await call('/auth/register', { email, password: 'Lune-Brisee-2026!' });
+    if (r.status !== 200) r = await call('/auth/login', { email, password: 'Lune-Brisee-2026!' });
     tk = r.j.token;
   });
 
