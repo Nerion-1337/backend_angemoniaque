@@ -1,8 +1,11 @@
-export type StatRule = { base_xp_cost: number; numb_up: number; multi_1: number; multi_2: number; multi_3: number };
+/** Paliers de coût : `multis` (un multiplicateur par palier, nombre libre, migration 45), sinon les trois colonnes historiques. */
+export type StatRule = { base_xp_cost: number; numb_up: number; multis?: (number | string)[] | null; multi_1?: number; multi_2?: number; multi_3?: number };
+export const multisOf = (r: StatRule) => (r.multis?.length ? r.multis : [r.multi_1 ?? 1, r.multi_2 ?? 2, r.multi_3 ?? 3]).map(Number);
+/** Palier atteint (1…n) après `purchased` achats ; le dernier palier vaut pour la suite. */
+export const upgradeTier = (rule: StatRule, purchased: number) => Math.min(Math.floor(purchased / rule.numb_up), multisOf(rule).length - 1) + 1;
 /** Coût XP du prochain point : base × multiplicateur du palier (hypothèse : palier = floor(achats / numb_up), plafonné à multi_3). */
 export function statUpgradeCost(rule: StatRule, purchased: number): number {
-  const tier = Math.floor(purchased / rule.numb_up);
-  const m = [rule.multi_1, rule.multi_2, rule.multi_3][Math.min(tier, 2)];
+  const m = multisOf(rule)[upgradeTier(rule, purchased) - 1];
   return Math.round(rule.base_xp_cost * m);
 }
 /** 8 directions, diagonales incluses : distance de Chebyshev × coût du terrain. */

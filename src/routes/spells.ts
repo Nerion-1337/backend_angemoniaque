@@ -19,7 +19,7 @@ def(spells, 'get', '/spells/{characterId}', null, c => tx(async db => { const me
       FROM (${CASTABLE}) s LEFT JOIN spell_cooldowns cd ON cd.character_id=$1 AND cd.spell_id=s.id ORDER BY s.id`, [me.id])).rows, maxSummons: await maxSummons(db, me), active: (await db.query('SELECT count(*)::int n FROM summons WHERE owner_id=$1', [me.id])).rows[0].n }; }));
 /** Délai avant de relancer : refus tant que spell_cooldowns n'est pas échu, puis échéance = maintenant + spells.cooldown_h. Le délai
  *  après la mort d'une invocation (monsters.resummon_delay_h) est posé par le trigger de la migration 43. */
-export const fmtWait = (s: number) => { const h = Math.floor(s / 3600), m = Math.ceil((s % 3600) / 60); return h ? `${h} h${m ? ` ${String(m).padStart(2, '0')}` : ''}` : `${Math.max(1, m)} min`; };
+export const fmtWait = (s: number) => { const t = Math.ceil(s / 60), h = Math.floor(t / 60), m = t % 60; return h ? `${h} h${m ? ` ${String(m).padStart(2, '0')}` : ''}` : `${Math.max(1, m)} min`; };   // minutes arrondies au total (jamais « 47 h 60 »)
 async function useCooldown(db: any, me: any, sp: any) {
   const { rows: [cd] } = await db.query('SELECT GREATEST(0, EXTRACT(EPOCH FROM ready_at - now()))::int s FROM spell_cooldowns WHERE character_id=$1 AND spell_id=$2', [me.id, sp.id]);
   if (cd?.s > 0) fail(409, `${sp.name} n'est pas encore disponible : encore ${fmtWait(cd.s)}`);

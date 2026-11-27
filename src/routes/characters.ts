@@ -1,5 +1,5 @@
 import { OpenAPIHono } from '@hono/zod-openapi'; import { def, router, z, P } from '../lib/route.js'; import { pool, tx, ownChar, posOf, fail } from '../lib/db.js';
-import { statUpgradeCost } from '../game/rules.js'; import { applySpec } from '../game/divine.js'; import { spawn } from '../game/spawn.js'; import { Kit, startRank, grantKit } from '../game/startKit.js'; import { nextRank, rankUp, MODES } from '../game/rankUp.js'; import { activeMount, actor } from '../game/movement.js'; import { gearStats, maxSummons, statBreakdown } from '../game/stats.js'; import { chestLimits } from './market.js'; import { canUseDivineEnergy } from '../game/rules.js';
+import { statUpgradeCost, upgradeTier, multisOf } from '../game/rules.js'; import { applySpec } from '../game/divine.js'; import { spawn } from '../game/spawn.js'; import { Kit, startRank, grantKit } from '../game/startKit.js'; import { nextRank, rankUp, MODES } from '../game/rankUp.js'; import { activeMount, actor } from '../game/movement.js'; import { gearStats, maxSummons, statBreakdown } from '../game/stats.js'; import { chestLimits } from './market.js'; import { canUseDivineEnergy } from '../game/rules.js';
 import { dbRole } from '../middleware/auth.js';
 export const characters = router();
 /**
@@ -77,7 +77,7 @@ def(characters, 'get', '/characters/{id}', null, (c) => tx(async db => {
 }));
 def(characters, 'get', '/characters/{id}/upgrades', null, (c) => tx(async db => {      // coûts par paliers (stat_cost_rules) pour l'onglet « Amélioration »
   const ch = await ownChar(db, c, P(c, 'id')); const { rows } = await db.query('SELECT * FROM stat_cost_rules ORDER BY base_xp_cost,stat');
-  return rows.map((r: any) => { const n = ch.upgrades[r.stat] ?? 0, tier = Math.floor(n / r.numb_up); return { stat: r.stat, value: ch[r.stat], count: n, tier: Math.min(tier, 2) + 1, untilNextTier: r.numb_up - (n % r.numb_up), nextCost: statUpgradeCost(r, n), needsDivine: r.stat === 'divine_energy_max' }; });
+  return rows.map((r: any) => { const n = ch.upgrades[r.stat] ?? 0; return { stat: r.stat, value: ch[r.stat], count: n, tier: upgradeTier(r, n), tiers: multisOf(r).length, untilNextTier: r.numb_up - (n % r.numb_up), nextCost: statUpgradeCost(r, n), needsDivine: r.stat === 'divine_energy_max' }; });
 }));
 const RESERVE: Record<string, string> = { hp_max: 'hp_current', energy_max: 'energy_current', divine_energy_max: 'divine_energy_current' };
 def(characters, 'post', '/characters/{id}/upgrade/{stat}', null, (c) => tx(async db => {

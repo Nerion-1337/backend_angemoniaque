@@ -21,11 +21,13 @@ def(faithPactRoutes, 'put', '/admin/content/pact', PactCfg, async (c, b) => {
 const Tier = z.object({
   name: z.string().trim().min(1).max(40), xp_hour: z.number().int().min(0).max(1e6), gold_hour: z.number().int().min(0).max(1e6),
   percent: z.number().int().min(1).max(100), duration_h: z.number().min(1).max(8760), cooldown_h: z.number().min(0).max(8760), sort: z.number().int().min(0).max(1000).optional(),
+  /** Nombre maximal d'attributions de cette composition par Ange / Démon (null = illimité, migration 45). */
+  max_assign: z.number().int().min(1).max(1000).nullable().optional(),
 });
-const COLS = ['name', 'xp_hour', 'gold_hour', 'percent', 'duration_h', 'cooldown_h', 'sort'] as const;
+const COLS = ['name', 'xp_hour', 'gold_hour', 'percent', 'duration_h', 'cooldown_h', 'sort', 'max_assign'] as const;
 const dup = (e: any) => { if (e?.code === '23505') fail(409, 'Une composition porte déjà ce nom'); throw e; };
 def(faithPactRoutes, 'post', '/admin/content/pact-tiers', Tier, async (c, b) => {
-  const { rows: [r] } = await pool.query(`INSERT INTO pact_tiers(${COLS.join(',')}) VALUES ($1,$2,$3,$4,$5,$6,COALESCE($7,(SELECT COALESCE(max(sort),0)+1 FROM pact_tiers))) RETURNING *`,
+  const { rows: [r] } = await pool.query(`INSERT INTO pact_tiers(${COLS.join(',')}) VALUES ($1,$2,$3,$4,$5,$6,COALESCE($7,(SELECT COALESCE(max(sort),0)+1 FROM pact_tiers)),$8) RETURNING *`,
     COLS.map(k => (b as any)[k] ?? null)).catch(dup);
   await audit(c, 'pact_tier.create', 'pact_tier', r.id, null, b); return r;
 });

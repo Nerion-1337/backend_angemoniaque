@@ -62,7 +62,10 @@ describe.skipIf(!process.env.DATABASE_URL)('Hauteur, coffre, coûts d’amélior
   test('coûts d’amélioration réglés en admin : appliqués à l’onglet Amélioration ; liste fermée ; retrait', async () => {
     expect((await call('/admin/content/stat-costs/xp', { base_xp_cost: 1, numb_up: 1, multi_1: 1, multi_2: 1, multi_3: 1 }, T.adm, 'PUT')).status).toBe(400);
     expect((await call('/admin/content/stat-costs/range', { base_xp_cost: 7, numb_up: 2, multi_1: 1, multi_2: 2, multi_3: 3 }, T.adm, 'PUT')).status).toBe(200);
-    expect((await call('/admin/content/stat-costs', undefined, T.adm)).j.rules).toContainEqual({ stat: 'range', base_xp_cost: 7, numb_up: 2, multi_1: 1, multi_2: 2, multi_3: 3 });
+    expect((await call('/admin/content/stat-costs', undefined, T.adm)).j.rules).toContainEqual({ stat: 'range', base_xp_cost: 7, numb_up: 2, multis: [1, 2, 3] });   // ancien format converti
+    expect((await call('/admin/content/stat-costs/range', { base_xp_cost: 7, numb_up: 2, multis: [1, 2, 3, 4, 6] }, T.adm, 'PUT')).status).toBe(200);   // paliers ajoutés
+    expect((await call('/admin/content/stat-costs', undefined, T.adm)).j.rules).toContainEqual({ stat: 'range', base_xp_cost: 7, numb_up: 2, multis: [1, 2, 3, 4, 6] });
+    expect((await call('/admin/content/stat-costs/range', { base_xp_cost: 7, numb_up: 2, multis: [] }, T.adm, 'PUT')).status).toBe(400);
     expect((await call(`/characters/${T.c}/upgrades`, undefined, T.tk)).j.find((u: any) => u.stat === 'range')).toMatchObject({ nextCost: 7 });
     await pool.query('UPDATE characters SET xp=100 WHERE id=$1', [T.c]);
     const r0 = (await me()).range;

@@ -32,7 +32,7 @@ export const godIncome = (followers: number, f: Pick<FaithCfgT, 'followersStep' 
 /** Pactes simultanés par défaut quand le rang n'a pas de réglage (`max_pacts` NULL) : Humain 1 ; Ange / Démon 3, +1 par rang au-dessus de 2. */
 export const defaultMaxPacts = (race: string, rank: number) => (race === 'human' ? 1 : ['angel', 'demon'].includes(race) ? 3 + Math.max(0, rank - 2) : 0);
 /** Délai lisible (secondes → « 1 h 05 » / « 12 min »). */
-export const fmtWait = (s: number) => { const h = Math.floor(s / 3600), m = Math.ceil((s % 3600) / 60); return h ? `${h} h${m ? ` ${String(m).padStart(2, '0')}` : ''}` : `${Math.max(1, m)} min`; };
+export const fmtWait = (s: number) => { const t = Math.ceil(s / 60), h = Math.floor(t / 60), m = t % 60; return h ? `${h} h${m ? ` ${String(m).padStart(2, '0')}` : ''}` : `${Math.max(1, m)} min`; };   // minutes arrondies au total (jamais « 47 h 60 »)
 
 /** Bonus (ou malus) temporaire d'une caractéristique ; un maximum déplace aussi sa réserve (jamais sous 0). */
 export async function applyBuff(db: any, charId: number, stat: string, delta: number, source: string, hours: number) {

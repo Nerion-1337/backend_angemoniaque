@@ -1,8 +1,13 @@
 import { RES3_BY_ID, RESOURCES3 } from '../src/game/resources3';
-import { test, expect } from 'vitest'; import { statUpgradeCost, pathEnergy, effectiveRank, walk, routeEnergy } from '../src/game/rules';
+import { test, expect } from 'vitest'; import { statUpgradeCost, upgradeTier, pathEnergy, effectiveRank, walk, routeEnergy } from '../src/game/rules';
 import { terrain, BURN_DAMAGE } from '../src/game/terrain'; import { RES_BY_ID } from '../src/game/resources'; import { RES2_BY_ID } from '../src/game/resources2';
 const r = { base_xp_cost: 50, numb_up: 10, multi_1: 1, multi_2: 2, multi_3: 3 };
 test('coût par paliers', () => { expect(statUpgradeCost(r, 0)).toBe(50); expect(statUpgradeCost(r, 10)).toBe(100); expect(statUpgradeCost(r, 99)).toBe(150); });
+test('paliers en nombre libre (multis) : le dernier vaut au-delà', () => {
+  const m = { base_xp_cost: 10, numb_up: 5, multis: [1, 2, 3, 5, 8] };
+  expect([0, 5, 10, 15, 20, 99].map(n => statUpgradeCost(m, n))).toEqual([10, 20, 30, 50, 80, 80]);
+  expect(upgradeTier(m, 24)).toBe(5); expect(upgradeTier(m, 4)).toBe(1); expect(upgradeTier({ base_xp_cost: 1, numb_up: 1, multis: ['1.5'] }, 9)).toBe(1);
+});
 test('diagonale = 1 case', () => expect(pathEnergy({ x: 0, y: 0 }, { x: 3, y: 3 })).toBe(3));
 test('chemin 8 directions', () => { expect(walk({ x: 0, y: 0 }, { x: 3, y: 1 })).toHaveLength(3); expect(routeEnergy({ x: 0, y: 0 }, { x: 2, y: 2 }, () => 2)).toBe(4); });
 test('surcharge divine', () => expect(effectiveRank(2, 3, { 3: 2, 4: 3 })).toBe(3));

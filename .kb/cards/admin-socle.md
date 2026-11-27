@@ -51,6 +51,7 @@ Les phases suivantes (bestiaire, cases, joueurs, divins, races) s'y branchent (c
 - Le tick rétablit aussi les rangs temporaires échus (card `rank-up`).
 - Le tick régénère aussi les gisements de ressources (card `deposits`).
 - Section « Améliorations » (`routes/admin/statCosts.ts`) : `GET /admin/content/stat-costs`, `PUT|DELETE /admin/content/stat-costs/{stat}` (stat_cost_rules : coût de base, améliorations par palier, ×palier 1/2/3) ; liste FERMÉE `UPGRADABLE` (la colonne est écrite telle quelle par l'amélioration) → 400 sinon ; sans ligne, la caractéristique ne s'améliore pas.
+- Paliers en nombre libre (migration 45) : `stat_cost_rules.multis` (1 à 20 multiplicateurs, le dernier vaut au-delà) ; l'ancien format multi_1..3 est accepté en entrée et converti ; `GET /characters/{id}/upgrades` renvoie `tier` et `tiers`.
 
 ## Gotchas
 - Jamais de `LATERAL` référençant la table cible d'un UPDATE (l'ancien tick échouait silencieusement) : sous-requête corrélée dans le SET.

@@ -4,13 +4,22 @@ import { pactCfg, pactAmount, applyBuff, defaultMaxPacts, fmtWait, CARD_SQL } fr
  * Pactes (migration 44, réglages admin « Pacte ») : un Humain et un Ange / Démon. L'Ange / le Démon choisit pour chaque pacte
  * une composition (`pact_tiers`) : XP / or par heure pour lui ; à l'activation par l'Humain, `percent` % de chaque
  * caractéristique choisie en admin passe de l'Ange / Démon à l'Humain (arrondi au supérieur) pendant `duration_h`, puis
- * réactivation possible après `cooldown_h`. L'Humain ne voit que le nom de la composition. Nombre de pactes par rang.
+ * réactivation possible `cooldown_h` après la FIN du bonus (jamais cumulé sur un même pacte ; deux pactes distincts se cumulent).
+ * L'Humain voit le nom, la durée et la recharge de sa composition. Nombre de pactes par rang.
+ * Migration 45 : une composition s'attribue au plus `max_assign` fois par Ange / Démon (NULL = illimité, toutes ses demandes
+ * et pactes comptés) ; la composition d'un pacte ne change qu'une fois toutes les 48 h (`tier_changed_at`).
  */
+export const TIER_CHANGE_H = 48;
 export const pacts = router();
 const ETHEREAL = ['demon', 'angel'];
 async function maxPactsOf(db: any, ch: any) {
   const { rows: [s] } = await db.query('SELECT current_rank, max_pacts FROM specializations WHERE id=$1', [ch.specialization_id]);
   return s.max_pacts ?? defaultMaxPacts(ch.race, s.current_rank);
+}
+/** Compositions encore attribuables par cet Ange / Démon (hors pacte `except`), dans l'ordre. */
+async function freeTiers(db: any, etherealId: number, except = 0) {
+  return (await db.query(`SELECT t.*, (SELECT count(*)::int FROM pacts p WHERE p.ethereal_id=$1 AND p.tier_id=t.id AND p.id<>$2) used FROM pact_tiers t ORDER BY t.sort, t.id`, [etherealId, except])).rows
+    .map((t: any) => ({ ...t, full: t.max_assign != null && t.used >= t.max_assign }));
 }
 const activeCount = async (db: any, ch: any) => (await db.query(`SELECT count(*)::int n FROM pacts WHERE active AND ${ch.race === 'human' ? 'human_id' : 'ethereal_id'}=$1`, [ch.id])).rows[0].n;
 async function checkLimits(db: any, ...who: any[]) {
@@ -22,20 +31,21 @@ def(pacts, 'post', '/pacts/request', z.object({ characterId: z.number(), targetP
   const meHuman = me.race === 'human', tHuman = t.race === 'human'; if (meHuman === tHuman || (!meHuman && !ETHEREAL.includes(me.race)) || (!tHuman && !ETHEREAL.includes(t.race))) fail(400, 'Un pacte lie un Humain à un Ange ou un Démon');
   const human = meHuman ? me : t, ethereal = meHuman ? t : me;
   if ((await db.query('SELECT 1 FROM pacts WHERE human_id=$1 AND ethereal_id=$2', [human.id, ethereal.id])).rowCount) fail(409, 'Une demande ou un pacte existe déjà entre vous');
-  const tier = (await db.query('SELECT id FROM pact_tiers ORDER BY sort, id LIMIT 1')).rows[0]?.id ?? null;
+  const tier = (await freeTiers(db, ethereal.id)).find((t: any) => !t.full)?.id ?? null;   // la plus basse encore attribuable
   const { rows: [r] } = await db.query("INSERT INTO pacts(human_id,ethereal_id,requested_by,active,status,tier_id) VALUES ($1,$2,$3,false,'pending',$4) RETURNING id", [human.id, ethereal.id, me.id, tier]);
   await log(db, me.id, `Demande de pacte envoyée à ${t.pseudo}`); await log(db, t.id, `Demande de pacte reçue de ${me.pseudo}`); return r;
 }));
 /** Pactes et demandes, avec la fiche publique de l'autre partie ; l'Ange/Démon reçoit le détail des compositions. */
 def(pacts, 'get', '/pacts/{characterId}', null, c => tx(async db => {
   const me = await ownChar(db, c, P(c, 'characterId')), human = me.race === 'human';
-  const { rows } = await db.query(`SELECT p.id, p.active, p.requested_by, p.tier_id, t.name tier_name,
+  const { rows } = await db.query(`SELECT p.id, p.active, p.requested_by, p.tier_id, t.name tier_name, t.duration_h::float, t.cooldown_h::float,
+      GREATEST(0, EXTRACT(EPOCH FROM p.tier_changed_at + make_interval(hours => ${TIER_CHANGE_H}) - now()))::int tier_change_in_s,
       GREATEST(0, EXTRACT(EPOCH FROM p.ready_at - now()))::int ready_in_s,
       (SELECT GREATEST(0, EXTRACT(EPOCH FROM max(b.expires_at) - now()))::int FROM temp_buffs b WHERE b.source='pact:'||p.id AND b.character_id=p.human_id) bonus_left_s,
       k.id partner_id, k.pseudo, k.race, k.race_name, k.rank_name, k.current_rank, k.guild
     FROM pacts p LEFT JOIN pact_tiers t ON t.id=p.tier_id JOIN (${CARD_SQL}) k ON k.id = CASE WHEN p.human_id=$1 THEN p.ethereal_id ELSE p.human_id END
     WHERE p.ethereal_id=$1 OR p.human_id=$1 ORDER BY p.id`, [me.id]);
-  const tiers = human ? [] : (await db.query('SELECT * FROM pact_tiers ORDER BY sort, id')).rows;
+  const tiers = human ? [] : await freeTiers(db, me.id);
   return { active: rows.filter((r: any) => r.active), incoming: rows.filter((r: any) => !r.active && r.requested_by !== me.id), outgoing: rows.filter((r: any) => !r.active && r.requested_by === me.id),
     tiers, stats: (await pactCfg()).stats, limit: { max: await maxPactsOf(db, me), used: await activeCount(db, me) } };
 }));
@@ -50,9 +60,14 @@ def(pacts, 'post', '/pacts/{id}/answer', z.object({ characterId: z.number(), acc
 /** Composition du pacte : choisie par l'Ange / le Démon, pacte par pacte (un bonus en cours n'est pas modifié). */
 def(pacts, 'post', '/pacts/{id}/tier', z.object({ characterId: z.number(), tierId: z.number().int() }), (c, b) => tx(async db => {
   const me = await ownChar(db, c, b.characterId);
-  if (!(await db.query('SELECT 1 FROM pact_tiers WHERE id=$1', [b.tierId])).rowCount) fail(404, 'Composition inconnue');
-  const r = await db.query('UPDATE pacts SET tier_id=$3 WHERE id=$1 AND ethereal_id=$2', [P(c, 'id'), me.id, b.tierId]);
-  if (!r.rowCount) fail(404, 'Pacte introuvable (seul l\'Ange ou le Démon choisit la composition)'); return { ok: true };
+  const { rows: [p] } = await db.query(`SELECT *, GREATEST(0, EXTRACT(EPOCH FROM tier_changed_at + make_interval(hours => ${TIER_CHANGE_H}) - now()))::int wait_s
+    FROM pacts WHERE id=$1 AND ethereal_id=$2 FOR UPDATE`, [P(c, 'id'), me.id]);
+  if (!p) fail(404, 'Pacte introuvable (seul l\'Ange ou le Démon choisit la composition)');
+  const t = (await freeTiers(db, me.id, p.id)).find((x: any) => x.id === b.tierId); if (!t) fail(404, 'Composition inconnue');
+  if (p.tier_id === b.tierId) return { ok: true };
+  if (p.wait_s > 0) fail(409, `Composition changée récemment : prochain changement dans ${fmtWait(p.wait_s)}`);
+  if (t.full) fail(409, `Composition « ${t.name} » déjà attribuée ${t.max_assign} fois (maximum)`);
+  await db.query('UPDATE pacts SET tier_id=$2, tier_changed_at=now() WHERE id=$1', [p.id, b.tierId]); return { ok: true };
 }));
 /** Annuler une demande envoyée ou résilier un pacte actif (chaque partie peut le faire). */
 def(pacts, 'delete', '/pacts/{id}/{characterId}', null, c => tx(async db => {
