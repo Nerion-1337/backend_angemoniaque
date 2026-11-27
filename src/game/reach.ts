@@ -32,6 +32,7 @@ export const actorElevation = (a: any) => (a.sm ? (a.loco?.flying ? FLY_LEVEL : 
 export async function targetElevation(db: any, t: { kind: string; id: number; row: any }) {
   if (t.kind === 'character') return mountElevation(await activeMount(db, t.id));
   if (t.kind === 'summon') return (await summonLoco(db, t.row))?.flying ? FLY_LEVEL : 0;
+  if (t.kind === 'building') return 0;
   const l: string[] = t.row.locomotion ?? []; return l.includes('air') ? FLY_LEVEL : 0;
 }
 /** Arme portée la plus longue (main principale ou seconde main) : { reach, fullAt, name } ; sans arme : portée 1. */

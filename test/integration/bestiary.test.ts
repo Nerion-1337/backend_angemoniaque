@@ -64,6 +64,9 @@ describe.skipIf(!process.env.DATABASE_URL)('Bestiaire phase 2 (loot, spawns, inv
     const st0 = await call('/admin/bestiary/status', undefined, T.adm.tk);
     await call(`/admin/players/${T.p.id}/stat`, { stat: 'agility', delta: 90 }, T.adm.tk);   // toucher ~91 % : le kill est quasi déterministe
     await call(`/admin/players/${T.p.id}/stat`, { stat: 'range', delta: 10 }, T.adm.tk);    // portée ≥ trajet : jamais de déplacement (donc jamais de « chemin bloqué »)
+    // la portée du personnage ne sert qu'aux armes à distance (migration 46) : un arc équipé
+    const bow = await call('/admin/content/items', { name: `Arc ${s}`, slot: 'weapon_main', weapon_damage: 1, reach: 1, ranged: true }, T.adm.tk); expect(bow.status).toBe(200);
+    { const { pool } = await import('../../src/db/pool.js'); await pool.query("INSERT INTO game_schema.character_items(character_id,item_id,equipped_slot) VALUES ($1,$2,'weapon_main')", [T.p.id, bow.j.id]); }
     const cell = await call(`/admin/players/${T.p.id}/teleport`, { map: 1, x: T.inst1cell[0] + 1, y: T.inst1cell[1] }, T.adm.tk);
     expect(cell.status).toBe(200);
     let killed = false;

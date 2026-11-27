@@ -5,6 +5,8 @@ export const buildingRoutes = router();
 const Building = z.object({
   name: z.string().max(80), kind: z.string().max(30).optional(), invulnerable: z.boolean().optional(), owner_id: z.number().int().optional(),
   structure: z.number().int().optional(), size: z.number().int().optional(),
+  /** XP gagnée par le joueur à chaque coup porté (touché) contre cette structure (migration 47) ; une structure invulnérable n'est pas attaquable. */
+  xp_hit: z.number().int().min(0).max(1e6).optional(),
   prerequisites: z.record(z.any()).optional(), data: z.record(z.any()).optional(),
   /** Lot 4 : armure de la structure ; case occupable ; bonus de l'occupant ; attaques possibles contre l'occupant. */
   armor: z.number().int().min(0).optional(), occupiable: z.boolean().optional(),

@@ -1,3 +1,4 @@
+import { combatDefaults } from '../../game/xp.js';
 import { def, router, z, P } from '../../lib/route.js'; import { pool, fail } from '../../lib/db.js';
 import { audit } from '../../lib/audit.js'; import { Kit, checkKit } from '../../game/startKit.js'; import { Requirements, checkReq } from '../../game/rankUp.js'; import { bumpContent } from '../../game/content.js'; import { rankTable } from '../../game/xp.js';
 export const raceRoutes = router();
@@ -62,8 +63,15 @@ def(raceRoutes, 'get', '/admin/content/ranks', null, async c => {
 });
 /** XP de combat et entraînement par rang (migration 46) : XP quand le joueur frappe un autre joueur, XP du défenseur qui esquive,
  *  coût en énergie et XP d'un entraînement (`POST /characters/{id}/train`, XP 0 = pas d'entraînement). */
-const COMBAT_XP = { xp_hit_player: z.number().int().min(0).max(1e6).optional(), xp_dodge: z.number().int().min(0).max(1e6).optional(),
-  train_energy: z.number().int().min(0).max(1e4).optional(), train_xp: z.number().int().min(0).max(1e6).optional() };
+const COMBAT_XP = { xp_hit_player: z.number().int().min(0).max(1e6).nullable().optional(), xp_dodge: z.number().int().min(0).max(1e6).nullable().optional(),
+  train_energy: z.number().int().min(0).max(1e4).nullable().optional(), train_xp: z.number().int().min(0).max(1e6).nullable().optional() };   // null = valeur générale
+/** Valeurs générales (game_config.combat_xp, migration 47) : appliquées à chaque race et chaque rang qui ne précise rien. */
+const CombatDefaults = z.object({ xp_hit_player: z.number().int().min(0).max(1e6), xp_dodge: z.number().int().min(0).max(1e6), train_energy: z.number().int().min(0).max(1e4), train_xp: z.number().int().min(0).max(1e6) });
+def(raceRoutes, 'get', '/admin/content/combat-xp', null, async () => combatDefaults());
+def(raceRoutes, 'put', '/admin/content/combat-xp', CombatDefaults, async (c, b) => {
+  await pool.query("INSERT INTO game_config(key,value) VALUES ('combat_xp',$1) ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value, updated_at=now()", [JSON.stringify(b)]);
+  await bumpContent(); await audit(c, 'config.combat_xp', 'config', undefined, null, b); return b;
+});
 def(raceRoutes, 'post', '/admin/content/ranks', z.object({
   race: z.string().max(40), name: z.string().max(60), current_rank: z.number().int().positive(),
   max_population_percent: z.number().min(0).max(100).default(100), gain_xp_hour: z.number().int().optional(),
@@ -84,12 +92,12 @@ def(raceRoutes, 'post', '/admin/content/ranks', z.object({
 def(raceRoutes, 'put', '/admin/content/ranks/{id}', z.record(z.any()), async (c, b) => {
   const ALLOWED = ['race', 'name', 'current_rank', 'max_population_percent', 'gain_xp_hour', 'hp_max', 'recovery', 'see', 'strength', 'agility', 'energy_max', 'divine_energy_max', 'prereq_xp', 'multipliers', 'evolution', ...Object.keys(COMBAT_XP)];
   const bad = z.object(COMBAT_XP).safeParse(b); if (!bad.success) fail(400, `${bad.error.issues[0].path.join('.')} : ${bad.error.issues[0].message}`);
-  const keys = Object.keys(b).filter(k => ALLOWED.includes(k) && b[k] !== undefined);
+  const keys = Object.keys(b).filter(k => ALLOWED.includes(k) && b[k] !== undefined && (b[k] !== null || k in COMBAT_XP));
   if (!keys.length) fail(400, 'Aucun champ à modifier');
   if (b.race !== undefined && (await pool.query('SELECT 1 FROM races WHERE key=$1', [b.race])).rowCount !== 1) fail(400, 'Race inconnue');
   const { rows: [row] } = await pool.query(
     `UPDATE specializations SET ${keys.map((k, i) => `${k}=$${i + 1}`).join(',')} WHERE id=$${keys.length + 1} RETURNING *`,
-    [...keys.map(k => (typeof b[k] === 'object' ? JSON.stringify(b[k]) : b[k])), P(c, 'id')]);
+    [...keys.map(k => (b[k] !== null && typeof b[k] === 'object' ? JSON.stringify(b[k]) : b[k])), P(c, 'id')]);
   if (!row) fail(404, 'Rang inconnu');
   await bumpContent(); await audit(c, 'rank.update', 'rank', P(c, 'id'), null, b);
   return row;

@@ -39,16 +39,24 @@ export async function weaponXp(db: any, charId: number): Promise<number> {
   const { rows: [r] } = await db.query("SELECT COALESCE(sum(i.xp_use),0)::int n FROM character_items ci JOIN items i ON i.id=ci.item_id WHERE ci.character_id=$1 AND ci.equipped_slot IN ('weapon_main','weapon_off')", [charId]);
   return r.n;
 }
-/** Réglages de combat / entraînement du rang d'un personnage (migration 46, admin « Races & Rangs »). */
-export async function rankCombat(db: any, charId: number) {
-  const { rows: [r] } = await db.query(`SELECT COALESCE(s.xp_hit_player,0) xp_hit_player, COALESCE(s.xp_dodge,0) xp_dodge, COALESCE(s.train_energy,0) train_energy,
-    COALESCE(s.train_xp,0) train_xp FROM characters c LEFT JOIN specializations s ON s.id=c.specialization_id WHERE c.id=$1`, [charId]);
-  return r ?? { xp_hit_player: 0, xp_dodge: 0, train_energy: 0, train_xp: 0 };
+export const COMBAT_KEYS = ['xp_hit_player', 'xp_dodge', 'train_energy', 'train_xp'] as const;
+export type CombatXp = Record<typeof COMBAT_KEYS[number], number>;
+/** Valeurs GÉNÉRALES (game_config.combat_xp, migration 47), appliquées à tout rang qui ne précise rien. */
+export const combatDefaults = async (): Promise<CombatXp> => {
+  const c = (await cfgAll()).combat_xp ?? {};
+  return Object.fromEntries(COMBAT_KEYS.map(k => [k, Math.max(0, Math.trunc(Number(c[k]) || 0))])) as CombatXp;
+};
+/** Réglages de combat / entraînement d'un personnage : valeur de son rang si précisée (non NULL), sinon la valeur générale. */
+export async function rankCombat(db: any, charId: number): Promise<CombatXp> {
+  const def = await combatDefaults();
+  const { rows: [r] } = await db.query(`SELECT s.xp_hit_player, s.xp_dodge, s.train_energy, s.train_xp FROM characters c LEFT JOIN specializations s ON s.id=c.specialization_id WHERE c.id=$1`, [charId]);
+  return Object.fromEntries(COMBAT_KEYS.map(k => [k, r?.[k] ?? def[k]])) as CombatXp;
 }
-/** XP de base d'un coup PORTÉ (touché) : joueur → `xp_hit_player` du rang de l'attaquant ; monstre → son `xp_hit` ; invocation → `xp_hit` de son type. */
+/** XP de base d'un coup PORTÉ (touché) : joueur → `xp_hit_player` du rang de l'attaquant ; monstre → son `xp_hit` ; invocation → `xp_hit` de son type ;
+ *  structure → son `xp_hit` (migration 47). */
 export async function hitXp(db: any, attackerId: number, t: { kind: string; row: any }) {
   if (t.kind === 'character') return (await rankCombat(db, attackerId)).xp_hit_player;
-  if (t.kind === 'monster') return Number(t.row.xp_hit ?? 0);
+  if (t.kind === 'monster' || t.kind === 'building') return Number(t.row.xp_hit ?? 0);
   if (t.kind === 'summon' && t.row.monster_id) return Number((await db.query('SELECT xp_hit FROM monsters WHERE id=$1', [t.row.monster_id])).rows[0]?.xp_hit ?? 0);
   return 0;
 }

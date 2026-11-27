@@ -29,7 +29,9 @@ Lot du 2026-11-27 (migration 46) : deux entités par case (une au sol, une dans 
 - `GET /map/{id}/cell` : `entities` (sol d'abord) et `entity` (celle de `?air=0|1`, sinon la première) ; `/combat/preview/...?air=` et `targetAt(…, air)` choisissent la couche.
 - Récolte : refusée à une créature contrôlée (409).
 - Portée d'attaque (`attackRange`) : arme de mêlée = sa portée seule (épée 1, lance 2) ; arme à distance (`items.ranged`) = portée du personnage (hauteur, bâtiment, passifs) + arme − 1 ; sans arme : 1 ; créature contrôlée : sa portée. Occupant protégé : attaque « distance » si arme à distance, sinon « mêlée ». `/characters/{id}` expose `weapon` et `attack_range`.
-- XP au coup TOUCHÉ (en plus de l'XP d'arme) : joueur → `xp_hit_player` du rang de l'attaquant ; monstre → son `xp_hit` ; invocation → `xp_hit` de son type ; pondérée par l'écart de rang. Esquive d'un joueur : le défenseur gagne `xp_dodge` de son rang.
+- XP au coup TOUCHÉ (en plus de l'XP d'arme) : joueur → `xp_hit_player` du rang de l'attaquant ; monstre → son `xp_hit` ; invocation → `xp_hit` de son type ; structure → son `xp_hit` ; pondérée par l'écart de rang. Esquive d'un joueur : le défenseur gagne `xp_dodge` de son rang.
+- Valeurs générales (migration 47, `game_config.combat_xp`, `GET|PUT /admin/content/combat-xp`) : `xp_hit_player`, `xp_dodge`, `train_energy`, `train_xp` s'appliquent à tout rang dont la colonne est NULL ; la valeur du rang (même 0) l'emporte (`rankCombat`). `PUT /admin/content/ranks/{id}` accepte null (= revenir à la valeur générale).
+- Structures (migration 47) : `/combat/attack` avec `targetBuildingId` ; invulnérable → 403, la sienne → 400, zone sacrée → 403 ; dégâts − armure sur `structure_current` (NULL = `structure`) ; à 0 : retirée de la carte, `structure_current` remis à NULL (la ligne reste) ; pas de sorts d'objets au coup sur une structure ; `GET /map` expose `shp`, `smax`, `building_owner`.
 - Entraînement `POST /characters/{id}/train` : rang avec `train_xp` > 0, personnage (pas une créature), énergie ≥ `train_energy` ; dépense puis gain d'XP (sans pondération).
 - Classement : `has_portrait` par ligne ; `GET /ranking/portrait/{pseudo}` (public) renvoie l'image (png/jpeg/webp/gif décodée du data URL), cache 5 min, 404 sinon / joueur bloqué.
 - Paramètre d'URL non entier → 400 (`P`).
@@ -37,7 +39,7 @@ Lot du 2026-11-27 (migration 46) : deux entités par case (une au sol, une dans 
 ## Gotchas
 - `positions.air` n'est jamais écrit à la main : le trigger le recalcule à chaque INSERT/UPDATE de la ligne (et quand `riding_summon_id` ou `locomotion` change).
 - Monter un volant sur une case où un autre volant se tient violerait l'unicité (cas rare, non géré finement).
-- Les structures (bâtiments) ne sont pas attaquables : pas d'XP au coup pour elles.
+- Une structure de `structure` 0 tombe au premier coup touché (seule l'option invulnérable protège).
 
 ## Tests
-`test/integration/layersCombat.test.ts` (couches, récolte, descente, portée, XP joueur / esquive / monstre, entraînement, avatar) ; `test/rules.test.ts` (attackRange).
+`test/integration/layersCombat.test.ts` (couches, récolte, descente, portée, XP joueur / esquive / monstre, entraînement, avatar, valeurs générales, structures) ; `test/rules.test.ts` (attackRange).

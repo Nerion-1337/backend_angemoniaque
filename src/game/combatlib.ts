@@ -1,12 +1,16 @@
 import { die, refreshSurcharge, grantDivine } from './divine.js'; import { gearStats } from './stats.js';
 import { rollLoot } from './loot.js'; import { gainXp } from './xp.js'; import { occupiableAt } from './buildingCell.js'; import { log } from '../lib/db.js';
-export type Target = { kind: 'character' | 'monster' | 'summon'; id: number; row: any; pos: any; armor: number; magicArmor: number; agility: number; name: string };
+export type Target = { kind: 'character' | 'monster' | 'summon' | 'building'; id: number; row: any; pos: any; armor: number; magicArmor: number; agility: number; name: string };
 export async function loadTarget(db: any, p: any): Promise<Target | null> {
   if (p.character_id) { const { rows: [c] } = await db.query('SELECT * FROM characters WHERE id=$1', [p.character_id]); const g = await gearStats(db, c), bc = await occupiableAt(db, p.map_id, p.coord_x, p.coord_y); return { kind: 'character', id: c.id, row: c, pos: p, armor: g.armor + (bc?.bonus_armor ?? 0), magicArmor: g.magicArmor + (bc?.bonus_magic_armor ?? 0), agility: g.agility, name: c.pseudo }; }
   if (p.monsters_id) {   // armures du monstre + celles des objets qu'il porte (monster_equips)
     const { rows: [m] } = await db.query('SELECT * FROM monsters WHERE id=$1', [p.monsters_id]);
     const { rows: [e] } = await db.query('SELECT COALESCE(sum(i.armor),0)::int a, COALESCE(sum(i.magic_armor),0)::int ma FROM monster_equips me JOIN items i ON i.id=me.item_id WHERE me.monster_id=$1', [m.id]);
     return { kind: 'monster', id: m.id, row: m, pos: p, armor: (m.armor ?? 0) + (e?.a ?? 0), magicArmor: (m.magic_armor ?? 0) + (e?.ma ?? 0), agility: m.agility, name: m.name };
+  }
+  if (p.building_id) {   // structure (migration 47) : points de structure courants, armure, aucune agilité
+    const { rows: [b] } = await db.query('SELECT *, COALESCE(structure_current, structure) hp_current FROM buildings WHERE id=$1', [p.building_id]);
+    return { kind: 'building', id: b.id, row: b, pos: p, armor: b.armor ?? 0, magicArmor: 0, agility: 0, name: b.name };
   }
   if (p.summon_id) { const { rows: [s] } = await db.query('SELECT * FROM summons WHERE id=$1', [p.summon_id]); return { kind: 'summon', id: s.id, row: s, pos: p, armor: s.armor, magicArmor: s.magic_armor ?? 0, agility: s.agility, name: s.name }; }
   return null;
@@ -18,7 +22,13 @@ export async function targetAt(db: any, mapId: number, x: number, y: number, air
 }
 /** Applique des dégâts ; gère la mort (joueur → Monde des Morts + objets divins, boss → butin au vainqueur, invocation → disparaît). */
 export async function applyDamage(db: any, t: Target, dmg: number, killerCharId: number) {
-  const hp = Math.max(0, t.row.hp_current - dmg), tbl = { character: 'characters', monster: 'monsters', summon: 'summons' }[t.kind];
+  const hp = Math.max(0, t.row.hp_current - dmg);
+  if (t.kind === 'building') {   // structure détruite : retirée de la carte, points de structure remis à neuf (la ligne sert de modèle)
+    if (hp > 0) { await db.query('UPDATE buildings SET structure_current=$2 WHERE id=$1', [t.id, hp]); return { hp, killed: false }; }
+    await db.query('DELETE FROM positions WHERE building_id=$1', [t.id]); await db.query('UPDATE buildings SET structure_current=NULL WHERE id=$1', [t.id]);
+    await log(db, killerCharId, `Structure détruite : ${t.name}`); return { hp: 0, killed: true };
+  }
+  const tbl = { character: 'characters', monster: 'monsters', summon: 'summons' }[t.kind];
   await db.query(`UPDATE ${tbl} SET hp_current=$2 WHERE id=$1`, [t.id, hp]); const killed = hp <= 0;
   if (killed) {
     if (t.kind === 'character') await die(db, t.row, killerCharId);

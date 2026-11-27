@@ -29,11 +29,15 @@ def(combat, 'get', '/combat/preview/{characterId}/{x}/{y}', null, c => tx(async 
   return { hitChance: computeHitChance(at.agility, t.agility), dodge: 100 - computeHitChance(at.agility, t.agility),
     range: r.range, distance: Math.round(r.d * 100) / 100, height: r.dh, reachable: r.maxGround >= 1, inRange: r.d <= r.range, power: Math.round(powerAt(Math.min(r.d, r.range), r.range, r.w.fullAt, r.w.start, r.w.end)) };
 }));
-def(combat, 'post', '/combat/attack', z.object({ characterId: z.number(), targetCharacterId: z.number().optional(), targetMonsterId: z.number().optional(), targetSummonId: z.number().optional() }), (c, b) => tx(async db => {
+def(combat, 'post', '/combat/attack', z.object({ characterId: z.number(), targetCharacterId: z.number().optional(), targetMonsterId: z.number().optional(), targetSummonId: z.number().optional(), targetBuildingId: z.number().optional() }), (c, b) => tx(async db => {
   const me = await ownChar(db, c, b.characterId), a = await actor(db, me);
-  const col = b.targetCharacterId ? ['character_id', b.targetCharacterId] : b.targetMonsterId ? ['monsters_id', b.targetMonsterId] : b.targetSummonId ? ['summon_id', b.targetSummonId] : fail(400, 'Cible manquante');
+  const col = b.targetCharacterId ? ['character_id', b.targetCharacterId] : b.targetMonsterId ? ['monsters_id', b.targetMonsterId] : b.targetSummonId ? ['summon_id', b.targetSummonId] : b.targetBuildingId ? ['building_id', b.targetBuildingId] : fail(400, 'Cible manquante');
   const { rows: [tp] } = await db.query(`SELECT * FROM positions WHERE ${col[0]}=$1`, [col[1]]); if (!tp || tp.map_id !== a.mp.map_id) fail(409, 'Cible introuvable sur cette carte');
   const t = (await loadTarget(db, tp))!; if (t.kind === 'character' && t.id === me.id) fail(400, 'Vous ne pouvez pas vous attaquer');
+  if (t.kind === 'building') {   // structures (migration 47) : attaquables sauf invulnérables, jamais les siennes
+    if (t.row.invulnerable) fail(403, `${t.name} est invulnérable`);
+    if (t.row.owner_id === me.id) fail(400, 'Vous ne pouvez pas attaquer votre propre structure');
+  }
   if (t.kind !== 'monster' && (inSafeZone(a.mp.map_id, a.mp.coord_x, a.mp.coord_y) || inSafeZone(tp.map_id, tp.coord_x, tp.coord_y))) fail(403, 'Zone sacrée : aucun combat entre joueurs');
   const cost = ATTACK_COST, at = await attacker(db, me, a);
   let rg = await reachOf(db, me, a, t, tp);
@@ -54,7 +58,7 @@ def(combat, 'post', '/combat/attack', z.object({ characterId: z.number(), target
   const xp = !a.sm ? await gainXp(db, me.id, await weaponXp(db, me.id), t) + await gainXp(db, me.id, await hitXp(db, me.id, t), t) : 0;
   // Sorts des objets portés (lot D) : arme → au coup porté (le héros, pas une invocation contrôlée) ; armure / bouclier → à l'attaque reçue.
   const procs: string[] = [];
-  if (!a.sm && !r.killed) procs.push(...await triggerItemSpells(db, me, { ...t, row: { ...t.row, hp_current: r.hp } }, 'on_hit'));
+  if (!a.sm && !r.killed && t.kind !== 'building') procs.push(...await triggerItemSpells(db, me, { ...t, row: { ...t.row, hp_current: r.hp } }, 'on_hit'));
   if (t.kind === 'character' && !r.killed) { const { rows: [mp] } = await db.query('SELECT * FROM positions WHERE character_id=$1', [me.id]); const self = a.sm ? null : await loadTarget(db, mp); if (self) procs.push(...await triggerItemSpells(db, t.row, self, 'on_struck')); }
   if (procs.length) await log(db, me.id, procs.join(' ; ').slice(0, 300));
   await log(db, me.id, `Attaque sur ${t.name} : -${dmg} PV${power < 100 ? ` (puissance ${power} % à ${Math.round(rg.d * 10) / 10} cases)` : ''}`); if (t.kind === 'character') await log(db, t.id, `Attaqué par ${at.name} : -${dmg} PV`); await trimLog(db, me.id);

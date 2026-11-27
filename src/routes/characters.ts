@@ -63,7 +63,8 @@ def(characters, 'post', '/characters/{id}/rank-up', null, (c) => tx(async db => 
 const summonLook = async (db: any, sm: any) => (sm.monster_id ? (await db.query('SELECT model, icon, locomotion FROM monsters WHERE id=$1', [sm.monster_id])).rows[0] : null) ?? {};
 def(characters, 'get', '/characters/{id}', null, (c) => tx(async db => {
   const ch = await ownChar(db, c, P(c, 'id')), a = await actor(db, ch), st = await gearStats(db, ch), mount = await activeMount(db, ch.id);
-  const { rows: [s] } = await db.query('SELECT name rank_name,current_rank,train_energy,train_xp FROM specializations WHERE id=$1', [ch.specialization_id]);
+  const { rows: [s] } = await db.query('SELECT name rank_name,current_rank FROM specializations WHERE id=$1', [ch.specialization_id]);
+  const rc = await rankCombat(db, ch.id); Object.assign(s, { train_energy: rc.train_energy, train_xp: rc.train_xp });   // rang, sinon valeur générale
   const { rows: [m] } = await db.query('SELECT width,height FROM maps WHERE id=$1', [a.mp.map_id]); const { rows: [hp] } = await db.query('SELECT * FROM positions WHERE character_id=$1', [ch.id]);
   // Invocations : position (aucune si montée), montable / montée, allure et déplacement de leur type (migration 43).
   const summons = (await db.query(`SELECT s.*, p.coord_x x, p.coord_y y, COALESCE(t.mountable, false) mountable, (s.id = $2) ridden, t.model, t.icon, t.locomotion, COALESCE(t.size, 1) size

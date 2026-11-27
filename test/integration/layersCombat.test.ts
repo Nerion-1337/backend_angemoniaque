@@ -21,9 +21,11 @@ describe.skipIf(!process.env.DATABASE_URL)('Couches, portée, XP de combat, entr
     T.a = await mk('lca'); T.b = await mk('lcb');
     T.spec = (await pool.query('SELECT specialization_id s FROM characters WHERE id=$1', [T.a.id])).rows[0].s;
     T.spec0 = (await pool.query('SELECT xp_hit_player, xp_dodge, train_energy, train_xp FROM specializations WHERE id=$1', [T.spec])).rows[0];
+    T.gen0 = (await call('/admin/content/combat-xp', undefined, T.adm)).j; T.buildings = [];
   });
   afterAll(async () => {
-    await call(`/admin/content/ranks/${T.spec}`, T.spec0, T.adm, 'PUT');
+    await call(`/admin/content/ranks/${T.spec}`, T.spec0, T.adm, 'PUT'); await call('/admin/content/combat-xp', T.gen0, T.adm, 'PUT');
+    for (const id of T.buildings) { await pool.query('DELETE FROM positions WHERE building_id=$1', [id]); await pool.query('DELETE FROM buildings WHERE id=$1', [id]); }
     for (const id of T.monsters) { await pool.query("DELETE FROM positions WHERE monsters_id IN (SELECT id FROM monsters WHERE id=$1 OR data->>'prototype'=$1::text)", [id]); await pool.query("DELETE FROM monsters WHERE data->>'prototype'=$1::text", [id]); await pool.query('DELETE FROM monsters WHERE id=$1', [id]); }
   });
 
@@ -115,5 +117,38 @@ describe.skipIf(!process.env.DATABASE_URL)('Couches, portée, XP de combat, entr
     expect(Buffer.from(await r.arrayBuffer()).subarray(1, 4).toString()).toBe('PNG');
     expect((await app.request(`/ranking/portrait/lcb${s}`)).status).toBe(404);
     const row = (await call(`/ranking?around=lca${s}`)).j.rows.find((x: any) => x.pseudo === `lca${s}`); expect(row.has_portrait).toBe(true);
+  });
+
+  test('valeurs générales : appliquées à tout rang qui ne précise rien (null), la valeur du rang prime', async () => {
+    expect((await call('/admin/content/combat-xp', { xp_hit_player: 1, xp_dodge: 1, train_energy: 2, train_xp: 5 }, T.adm, 'PUT')).status).toBe(200);
+    expect((await call('/admin/content/combat-xp', { xp_hit_player: -1, xp_dodge: 1, train_energy: 2, train_xp: 5 }, T.adm, 'PUT')).status).toBe(400);
+    expect((await call(`/admin/content/ranks/${T.spec}`, { train_energy: null, train_xp: null }, T.adm, 'PUT')).j).toMatchObject({ train_energy: null, train_xp: null });
+    await pool.query('UPDATE characters SET energy_current=10, xp=0, controlled_summon_id=NULL WHERE id=$1', [T.a.id]);
+    expect((await call(`/characters/${T.a.id}`, undefined, T.a.tk)).j.rank).toMatchObject({ train_energy: 2, train_xp: 5 });
+    expect((await call(`/characters/${T.a.id}/train`, undefined, T.a.tk, 'POST')).j).toMatchObject({ xp: 5, energy: 2 });
+    await call(`/admin/content/ranks/${T.spec}`, { train_xp: 9 }, T.adm, 'PUT');   // le rang précise l'XP, l'énergie reste générale
+    expect((await call(`/characters/${T.a.id}/train`, undefined, T.a.tk, 'POST')).j).toMatchObject({ xp: 9, energy: 2 });
+  });
+
+  test('structures : attaquables sauf invulnérables (et jamais les siennes) ; XP au coup ; détruite à 0', async () => {
+    const c = await spot(s + 77); await tp(T.a.id, c);
+    const mk = async (extra: any) => { const r = await call('/admin/content/buildings', { name: `Pal ${s}-${T.buildings.length}`, kind: 'wall', structure: 12, ...extra }, T.adm); expect(r.status, JSON.stringify(r.j)).toBe(200); T.buildings.push(r.j.id); return r.j; };
+    const inv = await mk({ invulnerable: true }), wall = await mk({ xp_hit: 4 }), mine = await mk({});
+    expect(wall.xp_hit).toBe(4);
+    await pool.query('UPDATE buildings SET owner_id=$2 WHERE id=$1', [wall.id, T.b.id]); await pool.query('UPDATE buildings SET owner_id=$2 WHERE id=$1', [mine.id, T.a.id]);
+    for (const [b, dx] of [[inv, 1], [wall, -1], [mine, 0]] as const) await pool.query('INSERT INTO positions(map_id,coord_x,coord_y,building_id) VALUES (3,$1,$2,$3)', [c.x + dx, c.y + (dx === 0 ? 1 : 0), b.id]);
+    expect((await call('/combat/attack', { characterId: T.a.id, targetBuildingId: inv.id }, T.a.tk)).status).toBe(403);
+    expect((await call('/combat/attack', { characterId: T.a.id, targetBuildingId: mine.id }, T.a.tk)).status).toBe(400);
+    const xp = async () => (await pool.query('SELECT xp FROM characters WHERE id=$1', [T.a.id])).rows[0].xp;
+    let destroyed = false, gained = 0;
+    for (let i = 0; i < 40 && !destroyed; i++) {
+      await pool.query('UPDATE characters SET energy_current=100, agility=500 WHERE id=$1', [T.a.id]);
+      const x0 = await xp(), r = await call('/combat/attack', { characterId: T.a.id, targetBuildingId: wall.id }, T.a.tk); expect(r.status, JSON.stringify(r.j)).toBe(200);
+      if (!r.j.missed) gained = Math.max(gained, (await xp()) - x0);
+      destroyed = r.j.killed;
+    }
+    expect(destroyed).toBe(true); expect(gained).toBeGreaterThanOrEqual(4);
+    expect((await pool.query('SELECT 1 FROM positions WHERE building_id=$1', [wall.id])).rowCount).toBe(0);
+    expect((await pool.query('SELECT structure_current FROM buildings WHERE id=$1', [wall.id])).rows[0].structure_current).toBeNull();
   });
 });

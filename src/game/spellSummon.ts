@@ -11,8 +11,8 @@ import { loadTarget, type Target } from './combatlib.js';
 /** Copie un bâtiment modèle (toutes ses caractéristiques et ses sorts liés) sur une case, au nom du propriétaire. */
 export async function copyBuilding(db: any, templateId: number, ownerId: number, mapId: number, x: number, y: number) {
   const { rows: [bd] } = await db.query(
-    `INSERT INTO buildings(name,kind,owner_id,invulnerable,data,structure,size,prerequisites,armor,occupiable,occupant_attack,bonus_armor,bonus_magic_armor,bonus_see,bonus_range)
-     SELECT name,kind,$2,false,data,structure,size,prerequisites,armor,occupiable,occupant_attack,bonus_armor,bonus_magic_armor,bonus_see,bonus_range FROM buildings WHERE id=$1 RETURNING id, name`, [templateId, ownerId]);
+    `INSERT INTO buildings(name,kind,owner_id,invulnerable,data,structure,size,prerequisites,armor,occupiable,occupant_attack,bonus_armor,bonus_magic_armor,bonus_see,bonus_range,xp_hit)
+     SELECT name,kind,$2,false,data,structure,size,prerequisites,armor,occupiable,occupant_attack,bonus_armor,bonus_magic_armor,bonus_see,bonus_range,xp_hit FROM buildings WHERE id=$1 RETURNING id, name`, [templateId, ownerId]);
   if (!bd) fail(404, 'Bâtiment modèle inconnu');
   await db.query("INSERT INTO entity_spells(kind,ref_id,spell_id,mode) SELECT 'building',$2,spell_id,mode FROM entity_spells WHERE kind='building' AND ref_id=$1", [templateId, bd.id]);
   await db.query('INSERT INTO positions(map_id,coord_x,coord_y,building_id) VALUES ($1,$2,$3,$4)', [mapId, x, y, bd.id]);
