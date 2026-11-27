@@ -5,7 +5,9 @@ export function def(app: any, method: 'get'|'post'|'put'|'delete', path: string,
   app.openapi(createRoute({ method, path, request: schema ? { body: { content: { 'application/json': { schema } } } } : {}, responses: { 200: { description: 'ok' } } }),
     async (c: any) => c.json(await handler(c, schema ? c.req.valid('json') : undefined)));
 }
-export const P = (c: any, k: string) => Number(c.req.param(k));
+import { fail } from './db.js';
+/** Paramètre d'URL entier ; sinon 400 (ex. « undefined » envoyé par un client) au lieu d'une erreur SQL 500. */
+export const P = (c: any, k: string) => { const v = Number(c.req.param(k)); if (!Number.isSafeInteger(v)) fail(400, `Paramètre « ${k} » invalide`); return v; };
 /** Routeur dont les erreurs de validation Zod sont renvoyées en {error:"message lisible"} (HTTP 400). */
 import { OpenAPIHono } from '@hono/zod-openapi';
 export const router = () => new OpenAPIHono({ defaultHook: (r: any, c: any) => {
