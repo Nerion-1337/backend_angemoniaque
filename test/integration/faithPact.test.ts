@@ -26,7 +26,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Classement, foi et pactes', () => {
   test('classement public : par rang puis XP, paginé ; « around » ouvre la page du joueur', async () => {
     const r = await call('/ranking?size=5'); expect(r.status).toBe(200);
     expect(r.j).toMatchObject({ page: 1, size: 5 }); expect(r.j.rows.length).toBeLessThanOrEqual(5);
-    expect(Object.keys(r.j.rows[0]).sort()).toEqual(['current_rank', 'guild', 'pos', 'pseudo', 'race', 'race_name', 'rank_name']);
+    expect(Object.keys(r.j.rows[0]).sort()).toEqual(['current_rank', 'guild', 'has_portrait', 'pos', 'pseudo', 'race', 'race_name', 'rank_name']);
     for (let i = 1; i < r.j.rows.length; i++) expect(r.j.rows[i].current_rank).toBeLessThanOrEqual(r.j.rows[i - 1].current_rank);
     const me = await call(`/ranking?size=5&around=${T.fid.pseudo}`); expect(me.j.rows.some((x: any) => x.pseudo === T.fid.pseudo)).toBe(true);
     expect(me.j.page).toBe(Math.ceil(me.j.position / 5));

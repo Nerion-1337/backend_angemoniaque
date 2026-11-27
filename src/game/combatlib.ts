@@ -11,8 +11,9 @@ export async function loadTarget(db: any, p: any): Promise<Target | null> {
   if (p.summon_id) { const { rows: [s] } = await db.query('SELECT * FROM summons WHERE id=$1', [p.summon_id]); return { kind: 'summon', id: s.id, row: s, pos: p, armor: s.armor, magicArmor: s.magic_armor ?? 0, agility: s.agility, name: s.name }; }
   return null;
 }
-export async function targetAt(db: any, mapId: number, x: number, y: number) {
-  const { rows: [p] } = await db.query('SELECT * FROM positions WHERE map_id=$1 AND coord_x=$2 AND coord_y=$3 AND item_id IS NULL AND (character_id IS NOT NULL OR monsters_id IS NOT NULL OR summon_id IS NOT NULL)', [mapId, x, y]);
+/** Cible sur une case ; `air` (migration 46) choisit la couche quand deux entités s'y tiennent (sinon : celle au sol d'abord). */
+export async function targetAt(db: any, mapId: number, x: number, y: number, air?: boolean) {
+  const { rows: [p] } = await db.query('SELECT * FROM positions WHERE map_id=$1 AND coord_x=$2 AND coord_y=$3 AND item_id IS NULL AND (character_id IS NOT NULL OR monsters_id IS NOT NULL OR summon_id IS NOT NULL) AND ($4::boolean IS NULL OR air=$4) ORDER BY air LIMIT 1', [mapId, x, y, air ?? null]);
   return p ? loadTarget(db, p) : null;
 }
 /** Applique des dégâts ; gère la mort (joueur → Monde des Morts + objets divins, boss → butin au vainqueur, invocation → disparaît). */

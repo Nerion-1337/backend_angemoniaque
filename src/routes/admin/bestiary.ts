@@ -1,6 +1,6 @@
 import { def, router, z, P } from '../../lib/route.js'; import { pool, fail } from '../../lib/db.js';
 import { audit } from '../../lib/audit.js'; import { bumpContent } from '../../game/content.js';
-import { terrain } from '../../game/terrain.js'; import { attachDivine } from '../../game/respawn.js';
+import { terrain } from '../../game/terrain.js'; import { cellTaken, isAirLoco } from '../../game/layers.js'; import { attachDivine } from '../../game/respawn.js';
 export const bestiaryRoutes = router();
 /**
  * Statut bestiaire pour le dashboard (Étape 2 phase 2) :
@@ -47,19 +47,19 @@ def(bestiaryRoutes, 'post', '/admin/bestiary/place', Place, async (c, b) => {
   if (!map) fail(404, 'Carte inconnue');
   if (b.x < 0 || b.y < 0 || b.x >= map.width || b.y >= map.height) fail(400, 'Hors de la carte');
   if (['shallow', 'deep', 'volcano'].includes(terrain(b.x, b.y, b.mapId).kind)) fail(400, 'Case invadable (eau/volcan)');
-  if ((await pool.query('SELECT 1 FROM positions WHERE map_id=$1 AND coord_x=$2 AND coord_y=$3 AND item_id IS NULL', [b.mapId, b.x, b.y])).rowCount) fail(409, 'Case occupée');
+  if (await cellTaken(pool, b.mapId, b.x, b.y, isAirLoco(proto.locomotion))) fail(409, 'Case occupée');   // un volant peut survoler un élément au sol
   let n = 1, name = `${proto.name} #${n}`;
   while ((await pool.query('SELECT 1 FROM monsters WHERE name=$1', [name])).rowCount) name = `${proto.name} #${++n}`;
   const recH = b.reincarnateH ?? proto.reincarnate_delay_h ?? 0;
   // Réapparition et objet divin porté : propres à CE monstre posé (migration 35), initialisés depuis le type puis réglés sur la carte.
   const { rows: [ins] } = await pool.query(
     `INSERT INTO monsters(name,hp_max,hp_current,recovery,see,strength,agility,energy_max,energy_current,range,armor,magic_armor,gold_current,guards_item,reincarnate_delay_h,data,
-       respawn,respawn_limits,divine_family,xp_reward,rank,size,rarity,model,icon)
-     VALUES ($1,$2,$2,$3,$4,$5,$6,$7,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23) RETURNING id`,
+       respawn,respawn_limits,divine_family,xp_reward,rank,size,rarity,model,icon,locomotion,xp_hit)
+     VALUES ($1,$2,$2,$3,$4,$5,$6,$7,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25) RETURNING id`,
     [name, proto.hp_max, proto.recovery, proto.see, proto.strength, proto.agility, proto.energy_max,
      proto.range, proto.armor, proto.magic_armor ?? 0, b.gold ?? proto.gold_current ?? 0, proto.guards_item, recH,
      JSON.stringify({ placed: true, prototype: proto.id, behavior: proto.data?.behavior ?? 'passif' }),
-     proto.respawn ?? true, JSON.stringify(proto.respawn_limits ?? []), proto.divine_family ?? null, proto.xp_reward ?? 0, proto.rank ?? 1, proto.size ?? 1, proto.rarity ?? 'commun', proto.model ?? null, proto.icon ?? null]);
+     proto.respawn ?? true, JSON.stringify(proto.respawn_limits ?? []), proto.divine_family ?? null, proto.xp_reward ?? 0, proto.rank ?? 1, proto.size ?? 1, proto.rarity ?? 'commun', proto.model ?? null, proto.icon ?? null, proto.locomotion ?? ['land'], proto.xp_hit ?? 0]);
   if (proto.divine_family) await attachDivine(pool, { id: ins.id, divine_family: proto.divine_family });
   // Drops de mort : entrées du butin du prototype, filtrées par les choix (objets/ressources/divins).
   const { rows: loots } = await pool.query('SELECT * FROM monster_loot WHERE monster_id=$1', [proto.id]);
@@ -86,7 +86,7 @@ def(bestiaryRoutes, 'put', '/admin/bestiary/place/{posId}', z.object({ mapId: z.
   if (!map) fail(404, 'Carte inconnue');
   if (b.x < 0 || b.y < 0 || b.x >= map.width || b.y >= map.height) fail(400, 'Hors de la carte');
   if (['shallow', 'deep', 'volcano'].includes(terrain(b.x, b.y, mapId).kind)) fail(400, 'Case invadable (eau/volcan)');
-  if ((await pool.query('SELECT 1 FROM positions WHERE map_id=$1 AND coord_x=$2 AND coord_y=$3 AND item_id IS NULL AND id<>$4', [mapId, b.x, b.y, p.id])).rowCount) fail(409, 'Case occupée');
+  if (await cellTaken(pool, mapId, b.x, b.y, p.air, p.id)) fail(409, 'Case occupée');   // même couche (sol / airs) que le monstre déplacé
   await pool.query('UPDATE positions SET map_id=$1, coord_x=$2, coord_y=$3 WHERE id=$4', [mapId, b.x, b.y, p.id]);
   await audit(c, 'monster.move', 'position', p.id, null, b);
   return { ok: true, mapId, x: b.x, y: b.y };

@@ -17,8 +17,8 @@ const FOR_RACE = `shop AND (shop_races='[]'::jsonb OR shop_races ? $1)`;
 def(market, 'get', '/shop', null, async c => { const { pool } = await import('../lib/db.js');
   const cid = Number(c.req.query('characterId')); const race = cid ? (await ownChar(pool, c, cid)).race : null;
   const w = race ? FOR_RACE : 'shop', a = race ? [race] : [];
-  return { items: (await pool.query(`SELECT id,name,slot,price,shop_stock stock,armor,weapon_damage,req_strength FROM items WHERE ${w} ORDER BY price`, a)).rows,
-    spells: (await pool.query(`SELECT id,name,kind,price,energy_cost,divine_energy_cost,description FROM spells WHERE ${w} ORDER BY price`, a)).rows,
+  return { items: (await pool.query(`SELECT id,name,slot,price,shop_stock stock,armor,weapon_damage,req_strength,rarity FROM items WHERE ${w} ORDER BY price`, a)).rows,
+    spells: (await pool.query(`SELECT id,name,kind,price,energy_cost,divine_energy_cost,description,rarity FROM spells WHERE ${w} ORDER BY price`, a)).rows,
     mapUpgrade: { price: await mapUpgradePrice() } }; });
 /** Carte des ressources (migrations 32, 38) : la carte du monde met en valeur la ressource choisie. Achetée à l'Hôtel de ville, elle
  *  n'ouvre QUE le monde de cette capitale (`characters.map_worlds`) ; les autres mondes s'ouvrent par leur parchemin. Prix réglé en admin. */

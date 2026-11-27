@@ -1,3 +1,4 @@
+import { actorAir } from './layers.js';
 import { heightParts } from './levels.js'; import { walk } from './rules.js'; import { ignite } from './burn.js'; import { terrain } from './terrain.js'; import { tileCost, tileOf, loadTiles } from './tileTypes.js'; import { BLOCKING, occupiableAt } from './buildingCell.js'; import { fail, posOf } from '../lib/db.js';
 /** Invocation MONTÉE (characters.riding_summon_id, migration 43) : profil de déplacement d'après son type de monstre. */
 const MOUNT_SQL = `SELECT s.*, s.id summon_id, COALESCE(t.size, 1) size, t.model, t.icon, t.locomotion,
@@ -71,7 +72,8 @@ export async function travel(db: any, ch: any, a: any, target: { x: number; y: n
   const cells: { x: number; y: number }[] = []; let cost = 0, divine = 0, lava = false;
   for (const c of walk({ x: mp.coord_x, y: mp.coord_y }, target)) { const t = terrain(c.x, c.y, mp.map_id), s = stepCost(t, a); if (!isFinite(s)) fail(409, blockedMsg(t.kind, a)); cells.push(c); cost += s; divine += tileOf(mp.map_id, t.kind)?.divine_energy_cost ?? 0; if (t.burn) lava = true;
     if (Math.max(Math.abs(c.x - target.x), Math.abs(c.y - target.y)) <= stopAt) break; }
-  if (cells.length && (await db.query(`SELECT 1 FROM positions WHERE map_id=$1 AND ${BLOCKING} AND (coord_x||','||coord_y)=ANY($2)`, [mp.map_id, cells.map(c => `${c.x},${c.y}`)])).rowCount) fail(409, 'Chemin bloqué');
+  // couches (migration 46) : un volant passe au-dessus de ce qui est au sol et inversement ; les bâtiments bloquent les deux
+  if (cells.length && (await db.query(`SELECT 1 FROM positions WHERE map_id=$1 AND ${BLOCKING} AND (building_id IS NOT NULL OR air=$3) AND (coord_x||','||coord_y)=ANY($2)`, [mp.map_id, cells.map(c => `${c.x},${c.y}`), actorAir(a)])).rowCount) fail(409, 'Chemin bloqué');
   await spendDivine(db, ch, divine);   // cases à coût divin (admin « Cases ») : vérifié avant tout débit
   await spend(db, ch, a, cost, 'move'); await spend(db, ch, a, actionCost, 'action');
   const last = cells[cells.length - 1];

@@ -1,3 +1,4 @@
+import { isAirLoco } from './layers.js';
 import { fail, log, posOf } from '../lib/db.js'; import { broadcast } from '../realtime/ws.js'; import { freeCell } from './spawn.js'; import { maxSummons } from './stats.js';
 import { bagRoom } from './bag.js'; import { Effects, applyEffects } from './spellEffects.js';
 import { loadTarget, type Target } from './combatlib.js';
@@ -41,7 +42,7 @@ export async function castSummon(db: any, me: any, mp: any, s: any, spellId: num
     const { rows: [m] } = await db.query('SELECT * FROM monsters WHERE id=$1', [s.refId]); if (!m) fail(404, 'Monstre à invoquer inconnu');
     const cap = await maxSummons(db, me), n = (await db.query('SELECT count(*)::int n FROM summons WHERE owner_id=$1', [me.id])).rows[0].n;
     if (n >= cap) fail(409, `Limite d'invocations atteinte (${cap} max)`);
-    const cell = await freeCell(db, mp.map_id, mp.coord_x, mp.coord_y, 1);
+    const cell = await freeCell(db, mp.map_id, mp.coord_x, mp.coord_y, 1, isAirLoco(m.locomotion));
     const { rows: [sm] } = await db.query(
       `INSERT INTO summons(owner_id,name,hp_current,hp_max,recovery,see,strength,agility,energy_current,energy_max,armor,magic_armor,damage,monster_id,spell_id)
        VALUES ($1,$2,$3,$3,$4,$5,$6,$7,$8,$8,$9,$10,$6,$11,$12) RETURNING id`,

@@ -53,6 +53,9 @@ describe.skipIf(!process.env.DATABASE_URL)('Bâtiments paramétrables', () => {
     await pool.query('INSERT INTO character_spells(character_id,spell_id) VALUES ($1,$2)', [T.b, sp.j.id]);
     expect((await call('/spells/cast', { characterId: T.b, spellId: sp.j.id, x: T.tower.x, y: T.tower.y }, T.btk)).status).toBe(403);   // sort
     await put(await at(2)); await pool.query('UPDATE characters SET range=4, energy_current=100 WHERE id=$1', [T.b]);
+    // attaque à distance = arme à distance (migration 46) : un arc équipé
+    const bow = await call('/admin/content/items', { name: `Arc ${s}`, slot: 'weapon_main', weapon_damage: 2, reach: 1, ranged: true }, T.adm); expect(bow.status, JSON.stringify(bow.j)).toBe(200);
+    await pool.query("INSERT INTO character_items(character_id,item_id,equipped_slot) VALUES ($1,$2,'weapon_main')", [T.b, bow.j.id]);
     const r = await call('/combat/attack', { characterId: T.b, targetCharacterId: T.a }, T.btk);
     expect(r.status, JSON.stringify(r.j)).toBe(200);   // à distance : autorisé
   });

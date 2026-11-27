@@ -1,6 +1,6 @@
 import { OpenAPIHono } from '@hono/zod-openapi'; import { def, router, z, P } from '../lib/route.js'; import { pool, tx, ownChar, posOf, fail } from '../lib/db.js';
-import { statUpgradeCost, upgradeTier, multisOf } from '../game/rules.js'; import { applySpec } from '../game/divine.js'; import { spawn } from '../game/spawn.js'; import { Kit, startRank, grantKit } from '../game/startKit.js'; import { nextRank, rankUp, MODES } from '../game/rankUp.js'; import { activeMount, actor } from '../game/movement.js'; import { gearStats, maxSummons, statBreakdown } from '../game/stats.js'; import { chestLimits } from './market.js'; import { canUseDivineEnergy } from '../game/rules.js';
-import { dbRole } from '../middleware/auth.js';
+import { statUpgradeCost, upgradeTier, multisOf } from '../game/rules.js'; import { applySpec } from '../game/divine.js'; import { spawn } from '../game/spawn.js'; import { Kit, startRank, grantKit } from '../game/startKit.js'; import { nextRank, rankUp, MODES } from '../game/rankUp.js'; import { activeMount, actor } from '../game/movement.js'; import { gearStats, maxSummons, statBreakdown } from '../game/stats.js'; import { weaponReach, attackRange } from '../game/reach.js'; import { chestLimits } from './market.js'; import { canUseDivineEnergy } from '../game/rules.js';
+import { dbRole } from '../middleware/auth.js'; import { gainXp, rankCombat } from '../game/xp.js'; import { log } from '../lib/db.js';
 export const characters = router();
 /**
  * Règles de création (vérifiées côté serveur) : race existante, active et dotée d'un premier rang ;
@@ -63,16 +63,19 @@ def(characters, 'post', '/characters/{id}/rank-up', null, (c) => tx(async db => 
 const summonLook = async (db: any, sm: any) => (sm.monster_id ? (await db.query('SELECT model, icon, locomotion FROM monsters WHERE id=$1', [sm.monster_id])).rows[0] : null) ?? {};
 def(characters, 'get', '/characters/{id}', null, (c) => tx(async db => {
   const ch = await ownChar(db, c, P(c, 'id')), a = await actor(db, ch), st = await gearStats(db, ch), mount = await activeMount(db, ch.id);
-  const { rows: [s] } = await db.query('SELECT name rank_name,current_rank FROM specializations WHERE id=$1', [ch.specialization_id]);
+  const { rows: [s] } = await db.query('SELECT name rank_name,current_rank,train_energy,train_xp FROM specializations WHERE id=$1', [ch.specialization_id]);
   const { rows: [m] } = await db.query('SELECT width,height FROM maps WHERE id=$1', [a.mp.map_id]); const { rows: [hp] } = await db.query('SELECT * FROM positions WHERE character_id=$1', [ch.id]);
   // Invocations : position (aucune si montée), montable / montée, allure et déplacement de leur type (migration 43).
   const summons = (await db.query(`SELECT s.*, p.coord_x x, p.coord_y y, COALESCE(t.mountable, false) mountable, (s.id = $2) ridden, t.model, t.icon, t.locomotion, COALESCE(t.size, 1) size
     FROM summons s LEFT JOIN positions p ON p.summon_id=s.id LEFT JOIN monsters t ON t.id=s.monster_id WHERE s.owner_id=$1 ORDER BY s.id`, [ch.id, ch.riding_summon_id ?? -1])).rows, sm = a.sm;
   const act = sm ? { kind: 'summon', id: sm.id, name: sm.name, hp_current: sm.hp_current, hp_max: sm.hp_max, energy_current: sm.energy_current, energy_max: sm.energy_max, recovery: sm.recovery, see: sm.see, agility: sm.agility, strength: sm.strength, damage: sm.damage, armor: sm.armor, magic_armor: sm.magic_armor ?? 0, loco: a.loco ?? null, ...(await summonLook(db, sm)) }
     : { kind: 'hero', name: ch.pseudo, hp_current: ch.hp_current, hp_max: ch.hp_max, energy_current: ch.energy_current, energy_max: ch.energy_max, recovery: ch.recovery, see: a.see, agility: st.agility, strength: st.strength, damage: st.damage, armor: st.armor, magic_armor: st.magicArmor };
+  const w = await weaponReach(db, ch.id);
   const scrolls = Object.fromEntries((await db.query("SELECT i.data->>'kind' k, count(*)::int n FROM character_items ci JOIN items i ON i.id=ci.item_id WHERE ci.character_id=$1 AND i.slot='scroll' AND NOT ci.in_chest GROUP BY 1", [ch.id])).rows.map((r: any) => [r.k, r.n]));
   return { ...ch, scrolls, rank: s, pos: { map_id: hp.map_id, x: hp.coord_x, y: hp.coord_y, ...m }, mount: mount ?? null, stats: st, hasDivine: canUseDivineEnergy(ch.race, s.rank_name), summons, maxSummons: await maxSummons(db, ch),
     actor: { ...act, pos: { map_id: a.mp.map_id, x: a.mp.coord_x, y: a.mp.coord_y, ...m } }, see_eff: a.see, range_eff: a.range,
+    // portée d'attaque (migration 46) : mêlée = portée de l'arme seule ; à distance = portée du personnage (hauteur comprise) + arme − 1
+    weapon: w, attack_range: sm ? a.range : attackRange(a.range, w),
     breakdown: await statBreakdown(db, ch, st, sm ? await actor(db, { ...ch, controlled_summon_id: null }) : a, mount) };
 }));
 def(characters, 'get', '/characters/{id}/upgrades', null, (c) => tx(async db => {      // coûts par paliers (stat_cost_rules) pour l'onglet « Amélioration »
@@ -80,6 +83,17 @@ def(characters, 'get', '/characters/{id}/upgrades', null, (c) => tx(async db => 
   return rows.map((r: any) => { const n = ch.upgrades[r.stat] ?? 0; return { stat: r.stat, value: ch[r.stat], count: n, tier: upgradeTier(r, n), tiers: multisOf(r).length, untilNextTier: r.numb_up - (n % r.numb_up), nextCost: statUpgradeCost(r, n), needsDivine: r.stat === 'divine_energy_max' }; });
 }));
 const RESERVE: Record<string, string> = { hp_max: 'hp_current', energy_max: 'energy_current', divine_energy_max: 'divine_energy_current' };
+/** Entraînement (migration 46) : le personnage (pas une créature contrôlée) dépense l'énergie réglée sur son rang et gagne l'XP du rang ;
+ *  XP 0 = pas d'entraînement pour ce rang (409). */
+def(characters, 'post', '/characters/{id}/train', null, (c) => tx(async db => {
+  const ch = await ownChar(db, c, P(c, 'id')), r = await rankCombat(db, ch.id);
+  if (ch.controlled_summon_id) fail(409, 'Revenez à votre personnage pour vous entraîner');
+  if (!(r.train_xp > 0)) fail(409, 'Aucun entraînement pour votre rang');
+  if (ch.energy_current < r.train_energy) fail(409, `Énergie insuffisante (${r.train_energy} requis)`);
+  await db.query('UPDATE characters SET energy_current=energy_current-$2 WHERE id=$1', [ch.id, r.train_energy]);
+  const xp = await gainXp(db, ch.id, r.train_xp); await log(db, ch.id, `Entraînement : +${xp} XP (−${r.train_energy} énergie)`);
+  return { ok: true, xp, energy: r.train_energy };
+}));
 def(characters, 'post', '/characters/{id}/upgrade/{stat}', null, (c) => tx(async db => {
   const ch = await ownChar(db, c, P(c, 'id')); const stat = c.req.param('stat');
   const { rows: [r] } = await db.query('SELECT * FROM stat_cost_rules WHERE stat=$1', [stat]); if (!r) fail(400, 'Statistique inconnue');

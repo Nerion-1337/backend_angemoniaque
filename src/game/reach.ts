@@ -1,7 +1,9 @@
 import { FLY_LEVEL } from './levels.js'; import { activeMount, summonLoco } from './movement.js';
 /**
- * Portée des attaques (migration 36).
- *  - Portée d'attaque du héros = sa portée (caractéristique, hauteur, bâtiment…) + (portée de son arme − 1) ; sans arme : portée 1.
+ * Portée des attaques (migrations 36 et 46). Deux portées :
+ *  - arme de MÊLÉE (`items.ranged` faux) : sa seule portée (épée 1, lance 2) ; ni la portée du personnage ni la hauteur ne s'y ajoutent ;
+ *  - arme À DISTANCE (arc…) : portée du personnage (caractéristique, hauteur du terrain / de la monture, bâtiment…) + (portée de l'arme − 1).
+ *  Sans arme : mêlée, portée 1. Créature contrôlée : sa propre portée.
  *  - Distance à la cible = Pythagore entre la distance au sol (cases) et l'écart de hauteur au-dessus du sol : à pied 0, monture
  *    terrestre / aquatique = sa taille (1 à 3), monture / créature / monstre volant = niveau 6. Le relief du terrain n'entre pas
  *    dans ce calcul (il donne déjà +1 de portée par niveau).
@@ -34,7 +36,9 @@ export async function targetElevation(db: any, t: { kind: string; id: number; ro
 }
 /** Arme portée la plus longue (main principale ou seconde main) : { reach, fullAt, name } ; sans arme : portée 1. */
 export async function weaponReach(db: any, charId: number) {
-  const { rows: [w] } = await db.query(`SELECT i.name, i.reach, i.full_power_at, i.power_start, i.power_end FROM character_items ci JOIN items i ON i.id=ci.item_id
-    WHERE ci.character_id=$1 AND ci.equipped_slot IN ('weapon_main','weapon_off') ORDER BY i.reach DESC, i.id LIMIT 1`, [charId]);
-  return { reach: Math.max(1, Number(w?.reach) || 1), fullAt: w?.full_power_at ?? null, start: w?.power_start ?? 100, end: w?.power_end ?? 100, name: w?.name ?? null };
+  const { rows: [w] } = await db.query(`SELECT i.name, i.reach, i.ranged, i.full_power_at, i.power_start, i.power_end FROM character_items ci JOIN items i ON i.id=ci.item_id
+    WHERE ci.character_id=$1 AND ci.equipped_slot IN ('weapon_main','weapon_off') ORDER BY i.ranged DESC, i.reach DESC, i.id LIMIT 1`, [charId]);
+  return { reach: Math.max(1, Number(w?.reach) || 1), ranged: !!w?.ranged, fullAt: w?.full_power_at ?? null, start: w?.power_start ?? 100, end: w?.power_end ?? 100, name: w?.name ?? null };
 }
+/** Portée d'attaque (pure) : `actorRange` = portée du personnage (hauteur comprise) ; mêlée = portée de l'arme seule. */
+export const attackRange = (actorRange: number, w: { reach: number; ranged: boolean }) => (w.ranged ? actorRange + w.reach - 1 : w.reach);

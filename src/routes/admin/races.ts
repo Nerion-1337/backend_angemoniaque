@@ -60,13 +60,18 @@ def(raceRoutes, 'get', '/admin/content/ranks', null, async c => {
     : await pool.query('SELECT * FROM specializations ORDER BY race, current_rank');
   return rows;
 });
+/** XP de combat et entraînement par rang (migration 46) : XP quand le joueur frappe un autre joueur, XP du défenseur qui esquive,
+ *  coût en énergie et XP d'un entraînement (`POST /characters/{id}/train`, XP 0 = pas d'entraînement). */
+const COMBAT_XP = { xp_hit_player: z.number().int().min(0).max(1e6).optional(), xp_dodge: z.number().int().min(0).max(1e6).optional(),
+  train_energy: z.number().int().min(0).max(1e4).optional(), train_xp: z.number().int().min(0).max(1e6).optional() };
 def(raceRoutes, 'post', '/admin/content/ranks', z.object({
   race: z.string().max(40), name: z.string().max(60), current_rank: z.number().int().positive(),
   max_population_percent: z.number().min(0).max(100).default(100), gain_xp_hour: z.number().int().optional(),
   hp_max: z.number().int().optional(), recovery: z.number().int().optional(), see: z.number().int().optional(),
   strength: z.number().int().optional(), agility: z.number().int().optional(),
   energy_max: z.number().int().optional(), divine_energy_max: z.number().int().optional(),
-  prereq_xp: z.number().int().optional(), multipliers: z.record(z.number()).optional(), evolution: z.string().max(300).optional()
+  prereq_xp: z.number().int().optional(), multipliers: z.record(z.number()).optional(), evolution: z.string().max(300).optional(),
+  ...COMBAT_XP
 }), async (c, b) => {
   if ((await pool.query('SELECT 1 FROM races WHERE key=$1', [b.race])).rowCount !== 1) fail(400, 'Race inconnue');
   const keys = Object.keys(b).filter(k => k !== 'race');
@@ -77,7 +82,8 @@ def(raceRoutes, 'post', '/admin/content/ranks', z.object({
   return row;
 });
 def(raceRoutes, 'put', '/admin/content/ranks/{id}', z.record(z.any()), async (c, b) => {
-  const ALLOWED = ['race', 'name', 'current_rank', 'max_population_percent', 'gain_xp_hour', 'hp_max', 'recovery', 'see', 'strength', 'agility', 'energy_max', 'divine_energy_max', 'prereq_xp', 'multipliers', 'evolution'];
+  const ALLOWED = ['race', 'name', 'current_rank', 'max_population_percent', 'gain_xp_hour', 'hp_max', 'recovery', 'see', 'strength', 'agility', 'energy_max', 'divine_energy_max', 'prereq_xp', 'multipliers', 'evolution', ...Object.keys(COMBAT_XP)];
+  const bad = z.object(COMBAT_XP).safeParse(b); if (!bad.success) fail(400, `${bad.error.issues[0].path.join('.')} : ${bad.error.issues[0].message}`);
   const keys = Object.keys(b).filter(k => ALLOWED.includes(k) && b[k] !== undefined);
   if (!keys.length) fail(400, 'Aucun champ à modifier');
   if (b.race !== undefined && (await pool.query('SELECT 1 FROM races WHERE key=$1', [b.race])).rowCount !== 1) fail(400, 'Race inconnue');

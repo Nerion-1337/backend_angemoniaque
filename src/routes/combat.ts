@@ -7,7 +7,7 @@ import { loadTarget, targetAt, applyDamage } from '../game/combatlib.js';
 import { computeHitChance } from '../game/rules.js'; import { inSafeZone } from '../game/terrain.js';
 import { applyArmor } from '../game/rules.js';
 import { broadcast } from '../realtime/ws.js';
-import { combatEvent } from '../lib/events.js'; import { triggerItemSpells } from '../game/spellSummon.js'; import { gainXp, weaponXp } from '../game/xp.js'; import { dist3, groundReach, powerAt, powered, actorElevation, targetElevation, weaponReach } from '../game/reach.js';
+import { combatEvent } from '../lib/events.js'; import { triggerItemSpells } from '../game/spellSummon.js'; import { gainXp, weaponXp, hitXp, rankCombat } from '../game/xp.js'; import { attackRange, dist3, groundReach, powerAt, powered, actorElevation, targetElevation, weaponReach } from '../game/reach.js';
 
 export const combat = router();
 const ATTACK_COST = 5;
@@ -18,12 +18,12 @@ async function attacker(db: any, ch: any, a: any) {
 }
 /** Portée de l'attaque (migration 36) : portée de l'acteur + (portée de l'arme − 1) ; distance 3D (sol + écart de hauteur). */
 async function reachOf(db: any, ch: any, a: any, t: any, tp: any) {
-  const w = a.sm ? { reach: 1, fullAt: null, start: 100, end: 100, name: null } : await weaponReach(db, ch.id);
-  const range = a.range + w.reach - 1, dh = Math.abs(actorElevation(a) - await targetElevation(db, t)), ground = dist(a.mp, tp);
+  const w = a.sm ? { reach: 1, ranged: false, fullAt: null, start: 100, end: 100, name: null } : await weaponReach(db, ch.id);
+  const range = a.sm ? a.range : attackRange(a.range, w), dh = Math.abs(actorElevation(a) - await targetElevation(db, t)), ground = dist(a.mp, tp);
   return { w, range, dh, ground, d: dist3(ground, dh), maxGround: groundReach(range, dh) };
 }
 def(combat, 'get', '/combat/preview/{characterId}/{x}/{y}', null, c => tx(async db => {
-  const ch = await ownChar(db, c, P(c, 'characterId')), a = await actor(db, ch), t = await targetAt(db, a.mp.map_id, P(c, 'x'), P(c, 'y')); if (!t) return { hitChance: null };
+  const ch = await ownChar(db, c, P(c, 'characterId')), a = await actor(db, ch), t = await targetAt(db, a.mp.map_id, P(c, 'x'), P(c, 'y'), c.req.query('air') == null ? undefined : c.req.query('air') === '1'); if (!t) return { hitChance: null };
   const at = await attacker(db, ch, a), r = await reachOf(db, ch, a, t, t.pos);
   // Portée : distance réelle (Pythagore), portée d'attaque, cible atteignable (sinon trop haute), puissance à cette distance.
   return { hitChance: computeHitChance(at.agility, t.agility), dodge: 100 - computeHitChance(at.agility, t.agility),
@@ -35,19 +35,23 @@ def(combat, 'post', '/combat/attack', z.object({ characterId: z.number(), target
   const { rows: [tp] } = await db.query(`SELECT * FROM positions WHERE ${col[0]}=$1`, [col[1]]); if (!tp || tp.map_id !== a.mp.map_id) fail(409, 'Cible introuvable sur cette carte');
   const t = (await loadTarget(db, tp))!; if (t.kind === 'character' && t.id === me.id) fail(400, 'Vous ne pouvez pas vous attaquer');
   if (t.kind !== 'monster' && (inSafeZone(a.mp.map_id, a.mp.coord_x, a.mp.coord_y) || inSafeZone(tp.map_id, tp.coord_x, tp.coord_y))) fail(403, 'Zone sacrée : aucun combat entre joueurs');
-  await checkOccupantAttack(db, t, Math.min(dist(a.mp, tp), a.range) <= 1 ? 'melee' : 'ranged');   // personnage protégé par le bâtiment qu'il occupe
   const cost = ATTACK_COST, at = await attacker(db, me, a);
   let rg = await reachOf(db, me, a, t, tp);
+  await checkOccupantAttack(db, t, rg.w.ranged ? 'ranged' : 'melee');   // personnage protégé par le bâtiment qu'il occupe (attaque à distance ou de mêlée selon l'arme)
   if (rg.maxGround < 1) fail(409, `${t.name} est hors d'atteinte : ${rg.dh} niveau(x) d'écart de hauteur, il faut une portée d'au moins ${Math.ceil(Math.hypot(1, rg.dh) * 100) / 100} (la vôtre : ${rg.range})`);
   if (rg.d > rg.range) { await travel(db, me, a, { x: tp.coord_x, y: tp.coord_y }, rg.maxGround, cost); rg = await reachOf(db, me, a, t, tp); }   // trajet (invocation montée) + action (personnage)
   else await spend(db, me, a, cost);
   const hit = computeHitChance(at.agility, t.agility), ok = Math.random() * 100 < hit;
-  if (!ok) { await log(db, me.id, `Attaque ratée sur ${t.name}`); broadcast(a.mp.map_id, combatEvent(t.id, false, true)); return { dmg: 0, missed: true, hitChance: hit, killed: false }; }
+  if (!ok) {   // esquive : le joueur défenseur gagne l'XP d'esquive de son rang (migration 46)
+    const dodgeXp = t.kind === 'character' ? await gainXp(db, t.id, (await rankCombat(db, t.id)).xp_dodge) : 0;
+    if (dodgeXp) await log(db, t.id, `Esquive l'attaque de ${at.name} : +${dodgeXp} XP`);
+    await log(db, me.id, `Attaque ratée sur ${t.name}`); broadcast(a.mp.map_id, combatEvent(t.id, false, true)); return { dmg: 0, missed: true, hitChance: hit, killed: false }; }
   const pw = powerAt(rg.d, rg.range, rg.w.fullAt, rg.w.start, rg.w.end), power = Math.round(pw);   // grande portée : départ → 100 % à la case X → reste au bout
   const raw = powered(at.damage, pw), dmg = applyArmor(raw, t.armor);   // dégâts arrondis au supérieur ; armure physique : réduction directe
   const r = await applyDamage(db, t, dmg, me.id);
   // XP des armes portées (items.xp_use) à chaque coup porté par le héros (pas l'invocation contrôlée), selon l'écart de rang.
-  const xp = !a.sm ? await gainXp(db, me.id, await weaponXp(db, me.id), t) : 0;
+  // + XP du coup porté (migration 46) : contre un joueur (rang de l'attaquant), contre un type de monstre / d'invocation (`xp_hit`)
+  const xp = !a.sm ? await gainXp(db, me.id, await weaponXp(db, me.id), t) + await gainXp(db, me.id, await hitXp(db, me.id, t), t) : 0;
   // Sorts des objets portés (lot D) : arme → au coup porté (le héros, pas une invocation contrôlée) ; armure / bouclier → à l'attaque reçue.
   const procs: string[] = [];
   if (!a.sm && !r.killed) procs.push(...await triggerItemSpells(db, me, { ...t, row: { ...t.row, hp_current: r.hp } }, 'on_hit'));

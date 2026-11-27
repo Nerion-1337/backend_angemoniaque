@@ -12,6 +12,7 @@ const CASTABLE = `SELECT s.*, src.source FROM spells s JOIN (
     UNION SELECT ms.spell_id, 'capacité : ' || sm.name FROM monster_spells ms JOIN summons sm ON sm.monster_id=ms.monster_id
       JOIN characters ch ON sm.id IN (ch.controlled_summon_id, ch.riding_summon_id) WHERE ms.mode='active' AND ch.id=$1
   ) src ON src.spell_id=s.id`;
+import { cellTaken } from '../game/layers.js';
 export const spells = router();
 def(spells, 'get', '/spells/{characterId}', null, c => tx(async db => { const me = await ownChar(db, c, P(c, 'characterId'));
   return { spells: (await db.query(`SELECT DISTINCT ON (s.id) s.*, GREATEST(0, EXTRACT(EPOCH FROM cd.ready_at - now()))::int cooldown_left_s,
@@ -69,7 +70,7 @@ def(spells, 'post', '/spells/cast', z.object({ characterId: z.number(), spellId:
   if (sp.kind === 'summon') {
     if (d !== 1) fail(409, 'Choisissez une case adjacente'); const cap = await maxSummons(db, me), n = (await db.query('SELECT count(*)::int n FROM summons WHERE owner_id=$1', [me.id])).rows[0].n;
     if (n >= cap) fail(409, `Limite d'invocations atteinte (${cap} max)`);
-    if (terrain(tx_, ty, a.mp.map_id).kind === 'deep' || (await db.query('SELECT 1 FROM positions WHERE map_id=$1 AND coord_x=$2 AND coord_y=$3 AND item_id IS NULL', [a.mp.map_id, tx_, ty])).rowCount) fail(409, 'Case occupée');
+    if (terrain(tx_, ty, a.mp.map_id).kind === 'deep' || await cellTaken(db, a.mp.map_id, tx_, ty, false)) fail(409, 'Case occupée');
     await spend(db, me, a, sp.energy_cost, payer);
     const { rows: [s] } = await db.query(`INSERT INTO summons(owner_id,name,hp_current,hp_max,energy_current,energy_max,recovery,see,strength,agility,armor,damage) VALUES ($1,'Golem d’Éther',280,280,75,75,5,4,14,8,10,14) RETURNING id`, [me.id]);
     await db.query('INSERT INTO positions(map_id,coord_x,coord_y,summon_id) VALUES ($1,$2,$3,$4)', [a.mp.map_id, tx_, ty, s.id]);
@@ -101,9 +102,11 @@ def(spells, 'post', '/summons/dismount', z.object({ characterId: z.number() }), 
   const me = await ownChar(db, c, b.characterId), mp = await posOf(db, me.id);
   if (!me.riding_summon_id) fail(409, 'Vous n\'êtes pas monté');
   if (terrain(mp.coord_x, mp.coord_y, mp.map_id).kind === 'deep') fail(409, 'Impossible de descendre en eau profonde');
-  const cell = await freeCell(db, mp.map_id, mp.coord_x, mp.coord_y, 1);
+  // la monture RESTE sur la case ; le personnage descend sur une case libre voisine (au sol)
+  const cell = await freeCell(db, mp.map_id, mp.coord_x, mp.coord_y, 1, false, { x: mp.coord_x, y: mp.coord_y });
   await db.query('UPDATE characters SET riding_summon_id=NULL WHERE id=$1', [me.id]);
-  await db.query('INSERT INTO positions(map_id,coord_x,coord_y,summon_id) VALUES ($1,$2,$3,$4)', [mp.map_id, cell.x, cell.y, me.riding_summon_id]);
+  await db.query('UPDATE positions SET coord_x=$2, coord_y=$3 WHERE character_id=$1', [me.id, cell.x, cell.y]);
+  await db.query('INSERT INTO positions(map_id,coord_x,coord_y,summon_id) VALUES ($1,$2,$3,$4)', [mp.map_id, mp.coord_x, mp.coord_y, me.riding_summon_id]);
   broadcast(mp.map_id, { type: 'moved' }); return { ok: true };
 }));
 def(spells, 'post', '/summons/{id}/dismiss', z.object({ characterId: z.number() }), (c, b) => tx(async db => { const me = await ownChar(db, c, b.characterId);

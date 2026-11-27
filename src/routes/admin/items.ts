@@ -18,6 +18,8 @@ const Item = z.object({
   /** XP gagnée à chaque utilisation (migration 35) : coup porté avec cette arme, parchemin utilisé. */
   xp_use: z.number().int().min(0).max(1e6).optional(),
   /** Portée de l'arme (1 = corps à corps) et, pour une arme à distance, pleine puissance jusqu'à N cases (< portée ; null = partout). Migration 36. */
+  /** Arme à distance (arc…, migration 46) : sa portée s'ajoute à celle du personnage (hauteur comprise) ; mêlée : portée de l'arme seule. */
+  ranged: z.boolean().optional(),
   reach: z.number().int().min(1).max(20).optional(), full_power_at: z.number().int().min(1).max(20).nullable().optional(),
   /** Grande portée (migration 37) : puissance à la case 1 et à la dernière case de portée (%). */
   power_start: z.number().int().min(0).max(100).optional(), power_end: z.number().int().min(0).max(100).optional(),

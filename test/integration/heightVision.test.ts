@@ -11,6 +11,8 @@ describe.skipIf(!process.env.DATABASE_URL)('Hauteur, coffre, coûts d’amélior
   const me = async () => (await call(`/characters/${T.c}`, undefined, T.tk)).j;
   const ride = async (name: string, extra: any) => {   // descend, renvoie ses invocations, invoque le type et monte dessus
     await call('/summons/dismount', { characterId: T.c }, T.tk); await pool.query('DELETE FROM summons WHERE owner_id=$1', [T.c]);
+    // descendre pose le personnage à côté (la monture reste) : retour sur la case de plaine de référence (niveau 0)
+    await pool.query('UPDATE positions SET map_id=1, coord_x=$2, coord_y=$3 WHERE character_id=$1', [T.c, T.xy[0], T.xy[1]]);
     return (await summonAndRide(call, T.adm, T.c, T.tk, { name: `${name}${s}`, ...extra })).type;
   };
   beforeAll(async () => {

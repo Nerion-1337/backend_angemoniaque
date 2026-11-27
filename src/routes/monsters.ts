@@ -1,7 +1,7 @@
 import { def, router, z, P } from '../lib/route.js';
 import { tx, ownChar, posOf, fail, log } from '../lib/db.js';
 import { checkEntityCost, assertCap } from '../game/entity.js';
-import { freeCell } from '../game/spawn.js';
+import { freeCell } from '../game/spawn.js'; import { isAirLoco } from '../game/layers.js';
 import { broadcast } from '../realtime/ws.js';
 
 export const monsters = router();
@@ -18,7 +18,7 @@ def(monsters, 'post', '/monsters/{monsterId}/summon', z.object({ characterId: z.
   if (!m) fail(404, 'Monstre inconnu');
   await assertCap(db, 'monster', m.id, me.id, mp.map_id);
   await checkEntityCost(db, me.id, 'monster', m.id, true);
-  const cell = await freeCell(db, mp.map_id, mp.coord_x, mp.coord_y, 2);
+  const cell = await freeCell(db, mp.map_id, mp.coord_x, mp.coord_y, 2, isAirLoco(m.locomotion));
   const { rows: [s] } = await db.query(
     `INSERT INTO summons(owner_id,name,hp_current,hp_max,recovery,see,strength,agility,energy_current,energy_max,armor,magic_armor,damage,monster_id)
      VALUES ($1,$2,$3,$3,$4,$5,$6,$7,$8,$8,$9,$10,$6,$11) RETURNING id`,

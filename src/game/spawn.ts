@@ -1,5 +1,7 @@
+import { cellTaken, isAirLoco } from './layers.js';
 import { terrain } from './terrain.js'; import { fail } from '../lib/db.js'; import { respawnBlockers, attachDivine } from './respawn.js';
-export async function freeCell(db: any, mapId: number, cx: number, cy: number, r: number) {
+/** Case libre (terre ferme) autour de (cx, cy) sur la couche demandée : `air` = dans les airs (migration 46). */
+export async function freeCell(db: any, mapId: number, cx: number, cy: number, r: number, air = false, avoid?: { x: number; y: number }) {
   const { rows: [m] } = await db.query('SELECT width w,height h FROM maps WHERE id=$1', [mapId]);
   // Le rayon s’élargit si l’aire est saturée (capitale encombrée en base de dev) : on préfère
   // naître un peu plus loin plutôt que de renoncer. Échec seulement si toute la carte est occupée.
@@ -7,7 +9,8 @@ export async function freeCell(db: any, mapId: number, cx: number, cy: number, r
     for (let i = 0; i < 100; i++) {
       const x = cx + Math.floor(Math.random() * (2 * rad + 1)) - rad, y = cy + Math.floor(Math.random() * (2 * rad + 1)) - rad;
       if (x < 0 || y < 0 || x >= m.w || y >= m.h || ['shallow', 'deep', 'volcano'].includes(terrain(x, y, mapId).kind)) continue;
-      if (!(await db.query('SELECT 1 FROM positions WHERE map_id=$1 AND coord_x=$2 AND coord_y=$3 AND item_id IS NULL', [mapId, x, y])).rowCount) return { x, y };
+      if (avoid && avoid.x === x && avoid.y === y) continue;
+      if (!(await cellTaken(db, mapId, x, y, air))) return { x, y };
     }
     if (rad * 2 >= Math.max(m.w, m.h)) return fail(503, 'Aucune case libre');
   }
@@ -47,16 +50,16 @@ export async function hourlySpawns(db: any) {
     for (const cap of (await db.query('SELECT scope, value FROM entity_caps WHERE kind=$1 AND ref_id=$2', ['monster', r.monster_id])).rows) {
       if ((cap.scope === 'global' && instances.length >= cap.value) || (cap.scope === 'per_zone' && onMap >= cap.value)) continue outer;
     }
-    const cell = await freeCellRect(db, r);
+    const cell = await freeCellRect(db, r, isAirLoco(proto.locomotion));
     if (!cell) continue;
     let n = instances.length + 1, name = `${proto.name} #${n}`;
     while ((await db.query('SELECT 1 FROM monsters WHERE name=$1', [name])).rowCount) name = `${proto.name} #${++n}`;
     const { rows: [ins] } = await db.query(
-      `INSERT INTO monsters(name,hp_max,hp_current,recovery,see,strength,agility,energy_max,energy_current,range,armor,magic_armor,gold_current,guards_item,data,xp_reward,rank,model,icon)
-       VALUES ($1,$2,$2,$3,$4,$5,$6,$7,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING id`,
+      `INSERT INTO monsters(name,hp_max,hp_current,recovery,see,strength,agility,energy_max,energy_current,range,armor,magic_armor,gold_current,guards_item,data,xp_reward,rank,model,icon,locomotion,xp_hit)
+       VALUES ($1,$2,$2,$3,$4,$5,$6,$7,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) RETURNING id`,
       [name, proto.hp_max, proto.recovery, proto.see, proto.strength, proto.agility, proto.energy_max,
        proto.range, proto.armor, proto.magic_armor ?? 0, proto.gold_current ?? 0, proto.guards_item,
-       JSON.stringify({ spawned: true, prototype: proto.id, behavior: proto.data?.behavior ?? 'passif' }), proto.xp_reward ?? 0, proto.rank ?? 1, proto.model ?? null, proto.icon ?? null]);
+       JSON.stringify({ spawned: true, prototype: proto.id, behavior: proto.data?.behavior ?? 'passif' }), proto.xp_reward ?? 0, proto.rank ?? 1, proto.model ?? null, proto.icon ?? null, proto.locomotion ?? ['land'], proto.xp_hit ?? 0]);
     await db.query('INSERT INTO positions(map_id,coord_x,coord_y,monsters_id) VALUES ($1,$2,$3,$4)', [r.map_id, cell.x, cell.y, ins.id]);
     await db.query('UPDATE spawn_rules SET last_spawned_at=now() WHERE id=$1', [r.id]);
   }
@@ -75,13 +78,13 @@ export async function reincarnateDue(db: any) {
   return n;
 }
 /** Case libre dans le rectangle de la règle : évite eau/volcan et toute case occupée (uq_cell). */
-async function freeCellRect(db: any, r: any) {
+async function freeCellRect(db: any, r: any, air = false) {
   const w = r.x_max - r.x_min + 1, h = r.y_max - r.y_min + 1;
   if (w <= 0 || h <= 0) return null;
   for (let i = 0; i < 60; i++) {
     const x = r.x_min + Math.floor(Math.random() * w), y = r.y_min + Math.floor(Math.random() * h);
     if (['shallow', 'deep', 'volcano'].includes(terrain(x, y, r.map_id).kind)) continue;
-    if ((await db.query('SELECT 1 FROM positions WHERE map_id=$1 AND coord_x=$2 AND coord_y=$3 AND item_id IS NULL', [r.map_id, x, y])).rowCount) continue;
+    if (await cellTaken(db, r.map_id, x, y, air)) continue;
     return { x, y };
   }
   return null;

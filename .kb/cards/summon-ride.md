@@ -31,7 +31,7 @@ monte dessus. Un sort peut avoir un délai avant d'être relancé ; la mort d'un
 - Monter (`POST /summons/ride`) : sa propre invocation, type `mountable`, PV > 0, case VOISINE (même monde, Chebyshev ≤ 1), pas déjà monté, pas en contrôlant une créature (409 sinon). L'invocation quitte la carte (plus une cible) et `characters.riding_summon_id` la désigne.
 - Monter dès le lancer : `POST /spells/cast` avec `ride: true` ; seulement si le type invoqué est montable et le héros pas déjà monté (sinon invoqué sans monter). `GET /spells` expose `summon_mountable`.
 - Monté : les déplacements et les capacités actives du type (`monster_spells` actif) consomment l'énergie de l'invocation ; les actions du joueur restent payées par lui (`spend` 'move' / 'mount').
-- Descendre (`POST /summons/dismount`) : l'invocation reprend une case libre voisine ; refusé en eau profonde. Contrôler l'invocation montée → 409.
+- Descendre (`POST /summons/dismount`) : l'invocation RESTE sur la case du cavalier ; le personnage se pose sur une case libre voisine, au sol (migration 46) ; refusé en eau profonde. Contrôler l'invocation montée → 409.
 - Invocation montée renvoyée, expirée ou supprimée : le cavalier est démonté (FK `ON DELETE SET NULL`).
 - Vision / portée du cavalier : +taille (1 à 3) si l'invocation montée est terrestre ou aquatique ; volante (locomotion avec `air`, même si elle marche aussi) = niveau +6 SANS la taille. Pas de gain de taille pour l'invocation elle-même.
 - Délai de relance (`spells.cooldown_h`, heures, décimales ; 0 = aucun) : par lanceur (`spell_cooldowns`) ; relancer avant l'échéance → 409 « encore 1 h 30 » ; posé au lancer (annulé si le lancer échoue). `GET /spells` expose `cooldown_left_s`.

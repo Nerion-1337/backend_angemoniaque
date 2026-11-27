@@ -68,3 +68,8 @@ test('foi / pactes : coût proportionnel arrondi au supérieur, % arrondi au sup
   expect(godIncome(7, { followersStep: 3, xpHour: 2, goldHour: 5 })).toEqual({ xp: 4, gold: 10 });
   expect([defaultMaxPacts('human', 6), defaultMaxPacts('angel', 1), defaultMaxPacts('demon', 4), defaultMaxPacts('nephilim', 4)]).toEqual([1, 3, 5, 0]);
 });
+test('portée d’attaque : mêlée = arme seule, distance = personnage + arme − 1', async () => {
+  const { attackRange } = await import('../src/game/reach');
+  expect(attackRange(5, { reach: 2, ranged: false })).toBe(2); expect(attackRange(5, { reach: 1, ranged: false })).toBe(1);
+  expect(attackRange(5, { reach: 2, ranged: true })).toBe(6); expect(attackRange(1, { reach: 1, ranged: true })).toBe(1);
+});
