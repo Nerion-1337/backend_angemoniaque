@@ -24,7 +24,7 @@ dans l'admin, combinables : plusieurs options alternatives, chacune avec ses exi
 - `buildings.activation` = { groups: [...] } ; il suffit d'UNE option remplie (la première dans l'ordre est retenue) ; dans une option, chaque condition renseignée est exigée : objets dans le SAC (quantités), objets divins détenus (famille ou toutes, nombre), sort appris, ressources, or, rang minimum (palier) et / ou l'un des rangs listés (ex. « Divin » pour un dieu).
 - `consume` vrai : objets, ressources et or retirés, objets divins rendus (sans détenteur) ; sinon seulement exigés.
 - Aucune option remplie → 403 avec ce qui manque, option par option.
-- Porte (`kind = door`) : si des options existent, elles REMPLACENT l'exigence historique (`data.requires`, un objet divin rendu au gardien).
+- Porte (`kind = door`) sans monde (`realm` NULL) : si des options existent, elles REMPLACENT l'exigence historique (`data.requires`, un objet divin rendu au gardien). Porte des mondes (migration 48, card `gates-structures`) : il faut une porte en face ouverte, les options s'ajoutent.
 - Autre bâtiment : `POST /buildings/{id}/activate` (case adjacente, 409 sinon ; sans option → 409 ; porte → 400) ; les sorts liés « à activer » du bâtiment s'appliquent au profit de l'activateur : sort de zone autour du bâtiment (camp relatif à l'activateur), sinon l'activateur lui-même ; invocations près de lui.
 - `POST /buildings/{id}/interact` renvoie `activation` (null sans option) ; le jeu active alors au lieu d'afficher le nom.
 - Admin : objets, sorts, rangs, familles divines et ressources vérifiés (404) ; schéma strict (400) ; le catalogue admin fournit `ranks` et `divineFamilies`.

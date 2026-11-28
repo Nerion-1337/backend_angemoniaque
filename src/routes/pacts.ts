@@ -1,5 +1,5 @@
 import { def, router, z, P } from '../lib/route.js'; import { tx, ownChar, fail, log } from '../lib/db.js';
-import { pactCfg, pactAmount, applyBuff, defaultMaxPacts, fmtWait, CARD_SQL } from '../game/faithPact.js';
+import { pactCfg, pactAmount, applyBuff, defaultMaxPacts, fmtWait, CARD_SQL } from '../game/faithPact.js'; import { checkPactRealm, doors, realmStatus, realmSql as realmSqlOf } from '../game/gates.js';
 /**
  * Pactes (migration 44, réglages admin « Pacte ») : un Humain et un Ange / Démon. L'Ange / le Démon choisit pour chaque pacte
  * une composition (`pact_tiers`) : XP / or par heure pour lui ; à l'activation par l'Humain, `percent` % de chaque
@@ -8,28 +8,48 @@ import { pactCfg, pactAmount, applyBuff, defaultMaxPacts, fmtWait, CARD_SQL } fr
  * L'Humain voit le nom, la durée et la recharge de sa composition. Nombre de pactes par rang.
  * Migration 45 : une composition s'attribue au plus `max_assign` fois par Ange / Démon (NULL = illimité, toutes ses demandes
  * et pactes comptés) ; la composition d'un pacte ne change qu'une fois toutes les 48 h (`tier_changed_at`).
+ * Migration 48 : un demi-dieu (Humain dont le rang a `pact_patron`) propose aussi des pactes aux Humains de rang inférieur, avec
+ * ses propres compositions (`pact_tiers.realm = 'demigod'`) ; il y tient le rôle de l'Ange / du Démon (`ethereal_id`). Les pactes
+ * d'un camp sont suspendus selon l'état des portes (game/gates.ts).
  */
 export const TIER_CHANGE_H = 48;
 export const pacts = router();
 const ETHEREAL = ['demon', 'angel'];
-async function maxPactsOf(db: any, ch: any) {
-  const { rows: [s] } = await db.query('SELECT current_rank, max_pacts FROM specializations WHERE id=$1', [ch.specialization_id]);
-  return s.max_pacts ?? defaultMaxPacts(ch.race, s.current_rank);
+type Role = 'human_id' | 'ethereal_id';
+/** Rôle par défaut : Humain côté Humain ; Ange / Démon côté Ange / Démon. Un demi-dieu tient les deux selon le pacte. */
+const roleOf = (ch: any): Role => (ch.race === 'human' ? 'human_id' : 'ethereal_id');
+async function specOf(db: any, ch: any) { return (await db.query('SELECT current_rank, max_pacts, pact_patron FROM specializations WHERE id=$1', [ch.specialization_id])).rows[0]; }
+/** Pactes simultanés : réglage du rang, sinon règle par défaut (demi-dieu qui propose : comme un Ange / Démon de son palier). */
+async function maxPactsOf(db: any, ch: any, role: Role = roleOf(ch)) {
+  const s = await specOf(db, ch);
+  return s.max_pacts ?? defaultMaxPacts(role === 'ethereal_id' && ch.race === 'human' ? 'angel' : ch.race, s.current_rank);
 }
 /** Compositions encore attribuables par cet Ange / Démon (hors pacte `except`), dans l'ordre. */
 async function freeTiers(db: any, etherealId: number, except = 0) {
-  return (await db.query(`SELECT t.*, (SELECT count(*)::int FROM pacts p WHERE p.ethereal_id=$1 AND p.tier_id=t.id AND p.id<>$2) used FROM pact_tiers t ORDER BY t.sort, t.id`, [etherealId, except])).rows
+  return (await db.query(`SELECT t.*, (SELECT count(*)::int FROM pacts p WHERE p.ethereal_id=$1 AND p.tier_id=t.id AND p.id<>$2) used FROM pact_tiers t
+    WHERE t.realm = (SELECT CASE race WHEN 'human' THEN 'demigod' ELSE 'ethereal' END FROM characters WHERE id=$1) ORDER BY t.sort, t.id`, [etherealId, except])).rows
     .map((t: any) => ({ ...t, full: t.max_assign != null && t.used >= t.max_assign }));
 }
-const activeCount = async (db: any, ch: any) => (await db.query(`SELECT count(*)::int n FROM pacts WHERE active AND ${ch.race === 'human' ? 'human_id' : 'ethereal_id'}=$1`, [ch.id])).rows[0].n;
-async function checkLimits(db: any, ...who: any[]) {
-  for (const ch of who) { const max = await maxPactsOf(db, ch); if (await activeCount(db, ch) >= max) fail(409, `${ch.pseudo} a atteint son nombre maximal de pactes (${max})`); }
+const activeCount = async (db: any, ch: any, role: Role = roleOf(ch)) => (await db.query(`SELECT count(*)::int n FROM pacts WHERE active AND ${role}=$1`, [ch.id])).rows[0].n;
+async function checkLimits(db: any, ...who: [any, Role][]) {
+  for (const [ch, role] of who) { const max = await maxPactsOf(db, ch, role); if (await activeCount(db, ch, role) >= max) fail(409, `${ch.pseudo} a atteint son nombre maximal de pactes (${max})`); }
+}
+/** Parties d'un pacte : Humain + Ange / Démon, ou Humain + demi-dieu (rang `pact_patron`, palier supérieur à celui de l'Humain). */
+async function parties(db: any, a: any, b: any) {
+  const ah = a.race === 'human', bh = b.race === 'human';
+  if (ah !== bh) { const [human, ethereal] = ah ? [a, b] : [b, a]; if (ETHEREAL.includes(ethereal.race)) return { human, ethereal }; }
+  else if (ah && bh) {
+    const [sa, sb] = [await specOf(db, a), await specOf(db, b)];
+    if (sa.pact_patron && sa.current_rank > sb.current_rank) return { human: b, ethereal: a };
+    if (sb.pact_patron && sb.current_rank > sa.current_rank) return { human: a, ethereal: b };
+    fail(400, 'Entre Humains, seul un demi-dieu propose un pacte, à un Humain de rang inférieur');
+  }
+  return fail(400, 'Un pacte lie un Humain à un Ange, un Démon ou un demi-dieu');
 }
 /** Demande de pacte : l'Humain nomme un Ange/Démon, ou inversement. L'autre partie doit accepter ; plusieurs demandes possibles. */
 def(pacts, 'post', '/pacts/request', z.object({ characterId: z.number(), targetPseudo: z.string().min(1) }), (c, b) => tx(async db => {
   const me = await ownChar(db, c, b.characterId); const { rows: [t] } = await db.query('SELECT * FROM characters WHERE pseudo=$1', [b.targetPseudo]); if (!t) fail(404, 'Personnage introuvable');
-  const meHuman = me.race === 'human', tHuman = t.race === 'human'; if (meHuman === tHuman || (!meHuman && !ETHEREAL.includes(me.race)) || (!tHuman && !ETHEREAL.includes(t.race))) fail(400, 'Un pacte lie un Humain à un Ange ou un Démon');
-  const human = meHuman ? me : t, ethereal = meHuman ? t : me;
+  const { human, ethereal } = await parties(db, me, t);
   if ((await db.query('SELECT 1 FROM pacts WHERE human_id=$1 AND ethereal_id=$2', [human.id, ethereal.id])).rowCount) fail(409, 'Une demande ou un pacte existe déjà entre vous');
   const tier = (await freeTiers(db, ethereal.id)).find((t: any) => !t.full)?.id ?? null;   // la plus basse encore attribuable
   const { rows: [r] } = await db.query("INSERT INTO pacts(human_id,ethereal_id,requested_by,active,status,tier_id) VALUES ($1,$2,$3,false,'pending',$4) RETURNING id", [human.id, ethereal.id, me.id, tier]);
@@ -37,24 +57,27 @@ def(pacts, 'post', '/pacts/request', z.object({ characterId: z.number(), targetP
 }));
 /** Pactes et demandes, avec la fiche publique de l'autre partie ; l'Ange/Démon reçoit le détail des compositions. */
 def(pacts, 'get', '/pacts/{characterId}', null, c => tx(async db => {
-  const me = await ownChar(db, c, P(c, 'characterId')), human = me.race === 'human';
+  const me = await ownChar(db, c, P(c, 'characterId')), patron = me.race !== 'human' || !!(await specOf(db, me)).pact_patron;
   const { rows } = await db.query(`SELECT p.id, p.active, p.requested_by, p.tier_id, t.name tier_name, t.duration_h::float, t.cooldown_h::float,
       GREATEST(0, EXTRACT(EPOCH FROM p.tier_changed_at + make_interval(hours => ${TIER_CHANGE_H}) - now()))::int tier_change_in_s,
       GREATEST(0, EXTRACT(EPOCH FROM p.ready_at - now()))::int ready_in_s,
       (SELECT GREATEST(0, EXTRACT(EPOCH FROM max(b.expires_at) - now()))::int FROM temp_buffs b WHERE b.source='pact:'||p.id AND b.character_id=p.human_id) bonus_left_s,
+      (p.ethereal_id=$1) i_propose, ${realmSqlOf('e.race')} realm,
       k.id partner_id, k.pseudo, k.race, k.race_name, k.rank_name, k.current_rank, k.guild
-    FROM pacts p LEFT JOIN pact_tiers t ON t.id=p.tier_id JOIN (${CARD_SQL}) k ON k.id = CASE WHEN p.human_id=$1 THEN p.ethereal_id ELSE p.human_id END
+    FROM pacts p LEFT JOIN pact_tiers t ON t.id=p.tier_id JOIN characters e ON e.id=p.ethereal_id JOIN (${CARD_SQL}) k ON k.id = CASE WHEN p.human_id=$1 THEN p.ethereal_id ELSE p.human_id END
     WHERE p.ethereal_id=$1 OR p.human_id=$1 ORDER BY p.id`, [me.id]);
-  const tiers = human ? [] : await freeTiers(db, me.id);
+  const tiers = patron ? await freeTiers(db, me.id) : [], st = realmStatus(await doors(db));
+  for (const r of rows as any[]) { r.suspended = st[r.realm as 'demon']?.pactsOn === false ? st[r.realm as 'demon'].reason : null; }
+  const role: Role = patron ? 'ethereal_id' : 'human_id';
   return { active: rows.filter((r: any) => r.active), incoming: rows.filter((r: any) => !r.active && r.requested_by !== me.id), outgoing: rows.filter((r: any) => !r.active && r.requested_by === me.id),
-    tiers, stats: (await pactCfg()).stats, limit: { max: await maxPactsOf(db, me), used: await activeCount(db, me) } };
+    patron, tiers, stats: (await pactCfg()).stats, limit: { max: await maxPactsOf(db, me, role), used: await activeCount(db, me, role) } };
 }));
 def(pacts, 'post', '/pacts/{id}/answer', z.object({ characterId: z.number(), accept: z.boolean() }), (c, b) => tx(async db => {
   const me = await ownChar(db, c, b.characterId); const { rows: [p] } = await db.query('SELECT * FROM pacts WHERE id=$1 AND NOT active AND (human_id=$2 OR ethereal_id=$2) FOR UPDATE', [P(c, 'id'), me.id]); if (!p) fail(404, 'Demande introuvable');
   if (p.requested_by === me.id) fail(403, 'Seule l’autre partie peut répondre à votre demande');
   if (!b.accept) { await db.query('DELETE FROM pacts WHERE id=$1', [p.id]); return { ok: true, accepted: false }; }
   const human = (await db.query('SELECT * FROM characters WHERE id=$1', [p.human_id])).rows[0], eth = (await db.query('SELECT * FROM characters WHERE id=$1', [p.ethereal_id])).rows[0];
-  await checkLimits(db, human, eth); await db.query("UPDATE pacts SET active=true,status='active' WHERE id=$1", [p.id]);
+  await checkLimits(db, [human, 'human_id'], [eth, 'ethereal_id']); await db.query("UPDATE pacts SET active=true,status='active' WHERE id=$1", [p.id]);
   await log(db, human.id, `Pacte conclu avec ${eth.pseudo}`); await log(db, eth.id, `Pacte conclu avec ${human.pseudo}`); return { ok: true, accepted: true };
 }));
 /** Composition du pacte : choisie par l'Ange / le Démon, pacte par pacte (un bonus en cours n'est pas modifié). */
@@ -82,6 +105,7 @@ def(pacts, 'post', '/pacts/{id}/activate', z.object({ characterId: z.number() })
   if ((await db.query("SELECT 1 FROM temp_buffs WHERE character_id=$1 AND source=$2 AND expires_at>now()", [me.id, `pact:${id}`])).rowCount) fail(409, 'Bonus déjà actif');
   if (p.wait_s > 0) fail(409, `Pacte en recharge : encore ${fmtWait(p.wait_s)}`);
   const { rows: [e] } = await db.query('SELECT * FROM characters WHERE id=$1 FOR UPDATE', [p.ethereal_id]);
+  await checkPactRealm(db, e.race);   // portes détruites : pactes de ce camp suspendus (migration 48)
   const moves = (await pactCfg()).stats.map(stat => ({ stat, n: pactAmount(Number(e[stat]) || 0, p.percent) })).filter(m => m.n > 0);
   const hp = moves.find(m => m.stat === 'hp_max');
   if (hp && e.hp_current - hp.n < 1) fail(409, `${e.pseudo} n'a pas assez de points de vie pour le transfert (${hp.n} requis)`);

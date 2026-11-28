@@ -40,6 +40,7 @@ Foi et Pactes entièrement réglés en admin (migration 44) et classement public
 - Les deux parties voient la durée du bonus et le délai de réactivation de la composition (`duration_h`, `cooldown_h`), jamais le % pour l'Humain.
 - Activation (l'Humain) : pour chaque caractéristique cochée en admin, ⌈valeur de l'Ange/Démon × percent %⌉ passe de l'un à l'autre pendant `duration_h` ; refus si la composition manque, si le bonus est actif, en recharge (`ready_at` = fin du bonus + `cooldown_h` : le délai commence à la FIN du bonus) ; deux pactes différents se cumulent, ou si les PV courants de l'Ange/Démon tomberaient sous 1.
 - Pactes simultanés : `specializations.max_pacts` du rang de CHAQUE partie (NULL = défaut : Humain 1, Ange / Démon 3 + rang au-dessus de 2, autres 0), vérifié à l'acceptation.
+- Migration 48 (card `gates-structures`) : demi-dieu (rang `pact_patron`) ↔ Humain de palier inférieur, compositions `realm = 'demigod'` ; pactes d'un camp suspendus par les portes détruites (activation 409, pas de gain, bonus retirés) ; `GET /pacts` renvoie `patron`, et par pacte `i_propose`, `realm`, `suspended`.
 - Admin : `/admin/content/faith` (réglages validés), `/admin/content/pact` (caractéristiques), `/admin/content/pact-tiers` (nom unique → 409, % 1–100, durée ≥ 1 h), `/admin/content/pact-limits`.
 
 ## Gotchas

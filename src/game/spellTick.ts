@@ -1,4 +1,4 @@
-import { pool } from '../lib/db.js'; import { Effects, POOLS, applyEffects, pickTargets, isHarmful } from './spellEffects.js'; import { inSafeZone } from './terrain.js'; import { attackAllowed, occupiableAt } from './buildingCell.js'; import { loadTarget } from './combatlib.js';
+import { pool } from '../lib/db.js'; import { Effects, POOLS, applyEffects, pickTargets, isHarmful } from './spellEffects.js'; import { inSafeZone } from './terrain.js'; import { attackAllowed, occupiableAt } from './buildingCell.js'; import { loadTarget } from './combatlib.js'; import { zoneAt } from './gates.js';
 /**
  * Tick horaire des sorts : (1) dégâts sur la durée (spell_dots) — jamais mortels (PV min 1), lignes expirées supprimées ;
  * (2) sorts PASSIFS liés à un objet équipé ou à la monture active : leurs effets instantanés sur soi (soin, réserves ±)
@@ -40,6 +40,7 @@ export async function hourlyBuildingSpells() {
     const all = (await Promise.all(ps.map((p: any) => loadTarget(pool, p)))).filter(Boolean) as any[];
     const caster = { id: r.owner_id ?? 0, race: r.race ?? '' };
     for (const t of pickTargets(e, caster, { x: r.x, y: r.y }, all)) {
+      if (isHarmful(e) && await zoneAt(pool, 'peace_radius', t.pos.map_id, t.pos.coord_x, t.pos.coord_y, t.kind === 'building' ? t.id : 0)) continue;   // zone de paix d'une structure
       if (isHarmful(e) && t.kind === 'character') {
         if (inSafeZone(r.map_id, t.pos.coord_x, t.pos.coord_y)) continue;
         if (!attackAllowed(await occupiableAt(pool, t.pos.map_id, t.pos.coord_x, t.pos.coord_y), 'spell')) continue;

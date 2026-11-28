@@ -89,3 +89,21 @@ async function freeCellRect(db: any, r: any, air = false) {
   }
   return null;
 }
+/**
+ * Reconstruction des structures détruites (migration 48) : structure « recréée » (`respawn`), délai `respawn_delay_h` écoulé
+ * depuis sa destruction, conditions `respawn_limits` levées (mêmes règles que les monstres) ; reposée sur sa dernière case si
+ * elle est libre, sinon au plus près. Renvoie le nombre de structures reposées.
+ */
+export async function respawnStructures(db: any) {
+  const { rows } = await db.query(`SELECT b.* FROM buildings b WHERE b.destroyed_at IS NOT NULL AND b.respawn AND b.home IS NOT NULL
+    AND b.destroyed_at + make_interval(secs => b.respawn_delay_h * 3600) <= now() AND NOT EXISTS (SELECT 1 FROM positions p WHERE p.building_id=b.id)`);
+  let n = 0;
+  for (const b of rows) {
+    if ((await respawnBlockers(db, { respawn_limits: b.respawn_limits })).length) continue;
+    const h = b.home, busy = (await db.query('SELECT 1 FROM positions WHERE map_id=$1 AND coord_x=$2 AND coord_y=$3 AND item_id IS NULL', [h.map, h.x, h.y])).rowCount;
+    const c = busy ? await freeCell(db, h.map, h.x, h.y, 2) : { x: h.x, y: h.y };
+    await db.query('INSERT INTO positions(map_id,coord_x,coord_y,building_id) VALUES ($1,$2,$3,$4)', [h.map, c.x, c.y, b.id]);
+    await db.query('UPDATE buildings SET destroyed_at=NULL, structure_current=NULL WHERE id=$1', [b.id]); n++;
+  }
+  return n;
+}

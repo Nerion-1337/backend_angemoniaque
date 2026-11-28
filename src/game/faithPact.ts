@@ -1,4 +1,4 @@
-import { z } from '../lib/route.js'; import { CAPS } from './spellEffects.js'; import { cfgAll } from './content.js';
+import { z } from '../lib/route.js'; import { CAPS, POOLS } from './spellEffects.js'; import { cfgAll } from './content.js';
 /**
  * Foi et Pactes réglés en admin (migration 44) : réglages (game_config.faith / game_config.pact), calculs purs et
  * application d'un bonus temporaire (temp_buffs, rétabli au tick horaire).
@@ -40,6 +40,15 @@ export async function applyBuff(db: any, charId: number, stat: string, delta: nu
   const pool = POOL_OF[stat];
   await db.query(`UPDATE characters SET ${stat}=${stat}+$2${pool ? `, ${pool}=GREATEST(0, LEAST(${stat}+$2, ${pool}+$2))` : ''} WHERE id=$1`, [charId, delta]);
   await db.query("INSERT INTO temp_buffs(character_id,stat,delta,source,expires_at) VALUES ($1,$2,$3,$4,now()+make_interval(secs => $5::numeric * 3600))", [charId, stat, delta, source, hours]);
+}
+/** Retire tout de suite les bonus temporaires choisis (`where` sur temp_buffs) : caractéristique rétablie, réserve ramenée sous son maximum. */
+export async function expireBuffs(db: any, where: string, params: any[] = []) {
+  const { rows } = await db.query(`DELETE FROM temp_buffs WHERE ${where} RETURNING character_id, stat, delta`, params);
+  for (const r of rows) if ((CAPS as readonly string[]).includes(r.stat)) {
+    await db.query(`UPDATE characters SET ${r.stat}=GREATEST(0, ${r.stat}-$2) WHERE id=$1`, [r.character_id, r.delta]);
+    for (const [cur, max] of Object.values(POOLS)) if (max === r.stat) await db.query(`UPDATE characters SET ${cur}=LEAST(${cur}, ${max}) WHERE id=$1`, [r.character_id]);
+  }
+  return rows.length;
 }
 /** Fiche publique d'un personnage (classement, demandes de pacte / de foi) : pseudo, rang, race, guilde. */
 export const CARD_SQL = `SELECT c.id, c.pseudo, c.race, rc.name race_name, s.name rank_name, s.current_rank, g.name guild

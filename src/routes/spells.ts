@@ -1,5 +1,5 @@
 import { def, router, z, P } from '../lib/route.js'; import { tx, ownChar, fail, log, dist, posOf } from '../lib/db.js'; import { freeCell } from '../game/spawn.js'; import { castSummon, ride } from '../game/spellSummon.js';
-import { actor, spend, spendDivine } from '../game/movement.js'; import { maxSummons } from '../game/stats.js'; import { terrain, inSafeZone } from '../game/terrain.js'; import { targetAt, applyDamage } from '../game/combatlib.js'; import { applyArmor } from '../game/rules.js'; import { broadcast } from '../realtime/ws.js'; import { combatEvent } from '../lib/events.js'; import { Effects, hasEffects, pickTargets, checkSafe, applyEffects } from '../game/spellEffects.js'; import { loadTarget } from '../game/combatlib.js'; import { checkOccupantAttack, occupiableAt, attackAllowed } from '../game/buildingCell.js'; import { isHarmful } from '../game/spellEffects.js'; import { gainXp } from '../game/xp.js';
+import { actor, spend, spendDivine } from '../game/movement.js'; import { maxSummons } from '../game/stats.js'; import { terrain, inSafeZone } from '../game/terrain.js'; import { targetAt, applyDamage } from '../game/combatlib.js'; import { applyArmor } from '../game/rules.js'; import { broadcast } from '../realtime/ws.js'; import { combatEvent } from '../lib/events.js'; import { Effects, hasEffects, pickTargets, checkSafe, applyEffects } from '../game/spellEffects.js'; import { loadTarget } from '../game/combatlib.js'; import { checkOccupantAttack, occupiableAt, attackAllowed } from '../game/buildingCell.js'; import { isHarmful } from '../game/spellEffects.js'; import { gainXp } from '../game/xp.js'; import { checkPeace, zoneAt } from '../game/gates.js';
 /** Sorts lançables : appris, liés (mode actif) à un objet ÉQUIPÉ ou à un bâtiment à soi (entity_spells), et capacités actives du
  *  type de monstre de l'invocation MONTÉE ou contrôlée (monster_spells, payées par elle). */
 const CASTABLE = `SELECT s.*, src.source FROM spells s JOIN (
@@ -54,6 +54,12 @@ def(spells, 'post', '/spells/cast', z.object({ characterId: z.number(), spellId:
       if (targets.length && !ok.length) fail(403, 'Cible protégée par un bâtiment contre les sorts');
       targets = ok;
     }
+    if (isHarmful(e)) {   // zones de paix des structures (migration 48) : lanceur dedans → refus ; cibles dedans épargnées
+      const pz = await zoneAt(db, 'peace_radius', a.mp.map_id, a.mp.coord_x, a.mp.coord_y); if (pz) fail(403, `Zone de paix de ${pz} : aucune attaque possible`);
+      const ok = []; for (const t of targets) if ((t.kind === 'character' && t.id === me.id) || !(await zoneAt(db, 'peace_radius', a.mp.map_id, t.pos.coord_x, t.pos.coord_y, t.kind === 'building' ? t.id : 0))) ok.push(t);
+      if (targets.length && !ok.length) fail(403, 'Cible en zone de paix : aucune attaque possible');
+      targets = ok;
+    }
     if (!targets.length) fail(409, 'Aucune cible valable');
     checkSafe(e, a.mp.map_id, me, from, targets);
     await spend(db, me, a, sp.energy_cost, payer);
@@ -80,6 +86,7 @@ def(spells, 'post', '/spells/cast', z.object({ characterId: z.number(), spellId:
   else if (sp.kind === 'attack') {
     if (d > 4) fail(409, 'Cible hors de portée (4 cases max)'); const t = await targetAt(db, a.mp.map_id, tx_, ty); if (!t) fail(409, 'Aucune cible sur cette case'); if (t.kind === 'character' && t.id === me.id) fail(400, 'Cible invalide'); await checkOccupantAttack(db, t, 'spell');
     if (t.kind !== 'monster' && (inSafeZone(a.mp.map_id, a.mp.coord_x, a.mp.coord_y) || inSafeZone(a.mp.map_id, tx_, ty))) fail(403, 'Zone sacrée : aucun combat entre joueurs');
+    await checkPeace(db, a.mp.map_id, { x: a.mp.coord_x, y: a.mp.coord_y }, { x: tx_, y: ty });
     await spend(db, me, a, sp.energy_cost, payer); const dmg = applyArmor(sp.damage, t.magicArmor), r = await applyDamage(db, t, dmg, me.id); const xp = await gainXp(db, me.id, sp.xp_use ?? 0, t); await log(db, me.id, `${sp.name} sur ${t.name} : -${dmg} PV`); broadcast(a.mp.map_id, combatEvent(t.id, r.killed)); return { ok: true, dmg, killed: r.killed, xp };
   }
   const xp = await gainXp(db, me.id, sp.xp_use ?? 0);

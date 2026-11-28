@@ -25,7 +25,10 @@ export async function applyDamage(db: any, t: Target, dmg: number, killerCharId:
   const hp = Math.max(0, t.row.hp_current - dmg);
   if (t.kind === 'building') {   // structure détruite : retirée de la carte, points de structure remis à neuf (la ligne sert de modèle)
     if (hp > 0) { await db.query('UPDATE buildings SET structure_current=$2 WHERE id=$1', [t.id, hp]); return { hp, killed: false }; }
-    await db.query('DELETE FROM positions WHERE building_id=$1', [t.id]); await db.query('UPDATE buildings SET structure_current=NULL WHERE id=$1', [t.id]);
+    // dernière case et date gardées pour la reconstruction (réapparition de la structure, migration 48)
+    await db.query(`UPDATE buildings SET structure_current=NULL, destroyed_at=now(), home=jsonb_build_object('map', $2::int, 'x', $3::int, 'y', $4::int) WHERE id=$1`, [t.id, t.pos.map_id, t.pos.coord_x, t.pos.coord_y]);
+    await db.query('DELETE FROM positions WHERE building_id=$1', [t.id]);
+    if (t.row.kind === 'door') await (await import('./gates.js')).syncGates(db);   // pactes / alliances qui dépendent de cette porte
     await log(db, killerCharId, `Structure détruite : ${t.name}`); return { hp: 0, killed: true };
   }
   const tbl = { character: 'characters', monster: 'monsters', summon: 'summons' }[t.kind];

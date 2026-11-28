@@ -1,4 +1,4 @@
-import { def, router, z, P } from '../../lib/route.js'; import { pool, fail } from '../../lib/db.js'; import { Activation, checkActivation } from '../../game/activation.js';
+import { def, router, z, P } from '../../lib/route.js'; import { pool, fail } from '../../lib/db.js'; import { Activation, checkActivation } from '../../game/activation.js'; import { RespawnLimit, respawnBlockers } from '../../game/respawn.js'; import { syncGates } from '../../game/gates.js';
 import { audit } from '../../lib/audit.js'; import { bumpContent } from '../../game/content.js';
 import { safeInsert, safeUpdate, requireRow, extras } from './common.js';
 export const buildingRoutes = router();
@@ -13,7 +13,14 @@ const Building = z.object({
   bonus_armor: z.number().int().optional(), bonus_magic_armor: z.number().int().optional(), bonus_see: z.number().int().optional(), bonus_range: z.number().int().optional(),
   occupant_attack: z.object({ melee: z.boolean(), ranged: z.boolean(), spell: z.boolean() }).optional(),
   /** Conditions d'activation de la capacité (lot E, migration 28) : groupes alternatifs. */
-  activation: Activation.optional()
+  activation: Activation.optional(),
+  /** Migration 48 : zone sans combat / sans construction (rayon en cases autour de la structure, 0 = aucune). */
+  peace_radius: z.number().int().min(0).max(100).optional(), nobuild_radius: z.number().int().min(0).max(100).optional(),
+  /** Réapparition de CETTE structure après sa destruction : recréée ou non, délai (heures), conditions (éléments limités). */
+  respawn: z.boolean().optional(), respawn_delay_h: z.number().min(0).max(8760).optional(), respawn_limits: z.array(RespawnLimit).max(30).optional(),
+  /** Porte : son monde, le monde vers lequel elle mène, heures d'ouverture par objet divin rendu. */
+  realm: z.enum(['human', 'demon', 'angel', 'dead']).nullable().optional(), leads_to: z.enum(['human', 'demon', 'angel']).nullable().optional(),
+  open_h_per_item: z.number().min(0.1).max(8760).optional()
 });
 def(buildingRoutes, 'get', '/admin/content/buildings', null, async c => {
   const q = c.req.query('q');
@@ -30,11 +37,13 @@ def(buildingRoutes, 'post', '/admin/content/buildings', Building, async (c, b) =
 def(buildingRoutes, 'get', '/admin/content/buildings/{id}', null, async c => {
   const id = P(c, 'id');
   return { ...(await requireRow('buildings', id)), ...(await extras('building', id)),
-    position: (await pool.query('SELECT map_id,coord_x,coord_y FROM positions WHERE building_id=$1', [id])).rows[0] ?? null };
+    position: (await pool.query('SELECT map_id,coord_x,coord_y FROM positions WHERE building_id=$1', [id])).rows[0] ?? null,
+    respawn_blockers: await respawnBlockers(pool, await requireRow('buildings', id)) };
 });
 def(buildingRoutes, 'put', '/admin/content/buildings/{id}', Building.partial(), async (c, b) => {
   if (b.activation) await checkActivation(pool, b.activation);
   const row = await safeUpdate('buildings', P(c, 'id'), b as any);
+  if (row?.kind === 'door') await syncGates(pool);   // monde / destination d'une porte changés
   await bumpContent(); await audit(c, 'building.update', 'building', P(c, 'id'), null, b);
   return row;
 });

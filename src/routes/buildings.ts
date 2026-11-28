@@ -1,5 +1,5 @@
 import { def, router, z, P } from '../lib/route.js'; import { tx, ownChar, fail, log, dist } from '../lib/db.js';
-import { actor, travel } from '../game/movement.js'; import { activate, hasActivation } from '../game/activation.js'; import { Effects, pickTargets, applyEffects } from '../game/spellEffects.js'; import { loadTarget } from '../game/combatlib.js'; import { castSummon } from '../game/spellSummon.js'; import { terrain } from '../game/terrain.js'; import { broadcast } from '../realtime/ws.js';
+import { actor, travel } from '../game/movement.js'; import { activate, hasActivation } from '../game/activation.js'; import { Effects, pickTargets, applyEffects } from '../game/spellEffects.js'; import { loadTarget } from '../game/combatlib.js'; import { castSummon } from '../game/spellSummon.js'; import { terrain } from '../game/terrain.js'; import { broadcast } from '../realtime/ws.js'; import { checkBuildable } from '../game/gates.js';
 export const buildings = router();
 /**
  * Activer la capacité d'un bâtiment (lot E) : personnage sur une case adjacente, un groupe de conditions rempli (consommé s'il
@@ -37,6 +37,7 @@ def(buildings, 'post', '/buildings/place', z.object({ characterId: z.number(), k
   if (!sc) fail(403, 'Parchemin de construction requis');
   if (b.x === undefined || b.y === undefined) fail(400, 'Case cible requise');
   if (['shallow', 'deep', 'volcano'].includes(terrain(b.x, b.y, a.mp.map_id).kind) || (await db.query('SELECT 1 FROM positions WHERE map_id=$1 AND coord_x=$2 AND coord_y=$3 AND item_id IS NULL', [a.mp.map_id, b.x, b.y])).rowCount) fail(409, 'Case indisponible');
+  await checkBuildable(db, a.mp.map_id, b.x, b.y);   // zone sans construction d'une structure (migration 48)
   const t = await travel(db, me, a, b, 1, BUILD_COST);
   await db.query('DELETE FROM character_items WHERE ctid=$1::tid', [sc.ctid]);
   const { rows: [bd] } = await db.query('INSERT INTO buildings(name,kind,owner_id,data) VALUES ($1,$2,$3,$4) RETURNING id', [b.kind, b.kind, me.id, JSON.stringify({ hp: 200, ...(b.totem ? { totem: b.totem } : {}) })]);

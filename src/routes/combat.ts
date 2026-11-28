@@ -4,7 +4,7 @@ import { tx, ownChar, fail, log, dist, trimLog } from '../lib/db.js';
 import { actor, travel, spend } from '../game/movement.js';
 import { gearStats } from '../game/stats.js';
 import { loadTarget, targetAt, applyDamage } from '../game/combatlib.js';
-import { computeHitChance } from '../game/rules.js'; import { inSafeZone } from '../game/terrain.js';
+import { computeHitChance } from '../game/rules.js'; import { inSafeZone } from '../game/terrain.js'; import { checkPeace } from '../game/gates.js';
 import { applyArmor } from '../game/rules.js';
 import { broadcast } from '../realtime/ws.js';
 import { combatEvent } from '../lib/events.js'; import { triggerItemSpells } from '../game/spellSummon.js'; import { gainXp, weaponXp, hitXp, rankCombat } from '../game/xp.js'; import { attackRange, dist3, groundReach, powerAt, powered, actorElevation, targetElevation, weaponReach } from '../game/reach.js';
@@ -39,6 +39,7 @@ def(combat, 'post', '/combat/attack', z.object({ characterId: z.number(), target
     if (t.row.owner_id === me.id) fail(400, 'Vous ne pouvez pas attaquer votre propre structure');
   }
   if (t.kind !== 'monster' && (inSafeZone(a.mp.map_id, a.mp.coord_x, a.mp.coord_y) || inSafeZone(tp.map_id, tp.coord_x, tp.coord_y))) fail(403, 'Zone sacrée : aucun combat entre joueurs');
+  await checkPeace(db, a.mp.map_id, { x: a.mp.coord_x, y: a.mp.coord_y }, { x: tp.coord_x, y: tp.coord_y }, t.kind === 'building' ? t.id : 0);   // zones de paix des structures : toute attaque, monstres compris
   const cost = ATTACK_COST, at = await attacker(db, me, a);
   let rg = await reachOf(db, me, a, t, tp);
   await checkOccupantAttack(db, t, rg.w.ranged ? 'ranged' : 'melee');   // personnage protégé par le bâtiment qu'il occupe (attaque à distance ou de mêlée selon l'arme)
