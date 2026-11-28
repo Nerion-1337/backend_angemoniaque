@@ -3,8 +3,8 @@ import { z } from '../lib/route.js'; import { fail } from '../lib/db.js'; import
  * Portes des mondes et zones des structures (migration 48).
  * - Porte : `realm` (son monde : human / demon / angel / dead) et `leads_to`. Ses « portes en face » : realm = son leads_to et
  *   leads_to = son realm (portes des Hommes vers les Démons ↔ Brèche de Soufre ; vers les Anges ↔ Arche de Grâce).
- * - Activation : un joueur de la race du monde de la porte rend N objets divins de sa famille (Homme : artefact, Démon : arcane,
- *   Ange : relique) ; ouverte N × `open_h_per_item` heures de plus. Franchir une porte exige une porte en face ouverte :
+ * - Activation : par un joueur de la race du monde de la porte, avec ses éléments d'activation (migration 49, structActivation.ts ;
+ *   par défaut 1 objet divin de sa famille par période). Franchir une porte exige une porte en face ouverte :
  *   activer sa propre porte ne permet pas de la franchir, elle laisse venir l'autre monde.
  * - Porte détruite = sans position sur la carte (reconstruite par le tick de réapparition).
  * - Camp (demon / angel) : pactes suspendus si sa porte est détruite ou si TOUTES les portes des Hommes qui mènent chez lui le
@@ -12,6 +12,8 @@ import { z } from '../lib/route.js'; import { fail } from '../lib/db.js'; import
  * - Demi-dieux : leurs pactes ne valent que si TOUTES les portes du monde des Hommes sont détruites.
  */
 export const FACTIONS = ['demon', 'angel'] as const;
+/** Activée définitivement : date maximale (an 275760). */
+export const FOREVER = 8.64e15;
 export type Realm = 'demon' | 'angel' | 'demigod';
 export const REALM_LABEL: Record<Realm, string> = { demon: 'démoniaques', angel: 'angéliques', demigod: 'des demi-dieux' };
 /** Camp d'un pacte selon la race de l'Ange / Démon / demi-dieu qui le propose. */
@@ -19,8 +21,9 @@ export const pactRealm = (etherealRace: string): Realm => (etherealRace === 'hum
 export const realmSql = (col: string) => `(CASE ${col} WHEN 'human' THEN 'demigod' ELSE ${col} END)`;
 
 export async function doors(db: any) {
-  return (await db.query(`SELECT b.id, b.name, b.realm, b.leads_to, b.open_until, b.open_h_per_item::float, b.data, b.activation, p.map_id, p.coord_x, p.coord_y,
-      (p.id IS NOT NULL) placed, (p.id IS NOT NULL AND b.open_until > now()) open, GREATEST(0, EXTRACT(EPOCH FROM b.open_until - now()))::int open_in_s
+  return (await db.query(`SELECT b.id, b.name, b.realm, b.leads_to, CASE WHEN b.open_until='infinity' THEN NULL ELSE b.open_until END open_until, COALESCE(b.open_until='infinity', false) forever,
+      b.data, b.activation, b.activations, p.map_id, p.coord_x, p.coord_y, (p.id IS NOT NULL) placed, (p.id IS NOT NULL AND b.open_until > now()) open,
+      CASE WHEN b.open_until='infinity' THEN NULL ELSE GREATEST(0, EXTRACT(EPOCH FROM b.open_until - now()))::int END open_in_s
     FROM buildings b LEFT JOIN positions p ON p.building_id=b.id WHERE b.kind='door' ORDER BY b.id`)).rows;
 }
 /** Portes en face d'une porte (celles par lesquelles on arrive / qui doivent être ouvertes pour la franchir). */
@@ -28,7 +31,7 @@ export const facing = (all: any[], d: any) => all.filter(o => o.realm === d.lead
 /** État de chaque camp (pur) : pactes valides, fin de l'alliance (null = pas d'alliance). */
 export function realmStatus(all: any[]) {
   const ruined = (ds: any[]) => ds.length > 0 && ds.every(d => !d.placed);
-  const lastOpen = (ds: any[]) => ds.filter(d => d.open).reduce((m: number, d) => Math.max(m, new Date(d.open_until).getTime()), 0);
+  const lastOpen = (ds: any[]) => ds.filter(d => d.open).reduce((m: number, d) => Math.max(m, d.forever ? FOREVER : new Date(d.open_until).getTime()), 0);
   const out: Record<string, { pactsOn: boolean; allianceUntil: Date | null; reason?: string }> = {};
   for (const f of FACTIONS) {
     const own = all.filter(d => d.realm === f && d.leads_to === 'human'), hum = all.filter(d => d.realm === 'human' && d.leads_to === f);

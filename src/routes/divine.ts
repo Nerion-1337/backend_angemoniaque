@@ -1,35 +1,13 @@
 import { def, router, z, P } from '../lib/route.js'; import { tx, ownChar, posOf, fail, log, dist } from '../lib/db.js'; import { activate, hasActivation } from '../game/activation.js';
-import { KIND, required, held, applySpec } from '../game/divine.js'; import { freeCell, spawnZone } from '../game/spawn.js'; import { doors, facing, syncGates } from '../game/gates.js'; import { fmtWait } from '../game/faithPact.js'; import { broadcast } from '../realtime/ws.js';
+import { KIND, required, held, applySpec } from '../game/divine.js'; import { freeCell, spawnZone } from '../game/spawn.js'; import { doors, facing } from '../game/gates.js'; import { broadcast } from '../realtime/ws.js';
 export const divine = router();
-/**
- * Portes des mondes (migration 48, game/gates.ts). État vu depuis une case adjacente : monde, ouverture, portes en face, ce que le
- * joueur peut faire (activer avec ses objets divins, franchir, choisir sa porte d'arrivée).
- */
+/** Portes des mondes (migrations 48-49, game/gates.ts) : franchissement. État et activation : routes des structures (buildings.ts). */
 async function doorNear(db: any, ch: any, id: number) {
   const mp = await posOf(db, ch.id), all = await doors(db), d = all.find((x: any) => x.id === id);
   if (!d || !d.placed || d.map_id !== mp.map_id || dist(mp, d) > 1) fail(409, 'Porte hors de portée');
   return { d, all, mp };
 }
-const pub = (x: any) => ({ id: x.id, name: x.name, realm: x.realm, leads_to: x.leads_to, placed: x.placed, open: x.open, open_in_s: x.open ? x.open_in_s : 0 });
-def(divine, 'get', '/divine/door/{id}/{characterId}', null, c => tx(async db => {
-  const ch = await ownChar(db, c, P(c, 'characterId')), { d, all } = await doorNear(db, ch, P(c, 'id'));
-  const family = KIND[d.realm], face = d.realm === 'dead' || d.realm == null ? [] : facing(all, d);
-  return { ...pub(d), hours_per_item: d.open_h_per_item, family: family ?? null, can_activate: !!family && ch.race === d.realm,
-    held: family ? await held(db, ch.id, family) : 0, facing: face.map(pub), can_cross: d.realm === 'dead' || d.realm == null || face.some((f: any) => f.open),
-    activation: hasActivation(d) ? d.activation : null };
-}));
-def(divine, 'post', '/divine/door/{id}/activate', z.object({ characterId: z.number(), count: z.number().int().min(1).max(100) }), (c, b) => tx(async db => {
-  const ch = await ownChar(db, c, b.characterId), { d } = await doorNear(db, ch, P(c, 'id')), family = KIND[d.realm];
-  if (!family) fail(400, 'Cette porte ne s\'active pas');
-  if (ch.race !== d.realm) fail(403, `Seul un joueur de ce monde peut activer ${d.name}`);
-  const n = await held(db, ch.id, family); if (n < b.count) fail(403, `${b.count} ${family}(s) requis (vous en détenez ${n})`);
-  await db.query('UPDATE divine_items SET holder_character_id=NULL WHERE id IN (SELECT id FROM divine_items WHERE holder_character_id=$1 AND kind=$2 LIMIT $3)', [ch.id, family, b.count]);
-  const { rows: [r] } = await db.query(`UPDATE buildings SET open_until=GREATEST(now(), COALESCE(open_until, now())) + make_interval(secs => $2::numeric * open_h_per_item * 3600)
-    WHERE id=$1 RETURNING GREATEST(0, EXTRACT(EPOCH FROM open_until - now()))::int open_in_s`, [d.id, b.count]);
-  await syncGates(db);
-  await log(db, ch.id, `Active ${d.name} (${b.count} ${family}) : ouverte ${fmtWait(r.open_in_s)}`); broadcast(d.map_id, { type: 'built' });
-  return { ok: true, open_in_s: r.open_in_s };
-}));
+export const pubDoor = (x: any) => ({ id: x.id, name: x.name, realm: x.realm, leads_to: x.leads_to, placed: x.placed, open: x.open, forever: !!x.forever, open_in_s: x.open ? x.open_in_s : 0 });
 /** Franchir : une porte en face ouverte est exigée (Royaume des Morts : toujours, vers la zone d'apparition de sa race) ; les
  *  conditions réglées en admin s'ajoutent. Porte des Hommes → son arrivée fixe ; sinon → près d'une porte en face ouverte, au choix. */
 def(divine, 'post', '/divine/door', z.object({ characterId: z.number(), buildingId: z.number(), toBuildingId: z.number().optional() }), (c, b) => tx(async db => {
@@ -49,7 +27,7 @@ def(divine, 'post', '/divine/door', z.object({ characterId: z.number(), building
     if (!open.length) fail(409, `${d.name} est fermée : une porte de l'autre monde doit être activée (${facing(all, d).map((f: any) => f.name).join(', ') || 'aucune'})`);
     const pick = b.toBuildingId != null ? open.find((f: any) => f.id === b.toBuildingId) : open.length === 1 || d.realm === 'human' ? open[0] : null;
     if (b.toBuildingId != null && !pick) fail(409, 'Cette porte d\'arrivée n\'est pas ouverte');
-    if (!pick) return { ok: false, choose: open.map(pub) };
+    if (!pick) return { ok: false, choose: open.map(pubDoor) };
     const to = d.data?.to;
     dest = d.realm === 'human' && Array.isArray(to) ? { m: to[0], x: to[1], y: to[2], r: 3 } : { m: pick.map_id, x: pick.coord_x, y: pick.coord_y, r: 2 };
   }

@@ -36,3 +36,11 @@ export const bagRoom = async (db: any, id: number) => { const b = await bagState
 /** Emplacements supplémentaires nécessaires pour ajouter `qty` d'une ressource à une réserve. */
 export const extraSlots = (res: Record<string, number>, id: string, qty: number, st: (id: string) => number) =>
   Math.ceil((Math.max(0, Number(res[id]) || 0) + qty) / st(id)) - Math.ceil(Math.max(0, Number(res[id]) || 0) / st(id));
+
+/** Catégorie d'affichage (filtres de l'Hôtel de ville, 2026-11-28) d'un objet `i` : structure (parchemin de construction ou de
+ *  structure), invocation (parchemin d'un sort d'invocation), sort (parchemin d'un autre sort), ressource, sinon objet. */
+export const ITEM_CAT = (i: string) => `(CASE WHEN ${i}.data->>'kind' IN ('wall','tower','factory','totem','building') OR EXISTS (SELECT 1 FROM recipes r WHERE r.scroll_item_id=${i}.id AND r.target_kind='building') THEN 'structure'
+  WHEN EXISTS (SELECT 1 FROM recipes r JOIN spells s ON s.id=r.target_id WHERE r.scroll_item_id=${i}.id AND r.target_kind='spell' AND (s.kind='summon' OR s.effects ? 'summon')) THEN 'invocation'
+  WHEN EXISTS (SELECT 1 FROM recipes r WHERE r.scroll_item_id=${i}.id AND r.target_kind='spell') THEN 'sort'
+  WHEN ${i}.slot='resource' OR ${i}.data->>'kind' LIKE 'resource%' THEN 'ressource' ELSE 'objet' END)`;
+export const SPELL_CAT = (s: string) => `(CASE WHEN ${s}.kind='summon' OR ${s}.effects ? 'summon' THEN 'invocation' ELSE 'sort' END)`;

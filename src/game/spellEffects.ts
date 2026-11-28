@@ -1,5 +1,5 @@
 import { z } from '../lib/route.js'; import { fail } from '../lib/db.js';
-import { applyDamage, type Target } from './combatlib.js'; import { applyArmor } from './rules.js'; import { inSafeZone } from './terrain.js';
+import { applyDamage, type Target } from './combatlib.js'; import { applyArmor } from './rules.js';
 /**
  * Moteur de sorts paramétrable (spells.effects, migration 20). Un sort sans effets ({}) garde son comportement historique.
  * - target : self (lanceur), single (une case à portée), area (toutes les entités à `radius` d'une case à portée).
@@ -70,8 +70,3 @@ export function pickTargets(e: EffectsT, caster: any, center: { x: number; y: nu
   const inRange = (t: Target) => Math.max(Math.abs(t.pos.coord_x - center.x), Math.abs(t.pos.coord_y - center.y)) <= (e.target === 'area' ? e.radius : 0);
   return entities.filter(t => inRange(t) && keepTarget(e.affects, isAlly(caster.race, caster.id, t) || (t.kind === 'character' && t.id === caster.id)));
 }
-/** Zone sacrée : un effet hostile sur un autre personnage est refusé si le lanceur ou la cible y est. */
-export const checkSafe = (e: EffectsT, mapId: number, caster: any, from: { x: number; y: number }, targets: Target[]) => {
-  if (!isHarmful(e)) return;
-  for (const t of targets) if (t.kind === 'character' && t.id !== caster.id && (inSafeZone(mapId, from.x, from.y) || inSafeZone(mapId, t.pos.coord_x, t.pos.coord_y))) fail(403, 'Zone sacrée : aucun combat entre joueurs');
-};

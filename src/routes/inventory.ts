@@ -1,4 +1,4 @@
-import { OpenAPIHono } from '@hono/zod-openapi'; import { def, router, z, P } from '../lib/route.js'; import { tx, ownChar, fail, log } from '../lib/db.js'; import { bagState, resStacks } from '../game/bag.js';
+import { OpenAPIHono } from '@hono/zod-openapi'; import { def, router, z, P } from '../lib/route.js'; import { tx, ownChar, fail, log } from '../lib/db.js'; import { ITEM_CAT } from '../game/bag.js'; import { bagState, resStacks } from '../game/bag.js';
 import { gainXp } from '../game/xp.js';
 export const inventory = router();
 /** Emplacements acceptés par type d'objet. Plus d'emplacement « arc » : un arc est une arme à deux mains (`two_handed`, migration 32). */
@@ -8,7 +8,7 @@ export const GROUP: Record<string, string[]> = { weapon: ['weapon_main', 'weapon
   ring: ['ring_l', 'ring_r'], bracelet: ['bracelet_l', 'bracelet_r'], special: ['special_1', 'special_2', 'special_3', 'special_4', 'special_5'] };
 def(inventory, 'get', '/inventory/{characterId}', null, c => tx(async db => {
   const me = await ownChar(db, c, P(c, 'characterId'));
-  const items = (await db.query(`SELECT i.id,i.name,i.slot,i.two_handed,i.rarity,i.data,i.armor,i.magic_armor,i.bonuses,i.req_strength,i.weapon_damage,i.reach,i.full_power_at,i.power_start,i.power_end,i.strength_bonus,i.agility_bonus,ci.equipped_slot, GREATEST(0, EXTRACT(EPOCH FROM (ci.equipped_at + interval '12 hours' - now())))::int lock_seconds, ci.qty FROM character_items ci JOIN items i ON i.id=ci.item_id WHERE ci.character_id=$1 AND NOT ci.in_chest`, [me.id])).rows;
+  const items = (await db.query(`SELECT i.id,i.name,i.slot,i.two_handed,i.rarity,${ITEM_CAT('i')} cat,i.data,i.armor,i.magic_armor,i.bonuses,i.req_strength,i.weapon_damage,i.reach,i.full_power_at,i.power_start,i.power_end,i.strength_bonus,i.agility_bonus,ci.equipped_slot, GREATEST(0, EXTRACT(EPOCH FROM (ci.equipped_at + interval '12 hours' - now())))::int lock_seconds, ci.qty FROM character_items ci JOIN items i ON i.id=ci.item_id WHERE ci.character_id=$1 AND NOT ci.in_chest`, [me.id])).rows;
   const bag = await bagState(db, me.id);
   return { items, lockHours: 12, specialSlots: me.race === 'human' ? 5 : 4, bagMax: bag.size, bagUsed: bag.used, resources: me.resources, resStacks: resStacks(bag.resources, bag.st) };
 }));

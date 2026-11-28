@@ -44,7 +44,7 @@ export async function die(db: any, victim: any, killerCharId: number | null) {
   await db.query('UPDATE positions SET map_id=$4, coord_x=$2, coord_y=$3 WHERE character_id=$1', [victim.id, c.x, c.y, DEAD_MAP]);
   const { rows: [v] } = await db.query('SELECT xp, gold FROM characters WHERE id=$1', [victim.id]);
   const loss = deathLoss(Number(v.xp), Number(v.gold), Math.min(100, Math.max(0, Number(await cfgNum('death_loss_pct', 25)) || 0)));
-  await db.query('UPDATE characters SET hp_current=hp_max, xp=xp-$2, gold=gold-$3 WHERE id=$1', [victim.id, loss.xp, loss.gold]);
+  await db.query('UPDATE characters SET hp_current=hp_max, xp=xp-$2, xp_total=GREATEST(0, COALESCE(xp_total, 0)-$2), gold=gold-$3 WHERE id=$1', [victim.id, loss.xp, loss.gold]);   // l'XP totale accumulée ne baisse qu'à la mort
   await log(db, victim.id, `Mort : envoyé au Royaume des Morts${loss.xp || loss.gold ? ` (−${loss.xp} XP, −${loss.gold} or)` : ''}`);
 }
 /**

@@ -2,7 +2,7 @@
 title: Procedural map & terrain: resources, movement rules, spawn, map/action routes
 slug: map-terrain-gather
 status: done
-updated: 2026-11-26
+updated: 2026-11-28
 files:
   - src/game/terrain.ts
   - src/game/humanMap.ts
@@ -18,7 +18,6 @@ files:
 symbols:
   - src/game/terrain.ts:terrain
   - src/game/terrain.ts:noiseAt
-  - src/game/terrain.ts:inSafeZone
   - src/game/terrain.ts:FEATURES
   - src/game/resources.ts:RES_BY_ID
   - src/game/burn.ts:ignite
@@ -56,7 +55,7 @@ et API des cartes (`/map/*`) et actions (`/actions/*`). Le front en garde un mir
 - Paiement : l'invocation contrôlée paie tout ; sinon l'invocation montée paie le trajet et le héros les actions ; énergie insuffisante → 409.
 - Traverser une case de lave enflamme le HÉROS (pas les invocations) : `burn_until = now + 3 h`, 10 PV/h au tick, jamais mortel (PV min 1).
 - Récolte : 4 énergie, sur place ou à distance (trajet d'abord) ; eau profonde à pied → 409 « Rien à récolter ici » AVANT tout trajet ; stockée sous l'id STABLE du catalogue.
-- Zone sacrée : Chebyshev ≤ 10 de l'Hôtel de ville (carte 1) ; aucun combat joueur contre joueur si l'un des deux y est ; monstres exemptés.
+- Zone sacrée codée en dur retirée le 2026-11-28 : les zones sans combat se règlent sur chaque structure (`peace_radius`, card `gates-structures`).
 - Apparition d'un personnage : zone de sa race (card `races-spawn-clock`), sinon capitale ; case libre jamais sur eau ni lave, rayon élargi par pas de 2 si plein (503 seulement si la carte est pleine).
 - Les réponses de carte ne donnent jamais de PV exacts (état public sur 4 niveaux) ; `/map/{id}/area` limité à r ≤ 25.
 - Inventaire : verrou de 12 h au déséquipement, compatibilité slot/objet, arme à deux mains (`two_handed`, card `item-stats`) en main principale seulement et l'autre main libre, 5 emplacements spéciaux pour un humain (4 sinon), sac de 20.

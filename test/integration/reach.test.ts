@@ -16,11 +16,11 @@ describe.skipIf(!process.env.DATABASE_URL)('Portée des armes et hauteur', () =>
   const attack = () => call('/combat/attack', { characterId: T.a, targetCharacterId: T.b }, T.tka);
   beforeAll(async () => {
     app = (await import('../../src/app')).app; pool = (await import('../../src/lib/db')).pool;
-    const { terrain, inSafeZone } = await import('../../src/game/terrain');
+    const { terrain } = await import('../../src/game/terrain');
     T.adm = await login(process.env.ADMIN_EMAIL ?? 'admin@ange.local');
     T.tka = await login(`ra${s}@x.fr`); T.a = (await call('/characters', { pseudo: `ra${s}`, race: 'human' }, T.tka)).j.id;
     T.tkb = await login(`rb${s}@x.fr`); T.b = (await call('/characters', { pseudo: `rb${s}`, race: 'demon' }, T.tkb)).j.id;
-    const free = async (x: number, y: number) => terrain(x, y, 1).kind === 'plain' && !inSafeZone(1, x, y) && !(await pool.query('SELECT 1 FROM positions WHERE map_id=1 AND coord_x=$1 AND coord_y=$2', [x, y])).rowCount;
+    const free = async (x: number, y: number) => terrain(x, y, 1).kind === 'plain' && Math.max(Math.abs(x - 100), Math.abs(y - 100)) > 12 && !(await pool.query('SELECT 1 FROM positions WHERE map_id=1 AND coord_x=$1 AND coord_y=$2', [x, y])).rowCount;
     for (let i = 0; i < 600 && !T.xy; i++) { const x = 20 + (s + i * 7) % 150, y = 20 + (s + i * 13) % 150;   // trois cases de plaine libres en ligne, hors zone sacrée
       if (await free(x, y) && await free(x + 1, y) && await free(x + 2, y)) T.xy = [x, y]; }
     await pool.query('UPDATE positions SET map_id=1, coord_x=$2, coord_y=$3 WHERE character_id=$1', [T.a, T.xy[0], T.xy[1]]);

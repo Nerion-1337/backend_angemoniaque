@@ -1,4 +1,4 @@
-import { pool } from '../lib/db.js'; import { Effects, POOLS, applyEffects, pickTargets, isHarmful } from './spellEffects.js'; import { inSafeZone } from './terrain.js'; import { attackAllowed, occupiableAt } from './buildingCell.js'; import { loadTarget } from './combatlib.js'; import { zoneAt } from './gates.js';
+import { pool } from '../lib/db.js'; import { Effects, POOLS, applyEffects, pickTargets, isHarmful } from './spellEffects.js'; import { attackAllowed, occupiableAt } from './buildingCell.js'; import { loadTarget } from './combatlib.js'; import { zoneAt } from './gates.js';
 /**
  * Tick horaire des sorts : (1) dégâts sur la durée (spell_dots) — jamais mortels (PV min 1), lignes expirées supprimées ;
  * (2) sorts PASSIFS liés à un objet équipé ou à la monture active : leurs effets instantanés sur soi (soin, réserves ±)
@@ -24,12 +24,13 @@ export async function hourlySpellEffects() {
 }
 
 /** Sorts PASSIFS des bâtiments : appliqués chaque heure depuis la case de la structure — zone = entités à `radius` (camp relatif à
- *  la race du propriétaire), sinon l'occupant de la case. Effets hostiles : jamais en zone sacrée sur un personnage, ni sur un
+ *  la race du propriétaire), sinon l'occupant de la case. Structure qui s'active : seulement tant qu'elle est activée. Effets hostiles : jamais en zone de paix, ni sur un
  *  occupant protégé contre les sorts. */
 export async function hourlyBuildingSpells() {
   const { rows } = await pool.query(`SELECT b.id, b.owner_id, ch.race, p.map_id, p.coord_x x, p.coord_y y, s.id spell_id, s.effects
     FROM entity_spells es JOIN buildings b ON b.id=es.ref_id JOIN positions p ON p.building_id=b.id JOIN spells s ON s.id=es.spell_id
-    LEFT JOIN characters ch ON ch.id=b.owner_id WHERE es.kind='building' AND es.mode='passive'`);
+    LEFT JOIN characters ch ON ch.id=b.owner_id WHERE es.kind='building' AND es.mode='passive'
+      AND (jsonb_array_length(b.activations) = 0 OR b.open_until > now())`);   // structure à activer (migration 49) : seulement pendant son activation
   let n = 0;
   for (const r of rows) {
     const parsed = Effects.safeParse(r.effects ?? {}); if (!parsed.success || !Object.keys(r.effects ?? {}).length) continue;
@@ -42,7 +43,6 @@ export async function hourlyBuildingSpells() {
     for (const t of pickTargets(e, caster, { x: r.x, y: r.y }, all)) {
       if (isHarmful(e) && await zoneAt(pool, 'peace_radius', t.pos.map_id, t.pos.coord_x, t.pos.coord_y, t.kind === 'building' ? t.id : 0)) continue;   // zone de paix d'une structure
       if (isHarmful(e) && t.kind === 'character') {
-        if (inSafeZone(r.map_id, t.pos.coord_x, t.pos.coord_y)) continue;
         if (!attackAllowed(await occupiableAt(pool, t.pos.map_id, t.pos.coord_x, t.pos.coord_y), 'spell')) continue;
       }
       try { await applyEffects(pool, caster, r.spell_id, e, t); n++; } catch (err: any) { console.error('sort de bâtiment :', err.message); }

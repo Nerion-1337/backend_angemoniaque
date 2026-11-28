@@ -1,10 +1,9 @@
 import { test, expect } from 'vitest';
-import { terrain, noiseAt, inSafeZone, FEATURES, MAP_HUMAN, BURN_DAMAGE } from '../src/game/terrain';
+import { terrain, noiseAt, FEATURES, MAP_HUMAN, BURN_DAMAGE } from '../src/game/terrain';
 import { RESOURCES } from '../src/game/resources';
 const all = (f: (x: number, y: number, t: any) => void) => { for (let x = 0; x < 200; x++) for (let y = 0; y < 200; y++) f(x, y, terrain(x, y, MAP_HUMAN)); };
 test('Hôtel de ville exactement au milieu de la carte 200x200, sur une plaine', () => { expect(FEATURES.hotel).toEqual({ x: 100, y: 100 }); expect(terrain(100, 100, MAP_HUMAN).kind).toBe('plain'); });
-test('zone sacrée : rayon 10 autour de l’hôtel, Monde des Hommes uniquement', () => {
-  expect(inSafeZone(1, 100, 100)).toBe(true); expect(inSafeZone(1, 110, 90)).toBe(true); expect(inSafeZone(1, 111, 100)).toBe(false); expect(inSafeZone(1, 100, 89)).toBe(false); expect(inSafeZone(2, 100, 100)).toBe(false);
+test('abords de l’hôtel (rayon 10) : terre ferme', () => {
   for (let x = 90; x <= 110; x++) for (let y = 90; y <= 110; y++) expect(['plain', 'forest']).toContain(terrain(x, y, 1).kind);
 });
 test('4 portails, sur terre ferme', () => { expect(FEATURES.portals).toHaveLength(4); for (const p of FEATURES.portals) expect(['deep', 'shallow', 'volcano']).not.toContain(terrain(p.x, p.y, 1).kind); });

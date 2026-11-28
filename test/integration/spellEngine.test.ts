@@ -52,7 +52,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Moteur de sorts et liens', () => {
     const c = await ch(T.a); expect(c.energy_max).toBe(100); expect(c.energy_current).toBeLessThanOrEqual(100);
   });
 
-  test('cible unique hostile : dégâts instantanés + dégâts sur la durée (jamais mortels), refusé en zone sacrée', async () => {
+  test('cible unique hostile : dégâts instantanés + dégâts sur la durée (jamais mortels), refusé en zone de paix', async () => {
     const id = await spell('Poison', { target: 'single', range: 4, damage: 10, dot: { damage: 500, hours: 3 }, affects: 'all' });
     await learn(T.a, id);
     await pool.query('UPDATE characters SET hp_current=100, hp_max=200 WHERE id=$1', [T.b]);
@@ -62,11 +62,14 @@ describe.skipIf(!process.env.DATABASE_URL)('Moteur de sorts et liens', () => {
     expect((await pool.query("SELECT count(*)::int n FROM spell_dots WHERE target_kind='character' AND target_id=$1", [T.b])).rows[0].n).toBe(1);
     await hourlySpellEffects();
     expect((await ch(T.b)).hp_current).toBe(1);   // 500/h mais plancher 1
-    // zone sacrée (Monde des Hommes, autour de l'hôtel de ville)
-    await call(`/admin/players/${T.a}/teleport`, { map: 1, x: 100, y: 101 }, T.adm); const pa = await pos(T.a);
-    await call(`/admin/players/${T.b}/teleport`, { map: 1, x: pa.x + 1, y: pa.y }, T.adm); const pb = await pos(T.b);
+    // zone de paix d'une structure (la zone sacrée codée en dur a disparu le 2026-11-28)
+    const pa = await pos(T.a), pb = await pos(T.b);
+    const bz = (await pool.query("INSERT INTO buildings(name,kind,peace_radius) VALUES ('Paix', 'totem', 3) RETURNING id")).rows[0].id;
+    await pool.query('INSERT INTO positions(map_id,coord_x,coord_y,building_id) VALUES ($1,$2,$3,$4)', [pa.m, pa.x - 2, pa.y, bz]);
     await pool.query('UPDATE characters SET hp_current=100, energy_current=100 WHERE id = ANY($1)', [[T.a, T.b]]);
-    expect((await call('/spells/cast', { characterId: T.a, spellId: id, x: pb.x, y: pb.y }, T.tk)).status).toBe(403);
+    const no = await call('/spells/cast', { characterId: T.a, spellId: id, x: pb.x, y: pb.y }, T.tk);
+    await pool.query('DELETE FROM positions WHERE building_id=$1', [bz]); await pool.query('DELETE FROM buildings WHERE id=$1', [bz]);
+    expect(no.status).toBe(403); expect(no.j?.error ?? '').toMatch(/Zone de paix/);
     await pool.query('DELETE FROM spell_dots WHERE target_id=$1', [T.b]);
   });
 

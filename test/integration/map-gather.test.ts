@@ -74,7 +74,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Carte & récolte intégration', () =
     expect(resp.status).toBe(409);
     expect((await resp.json()).error).toBe('Rien à récolter ici');
   });
-  test('zone sacrée de l’Hôtel de ville : aucun combat entre joueurs (403)', async () => {
+  test('plus de zone sacrée codée en dur : la case expose la zone de paix réglée (aucune par défaut) ; état de forme public', async () => {
     const t2 = (await (await call('/auth/register', { email: `${u}9@x.fr`, password: 'Lune-Brisee-2026!' }, '', 'POST')).json()).token;
     let ok = false, id2: any, p: any;
     for (let k = 0; k < 3 && !ok; k++) { // même saturation possible pour le 2e personnage
@@ -82,13 +82,9 @@ describe.skipIf(!process.env.DATABASE_URL)('Carte & récolte intégration', () =
       if (cr.status === 200) { ok = true; id2 = (await cr.json()).id; p = (await (await call(`/characters/${id2}`, undefined, t2)).json()).actor.pos; }
     }
     expect(ok).toBe(true);
-    // les deux personnages sont apparus dans l’anneau r=4 autour de la capitale, dans la zone sacrée (rayon 10)
-    const resp = await call('/combat/attack', { characterId: id, targetCharacterId: id2 });
-    expect(resp.status).toBe(403);
-    expect((await resp.json()).error).toContain('Zone sacrée');
     const c = await (await call(`/map/${p.map_id}/cell?x=${p.x}&y=${p.y}&details=1`)).json();
     expect(c.entity.kind).toBe('character');
-    expect(c.safe).toBe(true); // le /cell expose le drapeau zone sacrée
+    expect(c.peace ?? null).toBe((await (await import('../../src/game/gates')).zoneAt((await import('../../src/lib/db')).pool, 'peace_radius', p.map_id, p.x, p.y)));
     expect(['En pleine forme', 'Bon état', 'Blessé', 'Souffrant']).toContain(c.entity.health);
     expect(c.entity.chp).toBeUndefined(); expect(c.entity.visibleGear).toBeInstanceOf(Array);
   });

@@ -1,5 +1,6 @@
 import { OpenAPIHono } from '@hono/zod-openapi'; import { def, router, z, P } from '../lib/route.js'; import { tx, ownChar, posOf, fail, log, dist } from '../lib/db.js';
 import { cfgNum } from '../game/content.js'; import { bagRoom, bagState, chestState, resStacks, extraSlots } from '../game/bag.js'; import { resName } from '../game/deposits.js';
+import { ITEM_CAT, SPELL_CAT } from '../game/bag.js';
 export const market = router();
 const TBL: Record<string, [string, string]> = { item: ['character_items', 'item_id'], spell: ['character_spells', 'spell_id'] };
 /** Coffre réglé par capitale (admin Bâtiments, data.chestStart / chestMax) : taille de départ (10) et capacité max (aucune). */
@@ -17,8 +18,8 @@ const FOR_RACE = `shop AND (shop_races='[]'::jsonb OR shop_races ? $1)`;
 def(market, 'get', '/shop', null, async c => { const { pool } = await import('../lib/db.js');
   const cid = Number(c.req.query('characterId')); const race = cid ? (await ownChar(pool, c, cid)).race : null;
   const w = race ? FOR_RACE : 'shop', a = race ? [race] : [];
-  return { items: (await pool.query(`SELECT id,name,slot,price,shop_stock stock,armor,weapon_damage,req_strength,rarity FROM items WHERE ${w} ORDER BY price`, a)).rows,
-    spells: (await pool.query(`SELECT id,name,kind,price,energy_cost,divine_energy_cost,description,rarity FROM spells WHERE ${w} ORDER BY price`, a)).rows,
+  return { items: (await pool.query(`SELECT id,name,slot,price,shop_stock stock,armor,weapon_damage,req_strength,rarity, ${ITEM_CAT('items')} cat FROM items WHERE ${w} ORDER BY price`, a)).rows,
+    spells: (await pool.query(`SELECT id,name,kind,price,energy_cost,divine_energy_cost,description,rarity, ${SPELL_CAT('spells')} cat FROM spells WHERE ${w} ORDER BY price`, a)).rows,
     mapUpgrade: { price: await mapUpgradePrice() } }; });
 /** Carte des ressources (migrations 32, 38) : la carte du monde met en valeur la ressource choisie. Achetée à l'Hôtel de ville, elle
  *  n'ouvre QUE le monde de cette capitale (`characters.map_worlds`) ; les autres mondes s'ouvrent par leur parchemin. Prix réglé en admin. */
@@ -47,7 +48,7 @@ def(market, 'post', '/market/list', z.object({ characterId: z.number(), kind: z.
   await db.query('INSERT INTO market_listings(seller_id,race,kind,ref_id,price) VALUES ($1,$2,$3,$4,$5)', [me.id, me.race, b.kind, b.refId, b.price]); return { ok: true };
 }));
 def(market, 'get', '/market/{characterId}', null, c => tx(async db => { const me = await ownChar(db, c, P(c, 'characterId')); await atCapital(db, me);
-  return (await db.query(`SELECT l.*, COALESCE(i.name,s.name) name FROM market_listings l LEFT JOIN items i ON l.kind='item' AND i.id=l.ref_id LEFT JOIN spells s ON l.kind='spell' AND s.id=l.ref_id WHERE NOT l.sold AND l.race=$1`, [me.race])).rows; }));
+  return (await db.query(`SELECT l.*, COALESCE(i.name,s.name) name, COALESCE(i.rarity,s.rarity) rarity, CASE WHEN l.kind='item' THEN ${ITEM_CAT('i')} ELSE ${SPELL_CAT('s')} END cat FROM market_listings l LEFT JOIN items i ON l.kind='item' AND i.id=l.ref_id LEFT JOIN spells s ON l.kind='spell' AND s.id=l.ref_id WHERE NOT l.sold AND l.race=$1`, [me.race])).rows; }));
 def(market, 'post', '/market/{id}/buy', z.object({ characterId: z.number() }), (c, b) => tx(async db => {
   const me = await ownChar(db, c, b.characterId); await atCapital(db, me);
   const { rows: [l] } = await db.query('SELECT * FROM market_listings WHERE id=$1 AND NOT sold AND race=$2 FOR UPDATE', [P(c, 'id'), me.race]); if (!l) fail(404, 'Annonce introuvable (même race uniquement)');
@@ -57,7 +58,7 @@ def(market, 'post', '/market/{id}/buy', z.object({ characterId: z.number() }), (
 }));
 def(market, 'get', '/chest/{characterId}', null, c => tx(async db => { const me = await ownChar(db, c, P(c, 'characterId')); await atCapital(db, me);
   const ch = await chestState(db, me.id);
-  return { size: me.chest_size, max: (await chestLimits(db, me.race)).max, used: ch.used, nextCost: 50 * me.chest_size, items: (await db.query('SELECT i.id,i.name FROM character_items ci JOIN items i ON i.id=ci.item_id WHERE ci.character_id=$1 AND ci.in_chest', [me.id])).rows,
+  return { size: me.chest_size, max: (await chestLimits(db, me.race)).max, used: ch.used, nextCost: 50 * me.chest_size, items: (await db.query(`SELECT i.id,i.name,i.rarity, ${ITEM_CAT('i')} cat FROM character_items ci JOIN items i ON i.id=ci.item_id WHERE ci.character_id=$1 AND ci.in_chest`, [me.id])).rows,
     resources: resStacks(ch.resources, ch.st) }; }));
 /** Ressources entre sac et coffre (tout, ou `qty`) : place vérifiée en piles des deux côtés. */
 def(market, 'post', '/chest/resource', z.object({ characterId: z.number(), resource: z.string().max(60), qty: z.number().int().min(1).optional(), to: z.enum(['chest', 'bag']) }), (c, b) => tx(async db => {

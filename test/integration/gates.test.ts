@@ -34,20 +34,20 @@ describe.skipIf(!process.env.DATABASE_URL)('Portes, zones des structures, mort, 
 
   test('porte activée par les objets divins de son monde ; on ne franchit pas sa propre porte ; arrivée au choix', async () => {
     const c2 = await spot(2, s), c1 = await spot(1, s + 11), c1b = await spot(1, s + 29);
-    const X = await building({ kind: 'door', realm: 'demon', leads_to: 'human', open_h_per_item: 5 }, 2, c2);
-    const H = await building({ kind: 'door', realm: 'human', leads_to: 'demon', data: { to: [2, c2.x + 3, c2.y] } }, 1, c1);
+    const X = await building({ kind: 'door', realm: 'demon', leads_to: 'human', activations: [{ kind: 'divine', ref: 'arcane', qty: 1, hours: 5 }] }, 2, c2);
+    const H = await building({ kind: 'door', realm: 'human', leads_to: 'demon', data: { to: [2, c2.x + 3, c2.y] }, activations: [{ kind: 'divine', ref: 'artefact', qty: 1, hours: 24 }] }, 1, c1);
     await tp(T.dem.id, 2, { x: c2.x + 1, y: c2.y }); await give(T.dem.id, 'arcane', 2);
-    const st = (await call(`/divine/door/${X.id}/${T.dem.id}`, undefined, T.dem.tk)).j;
-    expect(st).toMatchObject({ realm: 'demon', family: 'arcane', can_activate: true, held: 2, hours_per_item: 5 });
-    expect((await call(`/divine/door/${X.id}/activate`, { characterId: T.dem.id, count: 3 }, T.dem.tk)).status).toBe(403);   // 3 requis, 2 détenus
-    const a = await call(`/divine/door/${X.id}/activate`, { characterId: T.dem.id, count: 2 }, T.dem.tk); expect(a.status, JSON.stringify(a.j)).toBe(200);
-    expect(a.j.open_in_s).toBeGreaterThan(10 * 3600 - 60);   // 2 objets × 5 h
+    const st = (await call(`/buildings/${X.id}/state/${T.dem.id}`, undefined, T.dem.tk)).j;
+    expect(st).toMatchObject({ realm: 'demon', door: true, can_activate: true, active: false }); expect(st.elements[0]).toMatchObject({ kind: 'divine', max_times: 100, missing: null });
+    expect((await call(`/buildings/${X.id}/activate`, { characterId: T.dem.id, element: 0, times: 3 }, T.dem.tk)).status).toBe(403);   // 3 requis, 2 détenus
+    const a = await call(`/buildings/${X.id}/activate`, { characterId: T.dem.id, element: 0, times: 2 }, T.dem.tk); expect(a.status, JSON.stringify(a.j)).toBe(200);
+    expect(new Date(a.j.until).getTime()).toBeGreaterThan(Date.now() + 10 * 3600e3 - 60e3);   // 2 objets × 5 h
     expect((await pool.query('SELECT count(*)::int n FROM divine_items WHERE holder_character_id=$1', [T.dem.id])).rows[0].n).toBe(0);
     const no = await call('/divine/door', { characterId: T.dem.id, buildingId: X.id }, T.dem.tk); expect(no.status).toBe(409); expect(no.j.error).toMatch(/fermée/);
     // un Humain active sa porte vers les Démons : il la franchit (arrivée fixe) et le Démon franchit la sienne (arrivée près de H)
     await tp(T.hum.id, 1, { x: c1.x + 1, y: c1.y }); await give(T.hum.id, 'artefact', 1);
-    expect((await call(`/divine/door/${H.id}/activate`, { characterId: T.dem.id, count: 1 }, T.dem.tk)).status).toBe(409);   // pas à côté
-    expect((await call(`/divine/door/${H.id}/activate`, { characterId: T.hum.id, count: 1 }, T.hum.tk)).status).toBe(200);
+    expect((await call(`/buildings/${H.id}/activate`, { characterId: T.dem.id }, T.dem.tk)).status).toBe(409);   // pas à côté
+    expect((await call(`/buildings/${H.id}/activate`, { characterId: T.hum.id }, T.hum.tk)).status).toBe(200);
     const d1 = await call('/divine/door', { characterId: T.dem.id, buildingId: X.id }, T.dem.tk); expect(d1.status, JSON.stringify(d1.j)).toBe(200);
     let p = await pos(T.dem.id); expect(p.m).toBe(1); expect(Math.max(Math.abs(p.x - c1.x), Math.abs(p.y - c1.y))).toBeLessThanOrEqual(2);
     const h1 = await call('/divine/door', { characterId: T.hum.id, buildingId: H.id }, T.hum.tk); expect(h1.status, JSON.stringify(h1.j)).toBe(200);
@@ -66,13 +66,13 @@ describe.skipIf(!process.env.DATABASE_URL)('Portes, zones des structures, mort, 
     expect((await pool.query('SELECT width, height FROM maps WHERE id=3')).rows[0]).toEqual({ width: 150, height: 150 });
     const door = (await pool.query("SELECT b.id, p.coord_x x, p.coord_y y FROM buildings b JOIN positions p ON p.building_id=b.id WHERE b.kind='door' AND b.realm='dead'")).rows[0];
     expect(door).toMatchObject({ x: 75, y: 75 });
-    await pool.query('UPDATE characters SET xp=1000, gold=401 WHERE id=$1', [T.low.id]);
+    await pool.query('UPDATE characters SET xp=1000, gold=401 WHERE id=$1', [T.low.id]); const tot = Number((await pool.query('SELECT xp_total FROM characters WHERE id=$1', [T.low.id])).rows[0].xp_total);
     const row = (await pool.query('SELECT * FROM characters WHERE id=$1', [T.low.id])).rows[0];
     await (await import('../../src/game/divine')).die(pool, row, null);
-    const after = (await pool.query('SELECT xp, gold FROM characters WHERE id=$1', [T.low.id])).rows[0]; expect(after).toEqual({ xp: 750, gold: 301 });
+    const after = (await pool.query('SELECT xp, gold, xp_total FROM characters WHERE id=$1', [T.low.id])).rows[0]; expect(after).toMatchObject({ xp: 750, gold: 301 }); expect(Number(after.xp_total)).toBe(tot - 250);   // l'XP totale ne baisse qu'à la mort
     const p = await pos(T.low.id); expect(p.m).toBe(3); expect(Math.max(Math.abs(p.x - 75), Math.abs(p.y - 75))).toBeLessThanOrEqual(30);
     await pool.query('UPDATE positions SET coord_x=76, coord_y=75 WHERE character_id=$1', [T.low.id]);
-    expect((await call(`/divine/door/${door.id}/${T.low.id}`, undefined, T.low.tk)).j).toMatchObject({ realm: 'dead', can_cross: true, can_activate: false });
+    expect((await call(`/buildings/${door.id}/state/${T.low.id}`, undefined, T.low.tk)).j).toMatchObject({ realm: 'dead', can_cross: true, can_activate: false });
     const r = await call('/divine/door', { characterId: T.low.id, buildingId: door.id }, T.low.tk); expect(r.status, JSON.stringify(r.j)).toBe(200);
     const z = (await pool.query("SELECT spawn_map_id m FROM races WHERE key='human'")).rows[0]; expect((await pos(T.low.id)).m).toBe(z?.m ?? 1);
   });
